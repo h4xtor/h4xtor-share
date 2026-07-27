@@ -1,0 +1,51 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "h4xtor-share"
+version = "0.1.0"
+description = "Offline-first cross-platform clipboard and file sharing over local peer-to-peer links."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    { name = "h4xtor" }
+]
+dependencies = [
+    "aiofiles>=24.1,<25",
+    "aiohttp>=3.10,<4",
+    "cryptography>=43,<47",
+    "ifaddr>=0.2,<1",
+    "platformdirs>=4.3,<5",
+    "zeroconf>=0.136,<1"
+]
+
+[project.optional-dependencies]
+bluetooth = [
+    "bleak>=0.22,<2"
+]
+dev = [
+    "build>=1.2,<2",
+    "pyinstaller>=6.11,<7",
+    "pytest>=8.3,<9",
+    "pytest-asyncio>=0.25,<1",
+    "ruff>=0.9,<1"
+]
+
+[project.scripts]
+h4xtor-share = "h4xtor_share.app:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
