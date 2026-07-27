@@ -21,6 +21,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - name: Install Linux GUI dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes python3-tk
       - name: Install
         run: python -m pip install -e ".[dev]"
       - name: Lint
@@ -47,6 +50,9 @@ jobs:
         with:
           python-version: "3.12"
           cache: pip
+      - name: Install Linux GUI dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install --yes python3-tk
       - name: Install
         run: python -m pip install -e ".[dev]"
       - name: Package

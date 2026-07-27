@@ -69,6 +69,16 @@ Python 3.11 or later is required.
 python -m venv .venv
 ```
 
+Linux also requires the Tk runtime used by the desktop interface:
+
+```bash
+# Debian, Ubuntu and Kali
+sudo apt install python3-tk
+
+# Fedora and RHEL
+sudo dnf install python3-tkinter
+```
+
 Activate the environment, then install and run:
 
 ```bash

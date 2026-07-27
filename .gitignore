@@ -4,7 +4,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .venv/
+.venv-linux/
 build/
+build-linux/
 dist/
 release/
 *.spec
