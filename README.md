@@ -26,6 +26,9 @@ The first release implements the complete IP data path:
 Actual limits are imposed by the receiving filesystem, free disk space, operating
 system and transport. "Unlimited" does not mean infinite storage.
 
+The Linux release artifact is built on Ubuntu 22.04 for wider glibc compatibility.
+The source package remains the portable fallback for other distributions.
+
 ## Transport matrix
 
 | Transport | Windows | macOS | Linux | Status |

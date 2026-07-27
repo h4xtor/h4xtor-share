@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest, ubuntu-latest]
+        os: [windows-latest, macos-latest, ubuntu-22.04]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -41,7 +41,7 @@ jobs:
             artifact: h4xtor-share-windows
           - os: macos-latest
             artifact: h4xtor-share-macos
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             artifact: h4xtor-share-linux
     runs-on: ${{ matrix.os }}
     steps:
