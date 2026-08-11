@@ -9,6 +9,9 @@ from pathlib import Path
 from tkinter import filedialog, messagebox, simpledialog, ttk
 from typing import Any
 
+from tkinterdnd2 import DND_FILES, TkinterDnD
+
+from h4xtor_share import __version__
 from h4xtor_share.client import PeerClient
 from h4xtor_share.config import Config
 from h4xtor_share.crypto import ensure_certificate, server_ssl_context
@@ -20,11 +23,12 @@ from h4xtor_share.models import (
     Peer,
     TransferProgress,
 )
+from h4xtor_share.scanner import scan_lan as scan_lan_peers
 from h4xtor_share.server import ShareServer
 from h4xtor_share.transports import detect_transports
 
 APP_TITLE = "h4xtor-share"
-VERSION = "0.1.0"
+VERSION = __version__
 
 
 class AsyncRuntime:
@@ -57,7 +61,7 @@ class AsyncRuntime:
         self.thread.join(timeout=2)
 
 
-class H4xtorShareApp(tk.Tk):
+class H4xtorShareApp(TkinterDnD.Tk):
     COLORS = {
         "background": "#0b0f14",
         "panel": "#121923",
@@ -94,6 +98,7 @@ class H4xtorShareApp(tk.Tk):
         )
         self.peers: dict[str, Peer] = {}
         self.transfer_rows: dict[str, str] = {}
+        self.scan_future: Future[Any] | None = None
         self.title(f"{APP_TITLE} {VERSION}")
         self.geometry("920x650")
         self.minsize(820, 560)
@@ -222,6 +227,7 @@ class H4xtorShareApp(tk.Tk):
         toolbar = tk.Frame(parent, bg=self.COLORS["panel"], padx=12, pady=12)
         toolbar.pack(fill="x")
         self._button(toolbar, "Add IP", self.add_manual_peer).pack(side="left", padx=(0, 8))
+        self._button(toolbar, "Scan LAN", self.scan_lan).pack(side="left", padx=(0, 8))
         self._button(toolbar, "Pair", self.pair_selected, primary=True).pack(
             side="left", padx=(0, 8)
         )
@@ -229,6 +235,20 @@ class H4xtorShareApp(tk.Tk):
             side="left", padx=(0, 8)
         )
         self._button(toolbar, "Send files", self.send_files).pack(side="left")
+
+        self.drop_zone = tk.Label(
+            parent,
+            text="Drop files here to send them to the selected device",
+            bg=self.COLORS["panel_alt"],
+            fg=self.COLORS["muted"],
+            relief="flat",
+            padx=12,
+            pady=14,
+            font=("Segoe UI Semibold", 10),
+        )
+        self.drop_zone.pack(fill="x", padx=12, pady=(0, 12))
+        self.drop_zone.drop_target_register(DND_FILES)
+        self.drop_zone.dnd_bind("<<Drop>>", self._files_dropped)
 
         columns = ("name", "address", "platform", "transport", "trust")
         self.peer_tree = ttk.Treeview(
@@ -409,6 +429,14 @@ class H4xtorShareApp(tk.Tk):
         elif tag == "manual_peer":
             self._upsert_peer(value)
             self.status_var.set(f"Added {value.name}")
+        elif tag == "scan_peer":
+            self._upsert_peer(value)
+        elif tag == "scan_progress":
+            done, total = value
+            self.status_var.set(f"Scanning LAN: {done}/{total}")
+        elif tag == "scan_complete":
+            self.scan_future = None
+            self.status_var.set(f"LAN scan complete: {len(value)} device(s) found")
         elif tag == "pair_requested":
             peer, response = value
             self._prompt_for_pairing_code(peer, response)
@@ -497,6 +525,23 @@ class H4xtorShareApp(tk.Tk):
             "manual_peer",
         )
 
+    def scan_lan(self) -> None:
+        if self.scan_future is not None and not self.scan_future.done():
+            self.status_var.set("LAN scan is already running")
+            return
+        self.status_var.set("Scanning local /24 network...")
+        self.scan_future = self.runtime.submit(
+            scan_lan_peers(
+                self.client,
+                self.config_store.port,
+                peer_callback=lambda peer: self.event_queue.put(("scan_peer", peer)),
+                progress_callback=lambda done, total: self.event_queue.put(
+                    ("scan_progress", (done, total))
+                ),
+            ),
+            "scan_complete",
+        )
+
     def pair_selected(self) -> None:
         try:
             peer = self.selected_peer()
@@ -559,11 +604,29 @@ class H4xtorShareApp(tk.Tk):
         if not paths:
             return
 
+        self._send_paths(peer, [Path(raw_path) for raw_path in paths])
+
+    def _files_dropped(self, event: Any) -> str:
+        try:
+            peer = self.selected_peer()
+        except RuntimeError as error:
+            self._show_error(error)
+            return "break"
+        paths = [Path(raw_path) for raw_path in self.tk.splitlist(event.data)]
+        files = [path for path in paths if path.is_file()]
+        if not files:
+            self._show_error(ValueError("The drop did not contain any files."))
+            return "break"
+        self._send_paths(peer, files)
+        return "break"
+
+    def _send_paths(self, peer: Peer, paths: list[Path]) -> None:
+
         async def send_all() -> None:
-            for raw_path in paths:
+            for path in paths:
                 await self.client.send_file(
                     peer,
-                    Path(raw_path),
+                    path,
                     lambda progress: self.event_queue.put(("core_event", progress)),
                 )
 

@@ -86,3 +86,26 @@ jobs:
           name: ${{ matrix.artifact }}
           path: dist/${{ matrix.binary }}
           if-no-files-found: error
+
+  android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+      - name: Test Android app
+        run: gradle -p android testDebugUnitTest lintDebug
+      - name: Build installable APK
+        run: gradle -p android assembleDebug
+      - name: Stage Android artifact
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk h4xtor-share-android.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: h4xtor-share-android
+          path: h4xtor-share-android.apk
+          if-no-files-found: error

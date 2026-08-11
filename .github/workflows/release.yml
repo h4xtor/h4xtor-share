@@ -17,12 +17,18 @@ jobs:
           python-version: "3.12"
       - name: Install
         run: python -m pip install -e ".[dev]"
+      - name: Verify tag matches package version
+        shell: bash
+        run: |
+          package_version="$(python -c 'import h4xtor_share; print(h4xtor_share.__version__)')"
+          test "v${package_version}" = "${GITHUB_REF_NAME}"
       - name: Build wheel and sdist
         run: python -m build
-      - uses: softprops/action-gh-release@v2
+      - uses: actions/upload-artifact@v4
         with:
-          files: dist/*
-          fail_on_unmatched_files: true
+          name: release-python
+          path: dist/*
+          if-no-files-found: error
 
   package:
     needs: python-package
@@ -55,7 +61,46 @@ jobs:
         run: |
           python -m PyInstaller --clean --noconfirm packaging/h4xtor-share.spec
           mv "dist/${{ matrix.binary }}" "dist/${{ matrix.artifact }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+          if-no-files-found: error
+
+  android:
+    needs: python-package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.13"
+      - name: Test Android app
+        run: gradle -p android testDebugUnitTest lintDebug
+      - name: Build installable APK
+        run: gradle -p android assembleDebug
+      - name: Stage Android artifact
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk h4xtor-share-android.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-h4xtor-share-android
+          path: h4xtor-share-android.apk
+          if-no-files-found: error
+
+  publish:
+    needs: [python-package, package, android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-dist
+          merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
-          files: dist/${{ matrix.artifact }}
+          files: release-dist/*
           fail_on_unmatched_files: true

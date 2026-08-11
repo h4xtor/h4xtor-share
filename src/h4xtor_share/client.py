@@ -32,9 +32,15 @@ class PeerClient:
             raise RuntimeError("Peer certificate fingerprint has the wrong length.")
         return aiohttp.Fingerprint(value)
 
-    async def get_info(self, address: str, port: int) -> Peer:
+    async def get_info(
+        self,
+        address: str,
+        port: int,
+        *,
+        timeout_seconds: float = 8,
+    ) -> Peer:
         endpoint = f"https://{address}:{port}"
-        timeout = aiohttp.ClientTimeout(total=8)
+        timeout = aiohttp.ClientTimeout(total=timeout_seconds)
         async with aiohttp.ClientSession(timeout=timeout) as session, session.get(
             f"{endpoint}/api/v1/info",
             ssl=self.pairing_ssl(),
@@ -142,6 +148,15 @@ class PeerClient:
                 response.raise_for_status()
                 metadata = await response.json()
             offset = int(metadata["offset"])
+            progress_callback(
+                TransferProgress(
+                    transfer_id=transfer_id,
+                    file_name=path.name,
+                    sent=offset,
+                    total=total,
+                    direction="send",
+                )
+            )
 
             async def chunks() -> AsyncIterator[bytes]:
                 sent = offset
@@ -175,3 +190,12 @@ class PeerClient:
                 result = await response.json()
             if not result.get("complete"):
                 raise RuntimeError("Transfer stopped before the complete file arrived.")
+            progress_callback(
+                TransferProgress(
+                    transfer_id=transfer_id,
+                    file_name=path.name,
+                    sent=total,
+                    total=total,
+                    direction="send",
+                )
+            )

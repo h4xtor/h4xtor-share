@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.H4xtorShare" parent="android:style/Theme.Material.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:navigationBarColor">@color/h4_background</item>
+        <item name="android:statusBarColor">@color/h4_background</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:colorAccent">@color/h4_accent</item>
+        <item name="android:windowBackground">@color/h4_background</item>
+    </style>
+</resources>

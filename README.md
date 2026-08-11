@@ -1,26 +1,29 @@
 # h4xtor-share
 
-`h4xtor-share` is an offline-first desktop app for transferring clipboard text and
-arbitrary files directly between Windows, macOS and Linux devices.
+`h4xtor-share` is an offline-first app for transferring clipboard text and arbitrary
+files directly between Windows, macOS, Linux and Android devices.
 
 The application does not require an account, cloud storage, a relay server or WAN
 access. Peers discover each other with mDNS and communicate directly over the local
 link.
 
-## Current release: 0.1.0
+## Current release: 0.2.0
 
-The first release implements the complete IP data path:
+Version 0.2.0 adds the cross-platform UI and Android client/server:
 
 - automatic peer discovery over mDNS;
+- active LAN scanning when mDNS is blocked;
 - manual IP connection when multicast is blocked;
 - six-digit out-of-band device pairing;
 - TLS with certificate fingerprint pinning after pairing;
 - push-based cross-device text clipboard;
 - byte-streamed file transfer;
-- resumable partial uploads;
+- desktop drag-and-drop file sending;
+- live inbound and outbound transfer progress;
 - arbitrary file names and file types;
 - no application-defined file-size limit;
-- Windows, macOS and Linux packaging in GitHub Actions;
+- native Android send, receive, discovery and pairing;
+- Windows, macOS, Linux and Android packaging in GitHub Actions;
 - operation without WAN access.
 
 Actual limits are imposed by the receiving filesystem, free disk space, operating
@@ -37,14 +40,14 @@ The source package remains the portable fallback for other distributions.
 
 ## Transport matrix
 
-| Transport | Windows | macOS | Linux | Status |
-|---|---:|---:|---:|---|
-| Ethernet LAN | Yes | Yes | Yes | Implemented |
-| Infrastructure Wi-Fi | Yes | Yes | Yes | Implemented |
-| Existing hotspot link | Yes | Yes | Yes | Implemented |
-| Existing Wi-Fi Direct IP link | Yes | Limited by macOS | Yes | Data path implemented; OS provisions the group |
-| Bluetooth discovery | Experimental | Experimental | Experimental | Optional `bleak` dependency |
-| Bluetooth bulk transfer | No | No | No | Native peripheral backends required |
+| Transport | Windows | macOS | Linux | Android | Status |
+|---|---:|---:|---:|---:|---|
+| Ethernet LAN | Yes | Yes | Yes | Yes | Implemented |
+| Infrastructure Wi-Fi | Yes | Yes | Yes | Yes | Implemented |
+| Existing hotspot link | Yes | Yes | Yes | Yes | Implemented |
+| Existing Wi-Fi Direct IP link | Yes | Limited by macOS | Yes | Yes | Data path implemented; OS provisions the group |
+| Bluetooth discovery | Experimental | Experimental | Experimental | No | Optional desktop `bleak` dependency |
+| Bluetooth bulk transfer | No | No | No | No | Native peripheral backends required |
 
 The table is deliberately strict. macOS does not expose a general-purpose public
 Wi-Fi Direct provisioning API comparable to Windows WiFiDirect or Linux
@@ -112,14 +115,22 @@ bash <(curl -fsSL https://raw.githubusercontent.com/h4xtor/h4xtor-share/main/scr
 Both install scripts download the release wheel from GitHub and fall back to
 installing directly from the repository when no release is available yet.
 
+### Android
+
+Download `h4xtor-share-android.apk` from the
+[latest release](https://github.com/h4xtor/h4xtor-share/releases/latest), allow
+installation from the browser or file manager when Android prompts, and install it.
+The app requires Android 10 or later and saves received files in Downloads.
+
 ## Building a release
 
 Push a `v*` tag and GitHub Actions builds the Windows, macOS and Linux
-executables plus the Python wheel and attaches them to the release:
+executables, an installable Android APK, and the Python wheel and attaches them
+to the release:
 
 ```bash
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 ## Development
@@ -159,13 +170,15 @@ pytest
 1. Start `h4xtor-share` on two devices connected through the same LAN, Wi-Fi,
    hotspot or OS-created Wi-Fi Direct group. On Windows, allow the app through
    the firewall when prompted so peers can reach it.
-2. Select the other device. Use **Add IP** if multicast discovery is unavailable.
+2. Select the other device. Use **Scan LAN** or **Add IP** if multicast discovery
+   is unavailable.
 3. Click **Pair**.
 4. Read the six-digit code on the receiver and enter it on the sender.
-5. Select **Send clipboard** or **Send files**.
+5. Select **Send clipboard** or **Send files**, or drop files onto the desktop drop
+   zone. Follow active transfers in the **Transfers** tab.
 
 Received files are stored in the configured incoming directory. Transfers stream
-directly to disk and can resume from an existing partial file.
+directly to disk without loading the complete file into memory.
 
 ## Repository layout
 
@@ -177,6 +190,7 @@ src/h4xtor_share/
   crypto.py       Certificate creation and TLS setup
   discovery.py    mDNS service discovery
   models.py       Shared event and peer models
+  scanner.py      Concurrent local-network peer scan
   server.py       Receiving API and streamed uploads
   transports.py   Platform transport capability reporting
 packaging/
@@ -187,6 +201,9 @@ scripts/
   install.sh          Linux and macOS installer (Python/pip)
 tests/
   test_core.py
+  test_scanner.py
+android/
+  app/             Native Android client/server application
 ```
 
 ## Roadmap
