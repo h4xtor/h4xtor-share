@@ -5,8 +5,6 @@ import android.net.nsd.NsdManager;
 import android.net.nsd.NsdServiceInfo;
 import android.net.wifi.WifiManager;
 
-import java.nio.charset.StandardCharsets;
-
 public final class DiscoveryController {
     public interface Listener {
         void onPeerAddress(String address, int port);
@@ -76,11 +74,11 @@ public final class DiscoveryController {
         service.setServiceType(SERVICE_TYPE);
         service.setPort(AppIdentity.PORT);
         try {
-            service.setAttribute("id", identity.deviceId().getBytes(StandardCharsets.UTF_8));
-            service.setAttribute("name", identity.deviceName().getBytes(StandardCharsets.UTF_8));
-            service.setAttribute("platform", "android".getBytes(StandardCharsets.UTF_8));
-            service.setAttribute("protocol", "1".getBytes(StandardCharsets.UTF_8));
-            service.setAttribute("fingerprint", identity.fingerprint().getBytes(StandardCharsets.UTF_8));
+            service.setAttribute("id", identity.deviceId());
+            service.setAttribute("name", identity.deviceName());
+            service.setAttribute("platform", "android");
+            service.setAttribute("protocol", "1");
+            service.setAttribute("fingerprint", identity.fingerprint());
         } catch (Exception error) {
             listener.onStatus("mDNS attributes unavailable: " + safeMessage(error));
         }
