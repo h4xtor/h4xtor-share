@@ -1,0 +1,38 @@
+name: Publish v0.2.0
+
+on:
+  push:
+    paths:
+      - ".github/workflows/publish-v0.2.0.yml"
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    if: github.event.head_commit.message == 'Publish v0.2.0 release'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download validated CI artifacts
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run download 31487687671 --repo "$GITHUB_REPOSITORY" --dir release-dist
+      - name: Stage release files
+        shell: bash
+        run: |
+          mkdir release-files
+          cp release-dist/h4xtor-share-windows/h4xtor-share.exe release-files/h4xtor-share-windows.exe
+          cp release-dist/h4xtor-share-android/h4xtor-share-android.apk release-files/h4xtor-share-android.apk
+          cp release-dist/h4xtor-share-macos/h4xtor-share release-files/h4xtor-share-macos
+          cp release-dist/h4xtor-share-linux/h4xtor-share release-files/h4xtor-share-linux
+          cp release-dist/h4xtor-share-python/* release-files/
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          gh release create v0.2.0 release-files/*
+          --repo "$GITHUB_REPOSITORY"
+          --target "$GITHUB_SHA"
+          --title "h4xtor-share v0.2.0"
+          --generate-notes
