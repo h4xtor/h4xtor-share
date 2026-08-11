@@ -10,5 +10,6 @@ build-linux/
 dist/
 release/
 *.spec
+!packaging/h4xtor-share.spec
 .DS_Store
 Thumbs.db
