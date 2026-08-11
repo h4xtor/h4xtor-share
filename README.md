@@ -26,6 +26,12 @@ The first release implements the complete IP data path:
 Actual limits are imposed by the receiving filesystem, free disk space, operating
 system and transport. "Unlimited" does not mean infinite storage.
 
+File contents are transferred as a raw byte stream, so every file type works.
+Received names are sanitized to stay valid on all three operating systems:
+characters that Windows reserves (`< > : " | ? *`) are removed, reserved device
+names (`CON`, `COM1`, `NUL`, ...) get a leading underscore, and a file that
+already exists is stored under a numbered variant instead of being overwritten.
+
 The Linux release artifact is built on Ubuntu 22.04 for wider glibc compatibility.
 The source package remains the portable fallback for other distributions.
 
@@ -64,6 +70,58 @@ be allowed to send.
 Incoming paths are sanitized and files are written to a random `.part` path before an
 atomic rename. Existing files are never overwritten.
 
+## Installing
+
+### Windows
+
+The easiest path is the single-file executable. Download
+`h4xtor-share-windows.exe` from the [latest release](https://github.com/h4xtor/h4xtor-share/releases/latest)
+and run it. No Python or other dependency is required.
+
+To install through Python instead (needs Python 3.11 or later, tick
+"Add python.exe to PATH" during setup), open PowerShell and run:
+
+```powershell
+irm https://raw.githubusercontent.com/h4xtor/h4xtor-share/main/scripts/install.ps1 | iex
+```
+
+This installs into an isolated virtual environment, creates a Start Menu and
+desktop shortcut, and re-running it upgrades the app.
+
+### Linux
+
+The standalone executable is built on Ubuntu 22.04. Alternatively install
+through Python 3.11 or later (Debian/Ubuntu also need the Tk runtime):
+
+```bash
+sudo apt install python3-tk
+bash <(curl -fsSL https://raw.githubusercontent.com/h4xtor/h4xtor-share/main/scripts/install.sh)
+```
+
+The script creates `~/.local/bin/h4xtor-share` as the launcher.
+
+### macOS
+
+Download `h4xtor-share-macos` from the [latest release](https://github.com/h4xtor/h4xtor-share/releases/latest),
+or install through Python 3.11 or later:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/h4xtor/h4xtor-share/main/scripts/install.sh)
+```
+
+Both install scripts download the release wheel from GitHub and fall back to
+installing directly from the repository when no release is available yet.
+
+## Building a release
+
+Push a `v*` tag and GitHub Actions builds the Windows, macOS and Linux
+executables plus the Python wheel and attaches them to the release:
+
+```bash
+git tag v0.1.0
+git push origin v0.1.0
+```
+
 ## Development
 
 Python 3.11 or later is required.
@@ -99,7 +157,8 @@ pytest
 ## Using the app
 
 1. Start `h4xtor-share` on two devices connected through the same LAN, Wi-Fi,
-   hotspot or OS-created Wi-Fi Direct group.
+   hotspot or OS-created Wi-Fi Direct group. On Windows, allow the app through
+   the firewall when prompted so peers can reach it.
 2. Select the other device. Use **Add IP** if multicast discovery is unavailable.
 3. Click **Pair**.
 4. Read the six-digit code on the receiver and enter it on the sender.
@@ -120,6 +179,12 @@ src/h4xtor_share/
   models.py       Shared event and peer models
   server.py       Receiving API and streamed uploads
   transports.py   Platform transport capability reporting
+packaging/
+  h4xtor-share.spec   PyInstaller build specification
+  make_icon.py        Icon generator (pure stdlib)
+scripts/
+  install.ps1         Windows installer (Python/pip)
+  install.sh          Linux and macOS installer (Python/pip)
 tests/
   test_core.py
 ```

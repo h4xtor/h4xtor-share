@@ -25,11 +25,28 @@ CHUNK_SIZE = 1024 * 1024
 TRANSFER_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
 
 
+INVALID_NAME_CHARACTERS = '<>:"|?*'
+_RESERVED_WINDOWS_NAMES = (
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{index}" for index in range(1, 10)}
+    | {f"LPT{index}" for index in range(1, 10)}
+)
+MAX_NAME_LENGTH = 240
+
+
 def safe_file_name(value: str) -> str:
-    name = Path(value.replace("\\", "/")).name.strip().replace("\x00", "")
-    if name in {"", ".", ".."}:
+    name = Path(value.replace("\\", "/")).name.strip()
+    name = "".join(
+        char
+        for char in name
+        if ord(char) >= 32 and char not in INVALID_NAME_CHARACTERS
+    )
+    name = name.rstrip(" .")
+    if not name or name in {".", ".."}:
         raise ValueError("Invalid file name.")
-    return name[:240]
+    if name.split(".")[0].upper() in _RESERVED_WINDOWS_NAMES:
+        name = f"_{name}"
+    return name[:MAX_NAME_LENGTH]
 
 
 def unique_destination(directory: Path, file_name: str) -> Path:

@@ -20,6 +20,25 @@ def test_safe_file_name_rejects_invalid_names(value: str) -> None:
         safe_file_name(value)
 
 
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("report:2024.pdf", "report2024.pdf"),
+        ("a<b>c?d*e|f\"g.txt", "abcdefg.txt"),
+        ("notes;final (1).txt", "notes;final (1).txt"),
+        ("file name . ", "file name"),
+        ("CON", "_CON"),
+        ("aux.log", "_aux.log"),
+        ("NUL.txt", "_NUL.txt"),
+        ("COM3", "_COM3"),
+        ("LPT1 report.doc", "LPT1 report.doc"),
+        (".hidden", ".hidden"),
+    ],
+)
+def test_safe_file_name_is_cross_platform(value: str, expected: str) -> None:
+    assert safe_file_name(value) == expected
+
+
 def test_unique_destination_preserves_extension(tmp_path: Path) -> None:
     original = tmp_path / "archive.tar.gz"
     original.write_bytes(b"first")
