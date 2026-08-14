@@ -45,7 +45,7 @@ public final class H4xtorServer {
     public interface Listener {
         void onPairingCode(String peerName, String code);
         void onClipboardReceived(String peerName, String text);
-        void onFileReceived(String peerName, String fileName);
+        void onFileReceived(String peerName, String fileName, String uri, long size);
         void onStatus(String text);
     }
 
@@ -153,6 +153,13 @@ public final class H4xtorServer {
                             .put("files")
                             .put("resume"));
             sendJson(output, 200, body);
+            return;
+        }
+
+        if ("GET".equals(request.method) && "/api/v1/ping".equals(request.path)) {
+            sendJson(output, 200, new JSONObject()
+                    .put("pong", true)
+                    .put("device_id", identity.deviceId()));
             return;
         }
 
@@ -286,11 +293,15 @@ public final class H4xtorServer {
             }
             boolean complete = actualOffset == transfer.size;
             if (complete) {
-                publishToDownloads(transfer.part, transfer.name);
+                android.net.Uri uri = publishToDownloads(transfer.part, transfer.name);
                 //noinspection ResultOfMethodCallIgnored
                 transfer.part.delete();
                 transfers.remove(transferId);
-                listener.onFileReceived(transfer.peerName, transfer.name);
+                listener.onFileReceived(
+                        transfer.peerName,
+                        transfer.name,
+                        uri == null ? "" : uri.toString(),
+                        transfer.size);
             }
             sendJson(output, 200, new JSONObject()
                     .put("transfer_id", transferId)
@@ -460,7 +471,7 @@ public final class H4xtorServer {
         output.flush();
     }
 
-    private void publishToDownloads(File source, String requestedName) throws Exception {
+    private android.net.Uri publishToDownloads(File source, String requestedName) throws Exception {
         ContentResolver resolver = context.getContentResolver();
         String displayName = uniqueMediaName(resolver, requestedName);
         ContentValues values = new ContentValues();
@@ -494,6 +505,7 @@ public final class H4xtorServer {
                 resolver.delete(uri, null, null);
             }
         }
+        return uri;
     }
 
     private static String uniqueMediaName(ContentResolver resolver, String requestedName) {

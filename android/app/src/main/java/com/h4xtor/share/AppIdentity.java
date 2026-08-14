@@ -6,6 +6,9 @@ import android.os.Build;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.math.BigInteger;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
@@ -22,6 +25,7 @@ public final class AppIdentity {
     public static final int PORT = 47474;
     private static final String PREFS = "h4xtor_share";
     private static final String TLS_ALIAS = "h4xtor_share_tls";
+    private static final int HISTORY_LIMIT = 200;
 
     private final SharedPreferences prefs;
 
@@ -89,6 +93,42 @@ public final class AppIdentity {
 
     public String peerName(String peerId) {
         return prefs.getString("peer_name_" + peerId, peerId);
+    }
+
+    public boolean isClipboardSyncEnabled() {
+        return prefs.getBoolean("clipboard_sync", true);
+    }
+
+    public void setClipboardSyncEnabled(boolean value) {
+        prefs.edit().putBoolean("clipboard_sync", value).apply();
+    }
+
+    public synchronized void appendHistory(String bucket, JSONObject entry) {
+        try {
+            JSONArray list = history(bucket);
+            list.put(entry);
+            while (list.length() > HISTORY_LIMIT) {
+                list.remove(0);
+            }
+            prefs.edit().putString("history_" + bucket, list.toString()).apply();
+        } catch (Exception ignored) {
+            // History is best-effort and must never break a transfer.
+        }
+    }
+
+    public synchronized JSONArray history(String bucket) {
+        try {
+            String raw = prefs.getString("history_" + bucket, null);
+            return raw == null ? new JSONArray() : new JSONArray(raw);
+        } catch (Exception ignored) {
+            return new JSONArray();
+        }
+    }
+
+    public static String timestamp() {
+        return java.text.DateFormat.getDateTimeInstance(
+                java.text.DateFormat.MEDIUM,
+                java.text.DateFormat.MEDIUM).format(new java.util.Date());
     }
 
     private static boolean constantTimeEquals(String left, String right) {

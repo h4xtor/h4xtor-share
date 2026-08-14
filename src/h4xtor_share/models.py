@@ -33,12 +33,14 @@ class PairingPrompt:
 
 @dataclass(slots=True)
 class ClipboardReceived:
+    peer_id: str
     peer_name: str
     text: str
 
 
 @dataclass(slots=True)
 class FileReceived:
+    peer_id: str
     peer_name: str
     path: Path
     size: int
@@ -57,3 +59,31 @@ class TransferProgress:
         if self.total <= 0:
             return 100.0
         return min(100.0, self.sent * 100.0 / self.total)
+
+
+@dataclass(slots=True)
+class PeerStatus:
+    device_id: str
+    online: bool
+    rtt_ms: float | None
+
+
+@dataclass(slots=True)
+class FileOpenRequested:
+    path: str
+
+
+def signal_bars(rtt_ms: float | None) -> str:
+    """Map round-trip latency to a 4-level signal indicator.
+
+    ``rtt_ms=None`` yields the empty glyph for an unreachable peer.
+    """
+    if rtt_ms is None:
+        return ""
+    if rtt_ms < 15:
+        return "▂▄▆█"
+    if rtt_ms < 40:
+        return "▂▄▆"
+    if rtt_ms < 100:
+        return "▂▄"
+    return "▂"

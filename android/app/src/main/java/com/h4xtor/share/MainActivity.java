@@ -5,6 +5,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
+import android.content.ClipboardManager.OnPrimaryClipChangedListener;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -14,10 +15,15 @@ import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
+import android.provider.MediaStore;
 import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
+import android.webkit.MimeTypeMap;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -26,15 +32,20 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+
 import java.net.Inet4Address;
 import java.net.NetworkInterface;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
@@ -47,6 +58,10 @@ public final class MainActivity extends Activity
 
     private static final int REQUEST_NEARBY = 2001;
     private static final int REQUEST_FILE = 2002;
+
+    private static final int HEALTH_INTERVAL_MS = 4000;
+    private static final int CLIPBOARD_SUPPRESS_MS = 3000;
+    private static final int CLIPBOARD_DEBOUNCE_MS = 800;
 
     private static final int BG = Color.rgb(8, 17, 29);
     private static final int PANEL = Color.rgb(16, 28, 43);
@@ -61,6 +76,15 @@ public final class MainActivity extends Activity
     private final ExecutorService networkExecutor = Executors.newFixedThreadPool(48);
     private final Map<String, Peer> peers = Collections.synchronizedMap(new LinkedHashMap<>());
     private final AtomicBoolean scanRunning = new AtomicBoolean(false);
+    private final Map<String, PeerHealth> peerHealth = Collections.synchronizedMap(new HashMap<>());
+    private final Map<String, Boolean> peerLastOnline = Collections.synchronizedMap(new HashMap<>());
+    private final Map<String, Integer> peerConnections = Collections.synchronizedMap(new HashMap<>());
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private String clipboardObserved = "";
+    private String clipboardSuppressText = "";
+    private long clipboardSuppressUntil = 0L;
+    private String pendingClipboardBroadcast = null;
+    private OnPrimaryClipChangedListener clipboardSyncListener;
 
     private AppIdentity identity;
     private H4xtorClient client;
@@ -85,6 +109,150 @@ public final class MainActivity extends Activity
         discovery = new DiscoveryController(this, identity, this);
         setContentView(buildUi());
         requestLanAccessAndStart();
+        registerClipboardSync();
+        mainHandler.postDelayed(this::scheduleHealthChecks, HEALTH_INTERVAL_MS);
+    }
+
+    private static final class PeerHealth {
+        final boolean online;
+        final long rttMs;
+
+        PeerHealth(boolean online, long rttMs) {
+            this.online = online;
+            this.rttMs = rttMs;
+        }
+    }
+
+    private void registerClipboardSync() {
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+        clipboardSyncListener = () -> {
+            if (identity.isClipboardSyncEnabled()) {
+                runOnUiThread(() -> handleClipboardChanged(clipboard));
+            }
+        };
+        clipboard.addPrimaryClipChangedListener(clipboardSyncListener);
+    }
+
+    private void handleClipboardChanged(ClipboardManager clipboard) {
+        ClipData clip = clipboard.getPrimaryClip();
+        if (clip == null || clip.getItemCount() == 0) {
+            return;
+        }
+        CharSequence value = clip.getItemAt(0).coerceToText(this);
+        String text = value == null ? "" : value.toString();
+        if (text.isEmpty() || text.equals(clipboardObserved)) {
+            return;
+        }
+        clipboardObserved = text;
+        long now = SystemClock.elapsedRealtime();
+        if (text.equals(clipboardSuppressText) && now < clipboardSuppressUntil) {
+            return;
+        }
+        pendingClipboardBroadcast = text;
+        mainHandler.removeCallbacks(broadcastPendingClipboard);
+        mainHandler.postDelayed(broadcastPendingClipboard, CLIPBOARD_DEBOUNCE_MS);
+    }
+
+    private final Runnable broadcastPendingClipboard = () -> {
+        final String text = pendingClipboardBroadcast;
+        pendingClipboardBroadcast = null;
+        if (text == null) {
+            return;
+        }
+        networkExecutor.execute(() -> {
+            List<Peer> targets = trustedPeers();
+            int delivered = 0;
+            for (Peer peer : targets) {
+                try {
+                    client.sendClipboard(peer, text);
+                    delivered++;
+                    recordSentText(peer, text);
+                } catch (Exception ignored) {
+                    // A single unreachable peer must not stop the clipboard sync.
+                }
+            }
+            if (delivered > 0) {
+                status("Clipboard synced to " + delivered + " device(s)");
+            }
+        });
+    };
+
+    private void recordSentText(Peer peer, String text) {
+        try {
+            identity.appendHistory("sent", new JSONObject()
+                    .put("kind", isLink(text) ? "link" : "clipboard")
+                    .put("text", text.length() > 1000 ? text.substring(0, 1000) : text)
+                    .put("peer", peer.name)
+                    .put("ts", AppIdentity.timestamp()));
+        } catch (Exception ignored) {
+            // History is best-effort.
+        }
+    }
+
+    private void scheduleHealthChecks() {
+        if (isFinishing() || isDestroyed()) {
+            return;
+        }
+        checkPeerHealth();
+        mainHandler.postDelayed(this::scheduleHealthChecks, HEALTH_INTERVAL_MS);
+    }
+
+    private void checkPeerHealth() {
+        List<Peer> snapshot;
+        synchronized (peers) {
+            snapshot = new ArrayList<>(peers.values());
+        }
+        for (Peer peer : snapshot) {
+            networkExecutor.execute(() -> {
+                boolean online;
+                long rtt;
+                try {
+                    rtt = client.ping(peer, 2000);
+                    online = true;
+                } catch (Exception ignored) {
+                    online = false;
+                    rtt = 0L;
+                }
+                peerHealth.put(peer.deviceId, new PeerHealth(online, rtt));
+                Boolean previous = peerLastOnline.get(peer.deviceId);
+                if (previous == null || previous != online) {
+                    peerLastOnline.put(peer.deviceId, online);
+                    if (online) {
+                        int count = peerConnections.getOrDefault(peer.deviceId, 0) + 1;
+                        peerConnections.put(peer.deviceId, count);
+                    }
+                    recordDevice(peer, online, rtt);
+                }
+                runOnUiThread(this::renderPeers);
+            });
+        }
+    }
+
+    private void recordDevice(Peer peer, boolean online, long rttMs) {
+        try {
+            identity.appendHistory("devices", new JSONObject()
+                    .put("name", peer.name)
+                    .put("ip", peer.address)
+                    .put("os", peer.platform)
+                    .put("online", online)
+                    .put("rtt_ms", rttMs)
+                    .put("connections", peerConnections.getOrDefault(peer.deviceId, 0))
+                    .put("ts", AppIdentity.timestamp()));
+        } catch (Exception ignored) {
+            // History is best-effort.
+        }
+    }
+
+    private List<Peer> trustedPeers() {
+        List<Peer> result = new ArrayList<>();
+        synchronized (peers) {
+            for (Peer peer : peers.values()) {
+                if (identity.isOutboundTrusted(peer.deviceId)) {
+                    result.add(peer);
+                }
+            }
+        }
+        return result;
     }
 
     private View buildUi() {
@@ -106,9 +274,14 @@ public final class MainActivity extends Activity
 
         TextView title = text("h4xtor-share", 27, TEXT, true);
         header.addView(title, new LinearLayout.LayoutParams(0, dp(58), 1f));
+        Button history = button("History", false);
+        history.setOnClickListener(v -> showHistory());
+        header.addView(history, new LinearLayout.LayoutParams(dp(92), dp(46)));
         Button settings = button("Settings", false);
         settings.setOnClickListener(v -> showSettings());
-        header.addView(settings, new LinearLayout.LayoutParams(dp(105), dp(46)));
+        LinearLayout.LayoutParams settingsParams = new LinearLayout.LayoutParams(dp(105), dp(46));
+        settingsParams.setMargins(dp(8), 0, 0, 0);
+        header.addView(settings, settingsParams);
 
         statusText = text("Starting local services…", 13, ACCENT, true);
         root.addView(statusText, marginParams(dp(0), dp(2), dp(0), dp(14)));
@@ -345,6 +518,8 @@ public final class MainActivity extends Activity
     private View deviceCard(Peer peer) {
         boolean selected = selectedPeer != null && selectedPeer.deviceId.equals(peer.deviceId);
         boolean trusted = identity.isOutboundTrusted(peer.deviceId);
+        PeerHealth health = peerHealth.get(peer.deviceId);
+        boolean online = health != null && health.online;
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
         card.setPadding(dp(13), dp(11), dp(13), dp(11));
@@ -352,7 +527,7 @@ public final class MainActivity extends Activity
         card.setOnClickListener(v -> {
             selectedPeer = peer;
             renderPeers();
-            statusText.setText("Selected " + peer.name + (trusted ? " • paired" : " • pairing required"));
+            statusText.setText("Selected " + peer.name + (trusted ? " • connected" : " • connect to pair"));
         });
 
         LinearLayout first = new LinearLayout(this);
@@ -361,7 +536,16 @@ public final class MainActivity extends Activity
         card.addView(first, matchWrap());
         TextView name = text(peer.name, 16, TEXT, true);
         first.addView(name, new LinearLayout.LayoutParams(0, dp(34), 1f));
-        TextView state = text(trusted ? "● Paired" : "● Discovered", 12, trusted ? ACCENT : WARNING, true);
+        int ledColor = online ? ACCENT : (trusted ? WARNING : Color.rgb(120, 133, 150));
+        String ledLabel;
+        if (online) {
+            ledLabel = "● Online " + signalBars(health.rttMs);
+        } else if (trusted) {
+            ledLabel = "● Paired";
+        } else {
+            ledLabel = "○ Discovered";
+        }
+        TextView state = text(ledLabel, 12, ledColor, true);
         first.addView(state);
 
         TextView details = text(
@@ -372,15 +556,28 @@ public final class MainActivity extends Activity
         card.addView(details, marginParams(0, dp(2), 0, dp(8)));
 
         if (!trusted) {
-            Button pair = button("Pair", true);
-            pair.setOnClickListener(v -> pair(peer));
-            card.addView(pair, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
+            Button connect = button("Connect", true);
+            connect.setOnClickListener(v -> pair(peer));
+            card.addView(connect, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(44)));
         }
         return card;
     }
 
+    private static String signalBars(long rttMs) {
+        if (rttMs < 15) {
+            return "▂▄▆█";
+        }
+        if (rttMs < 40) {
+            return "▂▄▆";
+        }
+        if (rttMs < 100) {
+            return "▂▄";
+        }
+        return "▂";
+    }
+
     private void pair(Peer peer) {
-        status("Requesting pairing with " + peer.name + "…");
+        status("Connecting to " + peer.name + "…");
         networkExecutor.execute(() -> {
             try {
                 org.json.JSONObject response = client.requestPairing(peer);
@@ -442,6 +639,7 @@ public final class MainActivity extends Activity
         networkExecutor.execute(() -> {
             try {
                 client.sendClipboard(peer, text);
+                recordSentText(peer, text);
                 status("Clipboard sent to " + peer.name);
                 appendActivity("Clipboard sent to " + peer.name);
             } catch (Exception error) {
@@ -501,13 +699,25 @@ public final class MainActivity extends Activity
     }
 
     private void showSettings() {
+        LinearLayout container = new LinearLayout(this);
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(dp(6), dp(6), dp(6), dp(6));
+
         EditText input = new EditText(this);
         input.setText(identity.deviceName());
         input.setSelectAllOnFocus(true);
+        container.addView(input, matchWrap());
+
+        android.widget.CheckBox syncClipboard = new android.widget.CheckBox(this);
+        syncClipboard.setText("Broadcast clipboard text to paired devices");
+        syncClipboard.setTextColor(TEXT);
+        syncClipboard.setChecked(identity.isClipboardSyncEnabled());
+        container.addView(syncClipboard, marginParams(0, dp(10), 0, 0));
+
         new AlertDialog.Builder(this)
                 .setTitle("Device name")
                 .setMessage("This name is advertised to h4xtor-share peers on your LAN.")
-                .setView(input)
+                .setView(container)
                 .setNeutralButton("App settings", (dialog, which) -> {
                     Intent intent = new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
                     intent.setData(Uri.parse("package:" + getPackageName()));
@@ -517,13 +727,81 @@ public final class MainActivity extends Activity
                 .setPositiveButton("Save", (dialog, which) -> {
                     try {
                         identity.setDeviceName(input.getText().toString());
+                        identity.setClipboardSyncEnabled(syncClipboard.isChecked());
                         restartDiscovery();
-                        status("Device name saved");
+                        status("Settings saved");
                     } catch (Exception error) {
                         toast(safeMessage(error));
                     }
                 })
                 .show();
+    }
+
+    private void showHistory() {
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(8), dp(6), dp(8), dp(6));
+        scroll.addView(root, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        addHistorySection(root, "SENT", historyText("sent"));
+        addHistorySection(root, "RECEIVED", historyText("received"));
+        addHistorySection(root, "DEVICES", historyText("devices"));
+        new AlertDialog.Builder(this)
+                .setTitle("History")
+                .setView(scroll)
+                .setNegativeButton("Close", null)
+                .show();
+    }
+
+    private void addHistorySection(LinearLayout root, String title, String body) {
+        root.addView(text(title, 13, ACCENT, true), marginParams(0, dp(8), 0, dp(4)));
+        root.addView(text(body, 12, TEXT, false), marginParams(0, 0, 0, dp(10)));
+    }
+
+    private String historyText(String bucket) {
+        JSONArray list = identity.history(bucket);
+        if (list.length() == 0) {
+            return "Nothing yet.";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (int index = list.length() - 1; index >= 0; index--) {
+            try {
+                JSONObject entry = list.getJSONObject(index);
+                if ("devices".equals(bucket)) {
+                    builder.append(entry.optString("ts"))
+                            .append("  ")
+                            .append(entry.optBoolean("online", false) ? "● " : "○ ")
+                            .append(entry.optString("name"))
+                            .append(" (")
+                            .append(entry.optString("ip"))
+                            .append(", ")
+                            .append(entry.optString("os"))
+                            .append(", rtt ")
+                            .append(entry.optLong("rtt_ms", 0))
+                            .append("ms, connects ")
+                            .append(entry.optInt("connections", 0))
+                            .append(")\n");
+                } else {
+                    builder.append(entry.optString("ts"))
+                            .append("  ")
+                            .append(entry.optString("kind").toUpperCase(Locale.ROOT))
+                            .append("  ")
+                            .append(entry.optString("text"))
+                            .append("  ·  ")
+                            .append(entry.optString("peer"))
+                            .append('\n');
+                }
+            } catch (Exception ignored) {
+                // Skip malformed entries.
+            }
+        }
+        return builder.toString();
+    }
+
+    private static boolean isLink(String text) {
+        return text != null && text.trim().matches("(?i)^https?://\\S+$");
     }
 
     @Override
@@ -541,15 +819,93 @@ public final class MainActivity extends Activity
         runOnUiThread(() -> {
             ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
             clipboard.setPrimaryClip(ClipData.newPlainText("h4xtor-share", text));
+            clipboardObserved = text;
+            clipboardSuppressText = text;
+            clipboardSuppressUntil = SystemClock.elapsedRealtime() + CLIPBOARD_SUPPRESS_MS;
             statusText.setText("Clipboard received from " + peerName);
         });
         appendActivity("Clipboard received from " + peerName);
+        try {
+            identity.appendHistory("received", new JSONObject()
+                    .put("kind", isLink(text) ? "link" : "clipboard")
+                    .put("text", text.length() > 1000 ? text.substring(0, 1000) : text)
+                    .put("peer", peerName)
+                    .put("ts", AppIdentity.timestamp()));
+        } catch (Exception ignored) {
+            // History is best-effort.
+        }
     }
 
     @Override
-    public void onFileReceived(String peerName, String fileName) {
-        status("Received " + fileName + " from " + peerName + " • saved in Downloads/h4xtor-share");
+    public void onFileReceived(String peerName, String fileName, String uri, long size) {
+        status("Received " + fileName + " from " + peerName);
         appendActivity("Received " + fileName + " from " + peerName);
+        try {
+            identity.appendHistory("received", new JSONObject()
+                    .put("kind", "file")
+                    .put("text", fileName)
+                    .put("size", size)
+                    .put("uri", uri)
+                    .put("peer", peerName)
+                    .put("ts", AppIdentity.timestamp()));
+        } catch (Exception ignored) {
+            // History is best-effort.
+        }
+        runOnUiThread(() -> promptOpenReceived(fileName, uri));
+    }
+
+    private void promptOpenReceived(String fileName, String uri) {
+        if (uri == null || uri.isEmpty()) {
+            return;
+        }
+        boolean apk = fileName.toLowerCase(Locale.ROOT).endsWith(".apk");
+        AlertDialog.Builder builder = new AlertDialog.Builder(this)
+                .setTitle("Received: " + fileName)
+                .setMessage("Saved to Downloads/h4xtor-share");
+        builder.setPositiveButton(apk ? "Install" : "Open", (dialog, which) -> openReceived(fileName, uri));
+        builder.setNeutralButton("Show in Files", (dialog, which) -> revealDownloadsFolder());
+        builder.setNegativeButton("Later", null);
+        builder.show();
+    }
+
+    private void openReceived(String fileName, String uri) {
+        boolean apk = fileName.toLowerCase(Locale.ROOT).endsWith(".apk");
+        Intent intent = apk
+                ? new Intent(Intent.ACTION_INSTALL_PACKAGE)
+                : new Intent(Intent.ACTION_VIEW);
+        if (apk) {
+            intent.setData(Uri.parse(uri));
+        } else {
+            intent.setDataAndType(Uri.parse(uri), mimeFor(fileName));
+        }
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try {
+            startActivity(intent);
+        } catch (Exception error) {
+            toast("No app can open " + fileName);
+        }
+    }
+
+    private static String mimeFor(String fileName) {
+        String lower = fileName.toLowerCase(Locale.ROOT);
+        int dot = lower.lastIndexOf('.');
+        if (dot < 0 || dot == lower.length() - 1) {
+            return "application/octet-stream";
+        }
+        String mime = MimeTypeMap.getSingleton().getMimeTypeFromExtension(lower.substring(dot + 1));
+        return mime == null ? "application/octet-stream" : mime;
+    }
+
+    private void revealDownloadsFolder() {
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        intent.setDataAndType(
+                MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+                "vnd.android.document/directory");
+        try {
+            startActivity(intent);
+        } catch (Exception error) {
+            toast("No file manager is available");
+        }
     }
 
     @Override
@@ -651,6 +1007,15 @@ public final class MainActivity extends Activity
 
     @Override
     protected void onDestroy() {
+        if (clipboardSyncListener != null) {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            try {
+                clipboard.removePrimaryClipChangedListener(clipboardSyncListener);
+            } catch (Exception ignored) {
+                // Listener may already be unregistered.
+            }
+        }
+        mainHandler.removeCallbacks(broadcastPendingClipboard);
         discovery.stop();
         server.stop();
         networkExecutor.shutdownNow();

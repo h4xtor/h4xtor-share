@@ -57,6 +57,20 @@ class PeerClient:
             transport="lan",
         )
 
+    async def ping(self, peer: Peer, *, timeout_seconds: float = 2) -> float:
+        """Return the round-trip time in milliseconds for *peer*.
+
+        Raises on any failure so the caller can mark the peer offline.
+        """
+        started = asyncio.get_running_loop().time()
+        timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+        async with aiohttp.ClientSession(timeout=timeout) as session, session.get(
+            f"{peer.endpoint}/api/v1/ping",
+            ssl=self.pairing_ssl(),
+        ) as response:
+            response.raise_for_status()
+        return (asyncio.get_running_loop().time() - started) * 1000.0
+
     async def request_pairing(self, peer: Peer) -> dict[str, Any]:
         timeout = aiohttp.ClientTimeout(total=10)
         async with aiohttp.ClientSession(timeout=timeout) as session, session.post(

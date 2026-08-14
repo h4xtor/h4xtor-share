@@ -7,9 +7,27 @@ The application does not require an account, cloud storage, a relay server or WA
 access. Peers discover each other with mDNS and communicate directly over the local
 link.
 
-## Current release: 0.2.0
+## Current release: 0.3.0
 
-Version 0.2.0 adds the cross-platform UI and Android client/server:
+Version 0.3.0 adds a UI/UX overhaul, direct file execution, universal
+clipboard sync and a full history dashboard:
+
+- redesigned dark UI with prominent **Connect** buttons for device pairing;
+- **connection status LEDs** per device (green online / yellow paired / red offline);
+- **signal strength** bars computed from live ping round-trip time;
+- smooth real-time **progress bars** for every active file transfer;
+- **direct file execution** from the UI: Windows `startfile`, Android APK
+  install and `ACTION_VIEW` intents, Linux `chmod +x` + `xdg-open`;
+- **universal clipboard sync**: text copied on any running connected device is
+  broadcast to every paired device (echo-protected on both platforms);
+- **history dashboard** tracking sent files/links, received files/links and
+  connected devices (IP, OS, name, first/last seen, connection count);
+- everything from 0.2.0 remains: mDNS discovery, LAN scanning, manual IP,
+  six-digit pairing, pinned TLS, streaming transfers without a size limit.
+
+### Version 0.2.0
+
+Version 0.2.0 added the cross-platform UI and Android client/server:
 
 - automatic peer discovery over mDNS;
 - active LAN scanning when mDNS is blocked;
@@ -176,6 +194,10 @@ pytest
 4. Read the six-digit code on the receiver and enter it on the sender.
 5. Select **Send clipboard** or **Send files**, or drop files onto the desktop drop
    zone. Follow active transfers in the **Transfers** tab.
+6. Received files can be opened or revealed from the **History** tab. On Android,
+   received APKs offer a direct install action.
+7. Copy text on any paired device to have it appear on every other running,
+   connected device (disable in Settings if you do not want automatic sync).
 
 Received files are stored in the configured incoming directory. Transfers stream
 directly to disk without loading the complete file into memory.
@@ -189,7 +211,9 @@ src/h4xtor_share/
   config.py       Local identity and trust store
   crypto.py       Certificate creation and TLS setup
   discovery.py    mDNS service discovery
+  history.py      Bounded JSON history of transfers, links and devices
   models.py       Shared event and peer models
+  openers.py      Cross-platform open/execute for received files
   scanner.py      Concurrent local-network peer scan
   server.py       Receiving API and streamed uploads
   transports.py   Platform transport capability reporting
@@ -213,4 +237,4 @@ android/
 - Linux BlueZ D-Bus/RFCOMM backend.
 - In-app Windows and Linux Wi-Fi Direct group provisioning.
 - Directory transfer manifests.
-- Optional clipboard history with explicit retention controls.
+- Clipboard history with explicit retention controls.

@@ -61,6 +61,24 @@ public final class H4xtorClient {
         }
     }
 
+    public long ping(Peer peer, int timeoutMs) throws Exception {
+        long start = System.currentTimeMillis();
+        HttpsURLConnection connection = open(
+                new URL(peer.endpoint() + "/api/v1/ping"),
+                "GET",
+                trustAllFactory(),
+                timeoutMs);
+        try {
+            JSONObject object = readJson(connection);
+            if (!object.optBoolean("pong", false)) {
+                throw new IllegalStateException("Peer did not answer the ping");
+            }
+        } finally {
+            connection.disconnect();
+        }
+        return System.currentTimeMillis() - start;
+    }
+
     public JSONObject requestPairing(Peer peer) throws Exception {
         JSONObject body = new JSONObject()
                 .put("device_id", identity.deviceId())

@@ -83,6 +83,7 @@ class ShareServer:
         self.app.add_routes(
             [
                 web.get("/api/v1/info", self.info),
+                web.get("/api/v1/ping", self.ping),
                 web.post("/api/v1/pair/request", self.pair_request),
                 web.post("/api/v1/pair/confirm", self.pair_confirm),
                 web.post("/api/v1/clipboard", self.clipboard),
@@ -120,6 +121,16 @@ class ShareServer:
                 "fingerprint": self.fingerprint,
                 "capabilities": ["clipboard", "files", "resume"],
             }
+        )
+
+    async def ping(self, request: web.Request) -> web.Response:
+        """Unauthenticated liveness probe used for status LEDs and signal bars.
+
+        The round-trip time measured by the caller doubles as a coarse link
+        quality signal without needing Wi-Fi APIs on every platform.
+        """
+        return web.json_response(
+            {"pong": True, "device_id": self.config.device_id}
         )
 
     async def pair_request(self, request: web.Request) -> web.Response:
@@ -192,16 +203,18 @@ class ShareServer:
         return peer_id, peer_name
 
     async def clipboard(self, request: web.Request) -> web.Response:
-        _peer_id, peer_name = self.authenticate(request)
+        peer_id, peer_name = self.authenticate(request)
         payload = await request.json()
         text = payload.get("text")
         if not isinstance(text, str):
             raise web.HTTPBadRequest(text="Clipboard payload must contain text.")
-        self.event_callback(ClipboardReceived(peer_name=peer_name, text=text))
+        self.event_callback(
+            ClipboardReceived(peer_id=peer_id, peer_name=peer_name, text=text)
+        )
         return web.json_response({"accepted": True, "characters": len(text)})
 
     async def file_init(self, request: web.Request) -> web.Response:
-        _peer_id, peer_name = self.authenticate(request)
+        peer_id, peer_name = self.authenticate(request)
         payload = await request.json()
         transfer_id = str(payload.get("transfer_id") or "")
         if not TRANSFER_ID_PATTERN.fullmatch(transfer_id):
@@ -222,6 +235,7 @@ class ShareServer:
             part_path.unlink()
             offset = 0
         self.transfers[transfer_id] = {
+            "peer_id": peer_id,
             "peer_name": peer_name,
             "name": file_name,
             "size": total_size,
@@ -279,6 +293,7 @@ class ShareServer:
             await asyncio.to_thread(part_path.replace, destination)
             self.event_callback(
                 FileReceived(
+                    peer_id=transfer["peer_id"],
                     peer_name=transfer["peer_name"],
                     path=destination,
                     size=transfer["size"],

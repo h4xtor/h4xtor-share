@@ -82,10 +82,22 @@ class Config:
     @property
     def apply_received_clipboard(self) -> bool:
         return bool(self.data.get("apply_received_clipboard", True))
-
     @apply_received_clipboard.setter
     def apply_received_clipboard(self, value: bool) -> None:
         self.data["apply_received_clipboard"] = bool(value)
+        self.save()
+
+    @property
+    def history_path(self) -> Path:
+        return self.path.parent / "history.json"
+
+    @property
+    def clipboard_sync_enabled(self) -> bool:
+        return bool(self.data.get("clipboard_sync", True))
+
+    @clipboard_sync_enabled.setter
+    def clipboard_sync_enabled(self, value: bool) -> None:
+        self.data["clipboard_sync"] = bool(value)
         self.save()
 
     def trust_outbound_peer(
