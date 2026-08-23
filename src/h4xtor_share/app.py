@@ -21,6 +21,7 @@ from h4xtor_share.history import HistoryStore
 from h4xtor_share.models import (
     ClipboardReceived,
     FileReceived,
+    FolderReceived,
     PairingPrompt,
     Peer,
     PeerStatus,
@@ -31,6 +32,7 @@ from h4xtor_share.openers import open_path, reveal_in_folder
 from h4xtor_share.scanner import scan_lan as scan_lan_peers
 from h4xtor_share.server import ShareServer
 from h4xtor_share.transports import detect_transports
+from h4xtor_share.udp import UdpDiscovery
 
 APP_TITLE = "h4xtor-share"
 VERSION = __version__
@@ -38,6 +40,7 @@ VERSION = __version__
 HEALTH_INTERVAL_MS = 4000
 CLIPBOARD_POLL_MS = 500
 CLIPBOARD_SUPPRESS_SECONDS = 3.0
+SEND_CONCURRENCY = 3
 
 
 def _format_bytes(value: int) -> str:
@@ -47,6 +50,12 @@ def _format_bytes(value: int) -> str:
             return f"{size:.1f} {unit}" if unit != "B" else f"{int(size)} B"
         size /= 1024.0
     return f"{size:.1f} TiB"
+
+
+def _format_speed(bytes_per_second: float) -> str:
+    if bytes_per_second <= 0:
+        return ""
+    return f"{_format_bytes(bytes_per_second)}/s"
 
 
 class AsyncRuntime:
@@ -119,10 +128,18 @@ class H4xtorShareApp(TkinterDnD.Tk):
             fingerprint,
             self._receive_peer,
         )
+        self.udp_discovery = UdpDiscovery(
+            self.config_store,
+            fingerprint,
+            ("clipboard", "files", "resume", "folders"),
+            self._receive_peer,
+            status_callback=lambda text: self.event_queue.put(("status", text)),
+        )
         self.peers: dict[str, Peer] = {}
         self.peer_status: dict[str, PeerStatus] = {}
         self.transfer_rows: dict[str, str] = {}
         self.transfer_bars: dict[str, ttk.Progressbar] = {}
+        self.transfer_speed: dict[str, tuple[float, int, float]] = {}
         self.history = HistoryStore(self.config_store.history_path)
         self._clipboard_observed = ""
         self._clipboard_suppress_text = ""
@@ -269,11 +286,12 @@ class H4xtorShareApp(TkinterDnD.Tk):
         self._button(toolbar, "Send clipboard", self.send_clipboard).pack(
             side="left", padx=(0, 8)
         )
-        self._button(toolbar, "Send files", self.send_files).pack(side="left")
+        self._button(toolbar, "Send files", self.send_files).pack(side="left", padx=(0, 8))
+        self._button(toolbar, "Send folder", self.send_folder).pack(side="left")
 
         self.drop_zone = tk.Label(
             parent,
-            text="Drop files here to send them to the selected device",
+            text="Drop files or folders here to send them to the selected device",
             bg=self.COLORS["panel_alt"],
             fg=self.COLORS["muted"],
             relief="flat",
@@ -319,12 +337,13 @@ class H4xtorShareApp(TkinterDnD.Tk):
         self.peer_tree.bind("<Double-1>", self._peer_double_clicked)
 
     def _build_transfers_tab(self, parent: tk.Frame) -> None:
-        columns = ("file", "direction", "progress", "bytes")
+        columns = ("file", "direction", "progress", "speed", "bytes")
         self.transfer_tree = ttk.Treeview(parent, columns=columns, show="headings")
         for column, title, width in (
-            ("file", "File", 360),
+            ("file", "File", 320),
             ("direction", "Direction", 90),
-            ("progress", "Progress", 150),
+            ("progress", "Progress", 90),
+            ("speed", "Speed", 120),
             ("bytes", "Transferred", 200),
         ):
             self.transfer_tree.heading(column, text=title)
@@ -543,8 +562,10 @@ class H4xtorShareApp(TkinterDnD.Tk):
     async def _start_services(self) -> None:
         await self.server.start()
         await asyncio.to_thread(self.discovery.start)
+        await asyncio.to_thread(self.udp_discovery.start)
 
     async def _stop_services(self) -> None:
+        await asyncio.to_thread(self.udp_discovery.stop)
         await asyncio.to_thread(self.discovery.stop)
         await self.server.stop()
 
@@ -598,6 +619,8 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self.status_var.set("File transfer completed")
         elif tag == "peer_status":
             self._update_peer_status(value)
+        elif tag == "status":
+            self.status_var.set(value)
         elif tag == "health_cycle":
             pass
         elif tag == "clipboard_broadcast":
@@ -635,6 +658,17 @@ class H4xtorShareApp(TkinterDnD.Tk):
             peer = self._peer_by_id(event.peer_id)
             if peer is not None:
                 self.history.record_received_file(
+                    peer,
+                    event.path.name,
+                    event.size,
+                    str(event.path),
+                )
+                self._refresh_history()
+        elif isinstance(event, FolderReceived):
+            self.status_var.set(f"Received folder {event.path.name} from {event.peer_name}")
+            peer = self._peer_by_id(event.peer_id)
+            if peer is not None:
+                self.history.record_received_folder(
                     peer,
                     event.path.name,
                     event.size,
@@ -890,6 +924,26 @@ class H4xtorShareApp(TkinterDnD.Tk):
 
         self._send_paths(peer, [Path(raw_path) for raw_path in paths])
 
+    def send_folder(self) -> None:
+        try:
+            peer = self.selected_peer()
+        except RuntimeError as error:
+            self._show_error(error)
+            return
+        if not peer.supports_folders:
+            self._show_error(
+                RuntimeError(f"{peer.name} does not support folder transfers yet.")
+            )
+            return
+        path = filedialog.askdirectory(
+            title="Choose folder to send",
+            initialdir=str(Path.home()),
+            parent=self,
+        )
+        if not path:
+            return
+        self._send_paths(peer, [Path(path)])
+
     def _files_dropped(self, event: Any) -> str:
         try:
             peer = self.selected_peer()
@@ -898,39 +952,88 @@ class H4xtorShareApp(TkinterDnD.Tk):
             return "break"
         paths = [Path(raw_path) for raw_path in self.tk.splitlist(event.data)]
         files = [path for path in paths if path.is_file()]
-        if not files:
+        folders = [path for path in paths if path.is_dir()]
+        if not files and not folders:
             self._show_error(ValueError("The drop did not contain any files."))
             return "break"
-        self._send_paths(peer, files)
+        self._send_paths(peer, files + folders)
         return "break"
 
     def _send_paths(self, peer: Peer, paths: list[Path]) -> None:
+        files = [path for path in paths if path.is_file()]
+        folders = [path for path in paths if path.is_dir()]
+        unsupported = [path for path in folders if not peer.supports_folders]
+        if unsupported:
+            names = ", ".join(path.name for path in unsupported[:3])
+            self._show_error(
+                RuntimeError(
+                    f"{peer.name} does not support folder transfers yet: {names}"
+                )
+            )
+            folders = [path for path in folders if peer.supports_folders]
+        if not files and not folders:
+            return
+
+        def progress_callback(transfer_progress: TransferProgress) -> None:
+            self.event_queue.put(("core_event", transfer_progress))
+
+        def folder_size(path: Path) -> int:
+            return sum(
+                child.stat().st_size for child in path.rglob("*") if child.is_file()
+            )
 
         async def send_all() -> None:
-            for path in paths:
-                size = path.stat().st_size
-                await self.client.send_file(
-                    peer,
-                    path,
-                    lambda progress: self.event_queue.put(("core_event", progress)),
-                )
-                self.history.record_sent_file(peer, path.name, size, str(path))
+            semaphore = asyncio.Semaphore(SEND_CONCURRENCY)
 
-        self.status_var.set(f"Sending {len(paths)} file(s) to {peer.name}...")
+            async def send_one(path: Path) -> None:
+                async with semaphore:
+                    if path.is_dir():
+                        await self.client.send_folder(peer, path, progress_callback)
+                        self.history.record_sent_folder(
+                            peer, path.name, folder_size(path), str(path)
+                        )
+                    else:
+                        size = path.stat().st_size
+                        await self.client.send_file(peer, path, progress_callback)
+                        self.history.record_sent_file(
+                            peer, path.name, size, str(path)
+                        )
+
+            await asyncio.gather(*(send_one(path) for path in files + folders))
+
+        count = len(files) + len(folders)
+        self.status_var.set(f"Sending {count} item(s) to {peer.name}...")
         self.runtime.submit(send_all(), "files_sent")
 
     def _update_transfer(self, progress: TransferProgress) -> None:
+        now = time.monotonic()
+        previous = self.transfer_speed.get(progress.transfer_id)
+        if previous:
+            last_time, last_sent, smoothed = previous
+            elapsed = now - last_time
+            if elapsed > 0:
+                instantaneous = (progress.sent - last_sent) / elapsed
+                smoothed = (
+                    instantaneous
+                    if smoothed <= 0
+                    else smoothed * 0.7 + instantaneous * 0.3
+                )
+        else:
+            smoothed = 0.0
+        self.transfer_speed[progress.transfer_id] = (now, progress.sent, smoothed)
+
+        percent = f"{progress.percent:.0f}%"
+        speed = _format_speed(smoothed)
+        values = (
+            progress.file_name,
+            progress.direction,
+            percent,
+            speed,
+            f"{progress.sent:,} / {progress.total:,} bytes",
+        )
         row = self.transfer_rows.get(progress.transfer_id)
         if row and self.transfer_tree.exists(row):
-            self.transfer_tree.item(
-                row,
-                values=(
-                    progress.file_name,
-                    progress.direction,
-                    "",
-                    f"{progress.sent:,} / {progress.total:,} bytes",
-                ),
-            )
+            self.transfer_tree.item(row, values=values)
             bar = self.transfer_bars.get(row)
             if bar is not None:
                 bar.configure(
@@ -939,11 +1042,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
                 )
                 self._place_bar(row, bar)
             return
-        row = self.transfer_tree.insert(
-            "",
-            "end",
-            values=(progress.file_name, progress.direction, "", ""),
-        )
+        row = self.transfer_tree.insert("", "end", values=values)
         self.transfer_rows[progress.transfer_id] = row
         bar = ttk.Progressbar(
             self.transfer_tree,
@@ -980,11 +1079,14 @@ class H4xtorShareApp(TkinterDnD.Tk):
             return
         entry = self.history.received()[int(selected[0])]
         path = entry.get("path") or ""
-        if not path or not Path(path).is_file():
+        if not path or not Path(path).exists():
             self._show_error(FileNotFoundError(path or "Missing file path in history."))
             return
         try:
-            open_path(path)
+            if Path(path).is_dir() or entry.get("kind") == "folder":
+                reveal_in_folder(path)
+            else:
+                open_path(path)
         except Exception as error:
             self._show_error(error)
 
@@ -995,7 +1097,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
             return
         entry = self.history.received()[int(selected[0])]
         path = entry.get("path") or ""
-        if not path or not Path(path).is_file():
+        if not path or not Path(path).exists():
             self._show_error(FileNotFoundError(path or "Missing file path in history."))
             return
         try:

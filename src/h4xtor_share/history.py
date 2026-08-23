@@ -85,12 +85,18 @@ class HistoryStore:
     def record_sent_file(self, peer: Peer, name: str, size: int, path: str) -> None:
         self._append("sent", self._entry(peer, "file", name, size, path))
 
+    def record_sent_folder(self, peer: Peer, name: str, size: int, path: str) -> None:
+        self._append("sent", self._entry(peer, "folder", name, size, path))
+
     def record_sent_text(self, peer: Peer, text: str) -> None:
         kind = "link" if is_link(text) else "clipboard"
         self._append("sent", self._entry(peer, kind, text, len(text), ""))
 
     def record_received_file(self, peer: Peer, name: str, size: int, path: str) -> None:
         self._append("received", self._entry(peer, "file", name, size, path))
+
+    def record_received_folder(self, peer: Peer, name: str, size: int, path: str) -> None:
+        self._append("received", self._entry(peer, "folder", name, size, path))
 
     def record_received_text(self, peer: Peer, text: str) -> None:
         kind = "link" if is_link(text) else "clipboard"

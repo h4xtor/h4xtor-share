@@ -16,10 +16,15 @@ class Peer:
     fingerprint: str
     platform: str
     transport: TransportName = "lan"
+    capabilities: tuple[str, ...] = ()
 
     @property
     def endpoint(self) -> str:
         return f"https://{self.address}:{self.port}"
+
+    @property
+    def supports_folders(self) -> bool:
+        return "folders" in self.capabilities
 
 
 @dataclass(slots=True)
@@ -40,6 +45,14 @@ class ClipboardReceived:
 
 @dataclass(slots=True)
 class FileReceived:
+    peer_id: str
+    peer_name: str
+    path: Path
+    size: int
+
+
+@dataclass(slots=True)
+class FolderReceived:
     peer_id: str
     peer_name: str
     path: Path

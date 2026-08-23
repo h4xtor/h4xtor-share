@@ -63,6 +63,7 @@ class DiscoveryService:
                 "fingerprint": self.fingerprint,
                 "platform": self.config.platform_name,
                 "protocol": "1",
+                "capabilities": "clipboard,files,resume,folders",
             },
             server=f"{self.config.device_id}.local.",
         )
@@ -111,6 +112,12 @@ class DiscoveryService:
         )
         if not ipv4:
             return
+        raw_capabilities = property_text(info.properties, "capabilities")
+        capabilities = tuple(
+            capability.strip()
+            for capability in raw_capabilities.split(",")
+            if capability.strip()
+        )
         self.peer_callback(
             Peer(
                 device_id=device_id,
@@ -120,5 +127,6 @@ class DiscoveryService:
                 fingerprint=property_text(info.properties, "fingerprint"),
                 platform=property_text(info.properties, "platform", "unknown"),
                 transport="lan",
+                capabilities=capabilities,
             )
         )

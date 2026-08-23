@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import re
 import secrets
+import shutil
 import time
 import uuid
 from collections.abc import Callable
@@ -16,6 +17,7 @@ from h4xtor_share.config import Config
 from h4xtor_share.models import (
     ClipboardReceived,
     FileReceived,
+    FolderReceived,
     PairingPrompt,
     TransferProgress,
 )
@@ -23,6 +25,9 @@ from h4xtor_share.models import (
 PAIRING_TTL_SECONDS = 120
 CHUNK_SIZE = 1024 * 1024
 TRANSFER_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
+MAX_FOLDER_ENTRIES = 10_000
+MAX_RELATIVE_SEGMENTS = 64
+STALE_TEMP_AGE_SECONDS = 24 * 60 * 60
 
 
 INVALID_NAME_CHARACTERS = '<>:"|?*'
@@ -63,6 +68,27 @@ def unique_destination(directory: Path, file_name: str) -> Path:
         index += 1
 
 
+def safe_relative_path(value: str) -> str:
+    """Sanitize a relative path into safe, nested directory segments.
+
+    Every segment is passed through ``safe_file_name`` so traversal attempts
+    (``../``, absolute paths, reserved Windows names) are neutralized and the
+    result stays valid on Windows, macOS and Linux. Returns a forward-slash
+    joined path relative to the incoming folder.
+    """
+    normalized = value.strip().replace("\\", "/").lstrip("/")
+    segments = [
+        safe_file_name(part)
+        for part in normalized.split("/")
+        if part and part != "."
+    ]
+    if not segments or any(part in {".", ".."} for part in segments):
+        raise ValueError("Invalid relative path.")
+    if len(segments) > MAX_RELATIVE_SEGMENTS:
+        raise ValueError("Relative path has too many segments.")
+    return "/".join(segments)
+
+
 class ShareServer:
     def __init__(
         self,
@@ -77,6 +103,7 @@ class ShareServer:
         self.event_callback = event_callback
         self.pending_pairings: dict[str, dict[str, Any]] = {}
         self.transfers: dict[str, dict[str, Any]] = {}
+        self.folders: dict[str, dict[str, Any]] = {}
         self.runner: web.AppRunner | None = None
         self.site: web.TCPSite | None = None
         self.app = web.Application(client_max_size=0)
@@ -89,11 +116,15 @@ class ShareServer:
                 web.post("/api/v1/clipboard", self.clipboard),
                 web.post("/api/v1/files/init", self.file_init),
                 web.put("/api/v1/files/{transfer_id}", self.file_upload),
+                web.post("/api/v1/folders/init", self.folder_init),
+                web.put("/api/v1/folders/{folder_id}/{file_id}", self.folder_upload),
+                web.post("/api/v1/folders/complete", self.folder_complete),
             ]
         )
 
     async def start(self) -> None:
         self.config.incoming_directory.mkdir(parents=True, exist_ok=True)
+        self._sweep_stale_temp()
         self.runner = web.AppRunner(self.app, access_log=None)
         await self.runner.setup()
         self.site = web.TCPSite(
@@ -103,6 +134,29 @@ class ShareServer:
             ssl_context=self.ssl_context,
         )
         await self.site.start()
+
+    def _sweep_stale_temp(self) -> None:
+        """Remove abandoned ``.part`` files and staging directories.
+
+        Interrupted transfers leave partial data on disk. Anything older than
+        ``STALE_TEMP_AGE_SECONDS`` belongs to a transfer that can no longer be
+        resumed, so it is reclaimed without touching active or completed files.
+        """
+        incoming = self.config.incoming_directory
+        if not incoming.exists():
+            return
+        cutoff = time.time() - STALE_TEMP_AGE_SECONDS
+        for candidate in incoming.iterdir():
+            try:
+                if not candidate.name.startswith(".h4xtor-"):
+                    continue
+                if candidate.stat().st_mtime < cutoff:
+                    if candidate.is_dir():
+                        shutil.rmtree(candidate, ignore_errors=True)
+                    else:
+                        candidate.unlink()
+            except OSError:
+                continue
 
     async def stop(self) -> None:
         if self.runner:
@@ -119,7 +173,7 @@ class ShareServer:
                 "platform": self.config.platform_name,
                 "port": self.config.port,
                 "fingerprint": self.fingerprint,
-                "capabilities": ["clipboard", "files", "resume"],
+                "capabilities": ["clipboard", "files", "resume", "folders"],
             }
         )
 
@@ -306,5 +360,174 @@ class ShareServer:
                 "transfer_id": transfer_id,
                 "offset": actual_offset,
                 "complete": actual_offset == transfer["size"],
+            }
+        )
+
+    async def folder_init(self, request: web.Request) -> web.Response:
+        """Begin a directory transfer.
+
+        The sender supplies a manifest: the folder name and one entry per file
+        with its own transfer id, sanitized relative path and byte size. The
+        receiver creates an isolated staging directory and reports the existing
+        resume offset of every partial file already on disk.
+        """
+        peer_id, peer_name = self.authenticate(request)
+        payload = await request.json()
+        folder_id = str(payload.get("folder_id") or "")
+        if not TRANSFER_ID_PATTERN.fullmatch(folder_id):
+            raise web.HTTPBadRequest(text="Invalid folder id.")
+        try:
+            folder_name = safe_file_name(str(payload.get("name") or ""))
+        except ValueError as error:
+            raise web.HTTPBadRequest(text="Invalid folder name.") from error
+
+        raw_entries = payload.get("entries")
+        if not isinstance(raw_entries, list) or not raw_entries:
+            raise web.HTTPBadRequest(text="Folder must contain at least one file.")
+        if len(raw_entries) > MAX_FOLDER_ENTRIES:
+            raise web.HTTPBadRequest(text="Folder contains too many files.")
+
+        files: dict[str, dict[str, Any]] = {}
+        for entry in raw_entries:
+            try:
+                file_id = str(entry["id"])
+                relative = safe_relative_path(str(entry["path"]))
+                size = int(entry["size"])
+            except (KeyError, TypeError, ValueError) as error:
+                raise web.HTTPBadRequest(text="Invalid folder entry.") from error
+            if not TRANSFER_ID_PATTERN.fullmatch(file_id) or size < 0:
+                raise web.HTTPBadRequest(text="Invalid folder entry.")
+            if file_id in files:
+                raise web.HTTPBadRequest(text="Duplicate folder entry.")
+            files[file_id] = {"path": relative, "size": size}
+
+        incoming = self.config.incoming_directory
+        incoming.mkdir(parents=True, exist_ok=True)
+        staging = incoming / f".h4xtor-folder-{folder_id}"
+        staging.mkdir(parents=True, exist_ok=True)
+
+        offsets: list[dict[str, Any]] = []
+        for file_id, metadata in files.items():
+            part = staging / f".h4xtor-{file_id}.part"
+            offset = part.stat().st_size if part.exists() else 0
+            if offset > metadata["size"]:
+                part.unlink()
+                offset = 0
+            metadata["part"] = part
+            offsets.append({"id": file_id, "path": metadata["path"], "offset": offset})
+
+        self.folders[folder_id] = {
+            "peer_id": peer_id,
+            "peer_name": peer_name,
+            "name": folder_name,
+            "staging": staging,
+            "files": files,
+            "done": set(),
+        }
+        return web.json_response(
+            {
+                "folder_id": folder_id,
+                "name": folder_name,
+                "entries": offsets,
+            }
+        )
+
+    async def folder_upload(self, request: web.Request) -> web.Response:
+        self.authenticate(request)
+        folder_id = request.match_info["folder_id"]
+        file_id = request.match_info["file_id"]
+        folder = self.folders.get(folder_id)
+        if not folder:
+            raise web.HTTPNotFound(text="Folder was not initialized.")
+        if file_id in folder["done"]:
+            raise web.HTTPConflict(text="File already received.")
+        metadata = folder["files"].get(file_id)
+        if not metadata:
+            raise web.HTTPNotFound(text="Folder entry was not initialized.")
+
+        try:
+            requested_offset = int(request.headers.get("X-H4xtor-Offset", "-1"))
+        except ValueError as error:
+            raise web.HTTPBadRequest(text="Invalid transfer offset.") from error
+
+        part_path: Path = metadata["part"]
+        actual_offset = part_path.stat().st_size if part_path.exists() else 0
+        if requested_offset != actual_offset:
+            raise web.HTTPConflict(
+                text=str(actual_offset),
+                headers={"X-H4xtor-Offset": str(actual_offset)},
+            )
+
+        display = f"{folder['name']}/{metadata['path']}"
+        async with aiofiles.open(part_path, "ab") as output:
+            async for chunk in request.content.iter_chunked(CHUNK_SIZE):
+                if not chunk:
+                    continue
+                await output.write(chunk)
+                actual_offset += len(chunk)
+                if actual_offset > metadata["size"]:
+                    raise web.HTTPBadRequest(text="Received more bytes than declared.")
+                self.event_callback(
+                    TransferProgress(
+                        transfer_id=file_id,
+                        file_name=display,
+                        sent=actual_offset,
+                        total=metadata["size"],
+                        direction="receive",
+                    )
+                )
+
+        if actual_offset == metadata["size"]:
+            folder["done"].add(file_id)
+            target = folder["staging"] / metadata["path"]
+            target.parent.mkdir(parents=True, exist_ok=True)
+            await asyncio.to_thread(part_path.replace, target)
+
+        return web.json_response(
+            {
+                "folder_id": folder_id,
+                "file_id": file_id,
+                "offset": actual_offset,
+                "complete": actual_offset == metadata["size"],
+            }
+        )
+
+    async def folder_complete(self, request: web.Request) -> web.Response:
+        """Atomically promote a fully received staging directory.
+
+        Only when every manifest entry has arrived is the staging directory
+        renamed to its final, collision-free name. A partial folder is left in
+        place so the sender can retry and resume.
+        """
+        self.authenticate(request)
+        payload = await request.json()
+        folder_id = str(payload.get("folder_id") or "")
+        folder = self.folders.get(folder_id)
+        if not folder:
+            raise web.HTTPNotFound(text="Folder was not initialized.")
+        missing = len(folder["files"]) - len(folder["done"])
+        if missing:
+            raise web.HTTPConflict(text=f"{missing} file(s) not received yet.")
+
+        destination = unique_destination(
+            self.config.incoming_directory,
+            folder["name"],
+        )
+        await asyncio.to_thread(folder["staging"].replace, destination)
+        total = sum(metadata["size"] for metadata in folder["files"].values())
+        self.event_callback(
+            FolderReceived(
+                peer_id=folder["peer_id"],
+                peer_name=folder["peer_name"],
+                path=destination,
+                size=total,
+            )
+        )
+        del self.folders[folder_id]
+        return web.json_response(
+            {
+                "folder_id": folder_id,
+                "name": folder["name"],
+                "path": str(destination),
             }
         )

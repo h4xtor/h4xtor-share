@@ -11,7 +11,13 @@ from h4xtor_share.client import PeerClient
 from h4xtor_share.config import Config
 from h4xtor_share.crypto import ensure_certificate, server_ssl_context
 from h4xtor_share.history import HistoryStore, is_link
-from h4xtor_share.models import Peer, PeerStatus, signal_bars
+from h4xtor_share.models import (
+    FileReceived,
+    PairingPrompt,
+    Peer,
+    PeerStatus,
+    signal_bars,
+)
 from h4xtor_share.openers import open_path, reveal_in_folder
 from h4xtor_share.server import ShareServer
 
@@ -158,3 +164,84 @@ async def test_ping_endpoint_round_trip(tmp_path: Path) -> None:
         assert 0.0 <= rtt_ms < 2000.0
     finally:
         await server.stop()
+
+
+@pytest.mark.asyncio
+async def test_file_transfer_resumes_from_partial_offset(tmp_path: Path) -> None:
+    receiver_config = Config(tmp_path / "receiver" / "config.json")
+    receiver_config.data["device_name"] = "Receiver"
+    receiver_config.data["port"] = available_tcp_port()
+    receiver_config.data["incoming_directory"] = str(tmp_path / "received")
+    receiver_config.save()
+
+    certificate, key, fingerprint = ensure_certificate(
+        receiver_config.path.parent,
+        receiver_config.device_name,
+    )
+    events: list[object] = []
+    server = ShareServer(
+        receiver_config,
+        server_ssl_context(certificate, key),
+        fingerprint,
+        events.append,
+    )
+    await server.start()
+    try:
+        sender_config = Config(tmp_path / "sender" / "config.json")
+        sender_config.data["device_name"] = "Sender"
+        sender_config.save()
+        client = PeerClient(sender_config)
+        peer = await client.get_info("127.0.0.1", receiver_config.port)
+        pairing = await client.request_pairing(peer)
+        prompt = next(
+            event for event in events if isinstance(event, PairingPrompt)
+        )
+        await client.confirm_pairing(
+            peer,
+            str(pairing["pairing_id"]),
+            prompt.code,
+        )
+
+        payload = bytes(range(256)) * 10_000
+        source = tmp_path / "resumable.bin"
+        source.write_bytes(payload)
+
+        # Simulate an interrupted attempt: the receiver already holds the first
+        # 500 KiB of a transfer with a known id, and the client remembers that
+        # id so the retry continues instead of restarting.
+        transfer_id = "12" * 16
+        incoming = tmp_path / "received"
+        incoming.mkdir(parents=True, exist_ok=True)
+        part = incoming / f".h4xtor-{transfer_id}.part"
+        part.write_bytes(payload[: 500 * 1024])
+
+        key = (peer.device_id, str(source.resolve()))
+        client._resumable[key] = transfer_id
+
+        await client.send_file(peer, source, lambda _progress: None)
+
+        received = next(
+            event for event in events if isinstance(event, FileReceived)
+        )
+        assert received.path.read_bytes() == payload
+        assert received.size == len(payload)
+        assert not part.exists()
+    finally:
+        await server.stop()
+
+
+@pytest.mark.asyncio
+async def test_failed_send_is_remembered_for_resume(tmp_path: Path) -> None:
+    sender_config = Config(tmp_path / "sender" / "config.json")
+    sender_config.data["device_name"] = "Sender"
+    sender_config.save()
+    client = PeerClient(sender_config)
+    peer = sample_peer()
+    source = tmp_path / "payload.bin"
+    source.write_bytes(b"x" * 1024)
+
+    with pytest.raises(RuntimeError):
+        await client.send_file(peer, source, lambda _progress: None)
+
+    key = (peer.device_id, str(source.resolve()))
+    assert key in client._resumable
