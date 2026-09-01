@@ -95,16 +95,19 @@ class AsyncRuntime:
 
 class H4xtorShareApp(TkinterDnD.Tk):
     COLORS = {
-        "background": "#0b0f14",
-        "panel": "#121923",
-        "panel_alt": "#182230",
-        "text": "#eaf2fb",
-        "muted": "#93a4b8",
-        "accent": "#00d1b2",
-        "accent_hover": "#00b89c",
-        "danger": "#ff5c70",
-        "warning": "#f6c344",
-        "border": "#263548",
+        "background": "#f4f7fb",
+        "panel": "#ffffff",
+        "panel_alt": "#ffffff",
+        "text": "#14161c",
+        "muted": "#64677d",
+        "accent": "#ff8fa3",
+        "accent_hover": "#f27b90",
+        "accent_soft": "#ffdce3",
+        "danger": "#e5484d",
+        "warning": "#b7791f",
+        "border": "#e7ebf1",
+        "nav": "#ffffff",
+        "nav_active": "#ff8fa3",
     }
 
     def __init__(self) -> None:
@@ -165,33 +168,33 @@ class H4xtorShareApp(TkinterDnD.Tk):
             ".",
             background=self.COLORS["panel"],
             foreground=self.COLORS["text"],
-            fieldbackground=self.COLORS["panel_alt"],
+            fieldbackground=self.COLORS["panel"],
             bordercolor=self.COLORS["border"],
             font=("Segoe UI", 10),
         )
         style.configure(
             "Treeview",
-            background=self.COLORS["panel_alt"],
+            background=self.COLORS["panel"],
             foreground=self.COLORS["text"],
-            fieldbackground=self.COLORS["panel_alt"],
-            rowheight=30,
+            fieldbackground=self.COLORS["panel"],
+            rowheight=32,
             borderwidth=0,
         )
         style.map(
             "Treeview",
-            background=[("selected", self.COLORS["accent"])],
-            foreground=[("selected", "#06110f")],
+            background=[("selected", self.COLORS["accent_soft"])],
+            foreground=[("selected", self.COLORS["text"])],
         )
         style.configure(
             "Treeview.Heading",
-            background=self.COLORS["panel"],
+            background=self.COLORS["background"],
             foreground=self.COLORS["muted"],
             relief="flat",
             font=("Segoe UI Semibold", 9),
         )
         style.configure(
             "TNotebook",
-            background=self.COLORS["background"],
+            background=self.COLORS["panel"],
             borderwidth=0,
         )
         style.configure(
@@ -199,15 +202,34 @@ class H4xtorShareApp(TkinterDnD.Tk):
             background=self.COLORS["panel"],
             foreground=self.COLORS["muted"],
             padding=(18, 10),
+            borderwidth=0,
         )
         style.map(
             "TNotebook.Tab",
-            background=[("selected", self.COLORS["accent"])],
-            foreground=[("selected", "#06110f")],
+            background=[("selected", self.COLORS["accent_soft"])],
+            foreground=[("selected", self.COLORS["accent_hover"])],
+        )
+        style.configure(
+            "Horizontal.TProgressbar",
+            background=self.COLORS["accent"],
+            troughcolor=self.COLORS["background"],
+            bordercolor=self.COLORS["background"],
+            lightcolor=self.COLORS["accent"],
+            darkcolor=self.COLORS["accent"],
         )
 
+    NAV_ITEMS = (
+        ("home", "Home"),
+        ("devices", "Devices"),
+        ("transfers", "Transfers"),
+        ("history", "History"),
+        ("clipboard", "Clipboard"),
+        ("settings", "Settings"),
+    )
+
     def _build_ui(self) -> None:
-        header = tk.Frame(self, bg=self.COLORS["background"], padx=18, pady=16)
+        self._build_menubar()
+        header = tk.Frame(self, bg=self.COLORS["background"], padx=20, pady=16)
         header.pack(fill="x")
         tk.Label(
             header,
@@ -220,9 +242,9 @@ class H4xtorShareApp(TkinterDnD.Tk):
             header,
             text="offline peer-to-peer",
             bg=self.COLORS["background"],
-            fg=self.COLORS["accent"],
+            fg=self.COLORS["accent_hover"],
             font=("Segoe UI", 10),
-        ).pack(side="left", padx=(12, 0), pady=(10, 0))
+        ).pack(side="left", padx=(12, 0), pady=(11, 0))
         self.status_var = tk.StringVar(value="Starting local services...")
         tk.Label(
             header,
@@ -230,23 +252,83 @@ class H4xtorShareApp(TkinterDnD.Tk):
             bg=self.COLORS["background"],
             fg=self.COLORS["muted"],
             font=("Segoe UI", 10),
-        ).pack(side="right", pady=(9, 0))
+        ).pack(side="right", pady=(11, 0))
 
-        notebook = ttk.Notebook(self)
-        notebook.pack(fill="both", expand=True, padx=18, pady=(0, 18))
-        devices_tab = tk.Frame(notebook, bg=self.COLORS["panel"])
-        transfers_tab = tk.Frame(notebook, bg=self.COLORS["panel"])
-        history_tab = tk.Frame(notebook, bg=self.COLORS["panel"])
-        settings_tab = tk.Frame(notebook, bg=self.COLORS["panel"])
-        notebook.add(devices_tab, text="Devices")
-        notebook.add(transfers_tab, text="Transfers")
-        notebook.add(history_tab, text="History")
-        notebook.add(settings_tab, text="Settings")
+        self.nav_stack: dict[str, tk.Frame] = {}
+        content = tk.Frame(self, bg=self.COLORS["background"])
+        content.pack(fill="both", expand=True, padx=20, pady=(0, 0))
+        content.grid_rowconfigure(0, weight=1)
+        content.grid_columnconfigure(0, weight=1)
 
-        self._build_devices_tab(devices_tab)
-        self._build_transfers_tab(transfers_tab)
-        self._build_history_tab(history_tab)
-        self._build_settings_tab(settings_tab)
+        self._build_home_tab(content)
+        self._build_devices_tab(content)
+        self._build_transfers_tab(content)
+        self._build_history_tab(content)
+        self._build_clipboard_tab(content)
+        self._build_settings_tab(content)
+
+        for frame in self.nav_stack.values():
+            frame.grid(row=0, column=0, sticky="nsew")
+
+        self._build_navbar()
+        self._show_view("home")
+
+    def _build_menubar(self) -> None:
+        menubar = tk.Menu(self, tearoff=0)
+        device_menu = tk.Menu(menubar, tearoff=0)
+        device_menu.add_command(label="Add IP", command=self.add_manual_peer)
+        device_menu.add_command(label="Scan LAN", command=self.scan_lan)
+        device_menu.add_separator()
+        device_menu.add_command(label="Connect", command=self.pair_selected)
+        menubar.add_cascade(label="Device", menu=device_menu)
+
+        send_menu = tk.Menu(menubar, tearoff=0)
+        send_menu.add_command(label="Send clipboard", command=self.send_clipboard)
+        send_menu.add_command(label="Send files", command=self.send_files)
+        send_menu.add_command(label="Send folder", command=self.send_folder)
+        menubar.add_cascade(label="Send", menu=send_menu)
+        self.config(menu=menubar)
+
+    def _build_navbar(self) -> None:
+        bar = tk.Frame(self, bg=self.COLORS["nav"], highlightthickness=1)
+        bar.configure(highlightbackground=self.COLORS["border"])
+        bar.pack(fill="x", side="bottom")
+        self.nav_buttons: dict[str, tk.Button] = {}
+        for key, label in self.NAV_ITEMS:
+            button = tk.Button(
+                bar,
+                text=label,
+                command=lambda name=key: self._show_view(name),
+                bg=self.COLORS["nav"],
+                fg=self.COLORS["muted"],
+                activebackground=self.COLORS["background"],
+                activeforeground=self.COLORS["accent"],
+                relief="flat",
+                borderwidth=0,
+                padx=8,
+                pady=14,
+                cursor="hand2",
+                font=("Segoe UI Semibold", 9),
+            )
+            button.pack(side="left", expand=True, fill="x")
+            self.nav_buttons[key] = button
+        self._update_navbar()
+
+    def _show_view(self, name: str) -> None:
+        self.active_view = name
+        for key, frame in self.nav_stack.items():
+            if key == name:
+                frame.tkraise()
+        self._update_navbar()
+
+    def _update_navbar(self) -> None:
+        active = getattr(self, "active_view", "home")
+        for key, button in self.nav_buttons.items():
+            is_active = key == active
+            button.configure(
+                fg=self.COLORS["accent"] if is_active else self.COLORS["muted"],
+                font=("Segoe UI Semibold", 9) if is_active else ("Segoe UI", 9),
+            )
 
     def _button(
         self,
@@ -257,7 +339,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
         primary: bool = False,
     ) -> tk.Button:
         background = self.COLORS["accent"] if primary else self.COLORS["panel_alt"]
-        foreground = "#06110f" if primary else self.COLORS["text"]
+        foreground = "#ffffff" if primary else self.COLORS["text"]
         active = self.COLORS["accent_hover"] if primary else self.COLORS["border"]
         return tk.Button(
             parent,
@@ -275,37 +357,135 @@ class H4xtorShareApp(TkinterDnD.Tk):
             font=("Segoe UI Semibold", 9),
         )
 
+    def _card(self, parent: tk.Widget, **kwargs: Any) -> tk.Frame:
+        return tk.Frame(
+            parent,
+            bg=self.COLORS["panel"],
+            highlightthickness=1,
+            highlightbackground=self.COLORS["border"],
+            highlightcolor=self.COLORS["border"],
+            **kwargs,
+        )
+
+    def _build_home_tab(self, parent: tk.Frame) -> None:
+        view = tk.Frame(parent, bg=self.COLORS["background"])
+        view.grid_rowconfigure(0, weight=1)
+        view.grid_columnconfigure(0, weight=1)
+        self.nav_stack["home"] = view
+
+        card = self._card(view, padx=24, pady=24)
+        card.grid(row=0, column=0, sticky="nsew")
+        card.grid_columnconfigure(0, weight=1)
+
+        tk.Label(
+            card,
+            text="Home",
+            bg=self.COLORS["panel"],
+            fg=self.COLORS["text"],
+            font=("Segoe UI Semibold", 18),
+        ).grid(row=0, column=0, sticky="w")
+        tk.Label(
+            card,
+            text="Select a device and send anything, offline and peer-to-peer.",
+            bg=self.COLORS["panel"],
+            fg=self.COLORS["muted"],
+            font=("Segoe UI", 10),
+        ).grid(row=1, column=0, sticky="w", pady=(4, 20))
+
+        tk.Label(
+            card,
+            text="This device",
+            bg=self.COLORS["panel"],
+            fg=self.COLORS["muted"],
+            font=("Segoe UI Semibold", 10),
+        ).grid(row=2, column=0, sticky="w", pady=(0, 6))
+        device_row = tk.Frame(card, bg=self.COLORS["panel"])
+        device_row.grid(row=3, column=0, sticky="ew", pady=(0, 20))
+        self._home_device_led = tk.Label(
+            device_row,
+            text="●",
+            bg=self.COLORS["panel"],
+            fg=self.COLORS["accent_hover"],
+            font=("Segoe UI", 14),
+        )
+        self._home_device_led.pack(side="left")
+        self._home_device_name = tk.Label(
+            device_row,
+            text=self.config_store.device_name,
+            bg=self.COLORS["panel"],
+            fg=self.COLORS["text"],
+            font=("Segoe UI Semibold", 14),
+        )
+        self._home_device_name.pack(side="left", padx=(10, 0))
+        tk.Label(
+            device_row,
+            text=f"port {self.config_store.port}",
+            bg=self.COLORS["panel"],
+            fg=self.COLORS["muted"],
+            font=("Consolas", 9),
+        ).pack(side="left", padx=(12, 0), pady=(4, 0))
+
+        tk.Label(
+            card,
+            text="Quick send",
+            bg=self.COLORS["panel"],
+            fg=self.COLORS["muted"],
+            font=("Segoe UI Semibold", 10),
+        ).grid(row=4, column=0, sticky="w", pady=(0, 6))
+        tk.Label(
+            card,
+            text="Select a paired device in the Devices tab, then send files or clipboard.",
+            bg=self.COLORS["panel"],
+            fg=self.COLORS["muted"],
+            wraplength=520,
+            justify="left",
+        ).grid(row=5, column=0, sticky="w", pady=(0, 12))
+        quick = tk.Frame(card, bg=self.COLORS["panel"])
+        quick.grid(row=6, column=0, sticky="w")
+        self._button(quick, "Send clipboard", self.send_clipboard).pack(
+            side="left", padx=(0, 8)
+        )
+        self._button(quick, "Send files", self.send_files).pack(side="left", padx=(0, 8))
+        self._button(quick, "Send folder", self.send_folder).pack(side="left")
+
+        card.grid_rowconfigure(7, weight=1)
+
     def _build_devices_tab(self, parent: tk.Frame) -> None:
-        toolbar = tk.Frame(parent, bg=self.COLORS["panel"], padx=12, pady=12)
-        toolbar.pack(fill="x")
-        self._button(toolbar, "Add IP", self.add_manual_peer).pack(side="left", padx=(0, 8))
-        self._button(toolbar, "Scan LAN", self.scan_lan).pack(side="left", padx=(0, 8))
+        view = tk.Frame(parent, bg=self.COLORS["background"])
+        view.grid_rowconfigure(1, weight=1)
+        view.grid_columnconfigure(0, weight=1)
+        self.nav_stack["devices"] = view
+
+        toolbar = tk.Frame(view, bg=self.COLORS["background"])
+        toolbar.grid(row=0, column=0, sticky="ew", pady=(0, 12))
         self._button(toolbar, "Connect", self.pair_selected, primary=True).pack(
             side="left", padx=(0, 8)
         )
-        self._button(toolbar, "Send clipboard", self.send_clipboard).pack(
-            side="left", padx=(0, 8)
-        )
-        self._button(toolbar, "Send files", self.send_files).pack(side="left", padx=(0, 8))
-        self._button(toolbar, "Send folder", self.send_folder).pack(side="left")
+        self._button(toolbar, "Add IP", self.add_manual_peer).pack(side="left", padx=(0, 8))
+        self._button(toolbar, "Scan LAN", self.scan_lan).pack(side="left")
+
+        card = self._card(view, padx=12, pady=12)
+        card.grid(row=1, column=0, sticky="nsew")
+        card.grid_rowconfigure(1, weight=1)
+        card.grid_columnconfigure(0, weight=1)
 
         self.drop_zone = tk.Label(
-            parent,
+            card,
             text="Drop files or folders here to send them to the selected device",
-            bg=self.COLORS["panel_alt"],
+            bg=self.COLORS["background"],
             fg=self.COLORS["muted"],
             relief="flat",
             padx=12,
             pady=14,
             font=("Segoe UI Semibold", 10),
         )
-        self.drop_zone.pack(fill="x", padx=12, pady=(0, 12))
+        self.drop_zone.grid(row=0, column=0, sticky="ew", pady=(0, 12))
         self.drop_zone.drop_target_register(DND_FILES)
         self.drop_zone.dnd_bind("<<Drop>>", self._files_dropped)
 
         columns = ("name", "address", "platform", "transport", "status", "signal")
         self.peer_tree = ttk.Treeview(
-            parent,
+            card,
             columns=columns,
             show="headings",
             selectmode="browse",
@@ -329,16 +509,26 @@ class H4xtorShareApp(TkinterDnD.Tk):
         for column in columns:
             self.peer_tree.heading(column, text=headings[column])
             self.peer_tree.column(column, width=widths[column], anchor="w")
-        self.peer_tree.tag_configure("online", foreground=self.COLORS["accent"])
+        self.peer_tree.tag_configure("online", foreground=self.COLORS["accent_hover"])
         self.peer_tree.tag_configure("offline", foreground=self.COLORS["danger"])
         self.peer_tree.tag_configure("discovered", foreground=self.COLORS["warning"])
         self.peer_tree.tag_configure("paired", foreground=self.COLORS["text"])
-        self.peer_tree.pack(fill="both", expand=True, padx=12, pady=(0, 12))
+        self.peer_tree.grid(row=1, column=0, sticky="nsew")
         self.peer_tree.bind("<Double-1>", self._peer_double_clicked)
 
     def _build_transfers_tab(self, parent: tk.Frame) -> None:
+        view = tk.Frame(parent, bg=self.COLORS["background"])
+        view.grid_rowconfigure(0, weight=1)
+        view.grid_columnconfigure(0, weight=1)
+        self.nav_stack["transfers"] = view
+
+        card = self._card(view, padx=12, pady=12)
+        card.grid(row=0, column=0, sticky="nsew")
+        card.grid_rowconfigure(0, weight=1)
+        card.grid_columnconfigure(0, weight=1)
+
         columns = ("file", "direction", "progress", "speed", "bytes")
-        self.transfer_tree = ttk.Treeview(parent, columns=columns, show="headings")
+        self.transfer_tree = ttk.Treeview(card, columns=columns, show="headings")
         for column, title, width in (
             ("file", "File", 320),
             ("direction", "Direction", 90),
@@ -348,7 +538,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
         ):
             self.transfer_tree.heading(column, text=title)
             self.transfer_tree.column(column, width=width, anchor="w")
-        self.transfer_tree.pack(fill="both", expand=True, padx=12, pady=12)
+        self.transfer_tree.grid(row=0, column=0, sticky="nsew")
         self.transfer_tree.bind("<Configure>", lambda _event: self._reposition_bars())
 
     def _reposition_bars(self) -> None:
@@ -357,8 +547,18 @@ class H4xtorShareApp(TkinterDnD.Tk):
                 self._place_bar(row, bar)
 
     def _build_history_tab(self, parent: tk.Frame) -> None:
-        sub = ttk.Notebook(parent)
-        sub.pack(fill="both", expand=True, padx=12, pady=12)
+        view = tk.Frame(parent, bg=self.COLORS["background"])
+        view.grid_rowconfigure(0, weight=1)
+        view.grid_columnconfigure(0, weight=1)
+        self.nav_stack["history"] = view
+
+        card = self._card(view, padx=12, pady=12)
+        card.grid(row=0, column=0, sticky="nsew")
+        card.grid_rowconfigure(0, weight=1)
+        card.grid_columnconfigure(0, weight=1)
+
+        sub = ttk.Notebook(card)
+        sub.grid(row=0, column=0, sticky="nsew")
 
         sent_tab = tk.Frame(sub, bg=self.COLORS["panel"])
         received_tab = tk.Frame(sub, bg=self.COLORS["panel"])
@@ -439,68 +639,38 @@ class H4xtorShareApp(TkinterDnD.Tk):
                 ),
             )
 
-    def _build_settings_tab(self, parent: tk.Frame) -> None:
-        container = tk.Frame(parent, bg=self.COLORS["panel"], padx=20, pady=20)
-        container.pack(fill="both", expand=True)
-        tk.Label(
-            container,
-            text="This device",
-            bg=self.COLORS["panel"],
-            fg=self.COLORS["text"],
-            font=("Segoe UI Semibold", 16),
-        ).grid(row=0, column=0, columnspan=2, sticky="w")
-        tk.Label(
-            container,
-            text=f"ID: {self.config_store.device_id}",
-            bg=self.COLORS["panel"],
-            fg=self.COLORS["muted"],
-            font=("Consolas", 9),
-        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(5, 16))
+    def _build_clipboard_tab(self, parent: tk.Frame) -> None:
+        view = tk.Frame(parent, bg=self.COLORS["background"])
+        view.grid_rowconfigure(0, weight=1)
+        view.grid_columnconfigure(0, weight=1)
+        self.nav_stack["clipboard"] = view
+
+        card = self._card(view, padx=24, pady=24)
+        card.grid(row=0, column=0, sticky="nsew")
+        card.grid_columnconfigure(0, weight=1)
 
         tk.Label(
-            container,
-            text="Device name",
+            card,
+            text="Clipboard",
             bg=self.COLORS["panel"],
-            fg=self.COLORS["muted"],
-        ).grid(row=2, column=0, sticky="w")
-        self.device_name_var = tk.StringVar(value=self.config_store.device_name)
-        tk.Entry(
-            container,
-            textvariable=self.device_name_var,
-            bg=self.COLORS["panel_alt"],
             fg=self.COLORS["text"],
-            insertbackground=self.COLORS["text"],
-            relief="flat",
-            width=42,
-        ).grid(row=3, column=0, sticky="ew", pady=(4, 12), ipady=7)
-        self._button(container, "Save name", self.save_device_name).grid(
-            row=3, column=1, sticky="w", padx=(10, 0), pady=(4, 12)
-        )
-
+            font=("Segoe UI Semibold", 18),
+        ).grid(row=0, column=0, sticky="w")
         tk.Label(
-            container,
-            text="Incoming files",
+            card,
+            text="Text copied on any running connected device is broadcast to every paired device.",
             bg=self.COLORS["panel"],
             fg=self.COLORS["muted"],
-        ).grid(row=4, column=0, sticky="w")
-        self.incoming_var = tk.StringVar(value=str(self.config_store.incoming_directory))
-        tk.Entry(
-            container,
-            textvariable=self.incoming_var,
-            state="readonly",
-            readonlybackground=self.COLORS["panel_alt"],
-            fg=self.COLORS["text"],
-            relief="flat",
-        ).grid(row=5, column=0, sticky="ew", pady=(4, 16), ipady=7)
-        self._button(container, "Choose folder", self.choose_incoming_folder).grid(
-            row=5, column=1, sticky="w", padx=(10, 0), pady=(4, 16)
-        )
+            font=("Segoe UI", 10),
+            wraplength=520,
+            justify="left",
+        ).grid(row=1, column=0, sticky="w", pady=(4, 20))
 
         self.clipboard_apply_var = tk.BooleanVar(
             value=self.config_store.apply_received_clipboard
         )
         tk.Checkbutton(
-            container,
+            card,
             text="Apply received text to the system clipboard automatically",
             variable=self.clipboard_apply_var,
             command=self.save_clipboard_preference,
@@ -508,14 +678,14 @@ class H4xtorShareApp(TkinterDnD.Tk):
             fg=self.COLORS["text"],
             activebackground=self.COLORS["panel"],
             activeforeground=self.COLORS["text"],
-            selectcolor=self.COLORS["panel_alt"],
-        ).grid(row=6, column=0, columnspan=2, sticky="w", pady=(0, 2))
+            selectcolor=self.COLORS["background"],
+        ).grid(row=2, column=0, sticky="w", pady=(0, 2))
 
         self.clipboard_sync_var = tk.BooleanVar(
             value=self.config_store.clipboard_sync_enabled
         )
         tk.Checkbutton(
-            container,
+            card,
             text="Broadcast new clipboard text to all paired devices automatically",
             variable=self.clipboard_sync_var,
             command=self.save_clipboard_sync_preference,
@@ -523,11 +693,101 @@ class H4xtorShareApp(TkinterDnD.Tk):
             fg=self.COLORS["text"],
             activebackground=self.COLORS["panel"],
             activeforeground=self.COLORS["text"],
-            selectcolor=self.COLORS["panel_alt"],
-        ).grid(row=7, column=0, columnspan=2, sticky="w", pady=(0, 20))
+            selectcolor=self.COLORS["background"],
+        ).grid(row=3, column=0, sticky="w", pady=(0, 4))
 
         tk.Label(
-            container,
+            card,
+            text="Send clipboard",
+            bg=self.COLORS["panel"],
+            fg=self.COLORS["muted"],
+            font=("Segoe UI Semibold", 10),
+        ).grid(row=4, column=0, sticky="w", pady=(20, 6))
+        tk.Label(
+            card,
+            text="Select a paired device in the Devices tab, then send the current clipboard text.",
+            bg=self.COLORS["panel"],
+            fg=self.COLORS["muted"],
+            wraplength=520,
+            justify="left",
+        ).grid(row=5, column=0, sticky="w", pady=(0, 8))
+        self._button(card, "Send clipboard", self.send_clipboard, primary=True).grid(
+            row=6, column=0, sticky="w"
+        )
+        card.grid_rowconfigure(7, weight=1)
+
+    def _build_settings_tab(self, parent: tk.Frame) -> None:
+        view = tk.Frame(parent, bg=self.COLORS["background"])
+        view.grid_rowconfigure(0, weight=1)
+        view.grid_columnconfigure(0, weight=1)
+        self.nav_stack["settings"] = view
+
+        card = self._card(view, padx=24, pady=24)
+        card.grid(row=0, column=0, sticky="nsew")
+        card.grid_columnconfigure(0, weight=1)
+
+        tk.Label(
+            card,
+            text="This device",
+            bg=self.COLORS["panel"],
+            fg=self.COLORS["text"],
+            font=("Segoe UI Semibold", 16),
+        ).grid(row=0, column=0, columnspan=2, sticky="w")
+        tk.Label(
+            card,
+            text=f"ID: {self.config_store.device_id}",
+            bg=self.COLORS["panel"],
+            fg=self.COLORS["muted"],
+            font=("Consolas", 9),
+        ).grid(row=1, column=0, columnspan=2, sticky="w", pady=(5, 16))
+
+        tk.Label(
+            card,
+            text="Device name",
+            bg=self.COLORS["panel"],
+            fg=self.COLORS["muted"],
+        ).grid(row=2, column=0, sticky="w")
+        self.device_name_var = tk.StringVar(value=self.config_store.device_name)
+        tk.Entry(
+            card,
+            textvariable=self.device_name_var,
+            bg=self.COLORS["background"],
+            fg=self.COLORS["text"],
+            insertbackground=self.COLORS["text"],
+            relief="flat",
+            highlightthickness=1,
+            highlightbackground=self.COLORS["border"],
+            highlightcolor=self.COLORS["border"],
+            width=42,
+        ).grid(row=3, column=0, sticky="ew", pady=(4, 12), ipady=7)
+        self._button(card, "Save name", self.save_device_name).grid(
+            row=3, column=1, sticky="w", padx=(10, 0), pady=(4, 12)
+        )
+
+        tk.Label(
+            card,
+            text="Incoming files",
+            bg=self.COLORS["panel"],
+            fg=self.COLORS["muted"],
+        ).grid(row=4, column=0, sticky="w")
+        self.incoming_var = tk.StringVar(value=str(self.config_store.incoming_directory))
+        tk.Entry(
+            card,
+            textvariable=self.incoming_var,
+            state="readonly",
+            readonlybackground=self.COLORS["background"],
+            fg=self.COLORS["text"],
+            relief="flat",
+            highlightthickness=1,
+            highlightbackground=self.COLORS["border"],
+            highlightcolor=self.COLORS["border"],
+        ).grid(row=5, column=0, sticky="ew", pady=(4, 16), ipady=7)
+        self._button(card, "Choose folder", self.choose_incoming_folder).grid(
+            row=5, column=1, sticky="w", padx=(10, 0), pady=(4, 16)
+        )
+
+        tk.Label(
+            card,
             text="Transport status",
             bg=self.COLORS["panel"],
             fg=self.COLORS["text"],
@@ -537,19 +797,19 @@ class H4xtorShareApp(TkinterDnD.Tk):
         for transport in detect_transports():
             marker = "[READY]" if transport.data_path_ready else "[PLANNED]"
             marker_color = (
-                self.COLORS["accent"]
+                self.COLORS["accent_hover"]
                 if transport.data_path_ready
                 else self.COLORS["warning"]
             )
             tk.Label(
-                container,
+                card,
                 text=f"{marker} {transport.name}",
                 bg=self.COLORS["panel"],
                 fg=marker_color,
                 font=("Segoe UI Semibold", 10),
             ).grid(row=row, column=0, sticky="nw", pady=3)
             tk.Label(
-                container,
+                card,
                 text=transport.detail,
                 bg=self.COLORS["panel"],
                 fg=self.COLORS["muted"],
@@ -557,7 +817,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
                 justify="left",
             ).grid(row=row, column=1, sticky="w", padx=(12, 0), pady=3)
             row += 1
-        container.columnconfigure(0, weight=1)
+        card.grid_rowconfigure(row, weight=1)
 
     async def _start_services(self) -> None:
         await self.server.start()
