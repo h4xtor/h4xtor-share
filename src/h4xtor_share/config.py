@@ -165,6 +165,9 @@ class Config:
         self.data.get("known_peers", {}).pop(peer_id, None)
         self.save()
 
+    def trust_both_ways(self, peer_id: str) -> bool:
+        return self.is_trusted(peer_id)
+
     # -- known peers --------------------------------------------------------
     def remember_peer(self, peer: Peer) -> None:
         """Persist the last address of a trusted peer so it reconnects at startup."""
@@ -206,6 +209,23 @@ class Config:
             except (KeyError, TypeError, ValueError):
                 continue
         return peers
+
+    # -- hidden (removed) devices ------------------------------------------
+    def hidden_peers(self) -> set[str]:
+        return {str(item) for item in self.data.get("hidden_peers", [])}
+
+    def hide_peer(self, peer_id: str) -> None:
+        hidden = self.hidden_peers()
+        hidden.add(peer_id)
+        self.data["hidden_peers"] = sorted(hidden)[-200:]
+        self.save()
+
+    def unhide_peer(self, peer_id: str) -> None:
+        hidden = self.hidden_peers()
+        if peer_id in hidden:
+            hidden.discard(peer_id)
+            self.data["hidden_peers"] = sorted(hidden)
+            self.save()
 
     # -- preferences ---------------------------------------------------------
     def get_flag(self, key: str, default: bool) -> bool:

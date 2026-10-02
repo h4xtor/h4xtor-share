@@ -182,3 +182,14 @@ def test_safe_url_and_wifi_profile() -> None:
     xml = windows_profile_xml("DIRECT-<&>", "pass&word")
     assert "DIRECT-&lt;&amp;&gt;" in xml
     assert "pass&amp;word" in xml
+
+
+async def test_ping_rejects_a_different_device_on_the_same_address(nodes) -> None:
+    from dataclasses import replace
+
+    alpha, beta = nodes
+    peer = await alpha.client.get_info("127.0.0.1", beta.config.port)
+    assert await alpha.client.ping(peer) >= 0
+    impostor = replace(peer, device_id="ff" * 16)
+    with pytest.raises(RuntimeError):
+        await alpha.client.ping(impostor)

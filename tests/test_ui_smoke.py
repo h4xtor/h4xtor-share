@@ -62,3 +62,41 @@ def test_ui_smoke_builds_and_shows_peer_state() -> None:
             app.update()
     finally:
         app.close()
+
+
+@pytest.mark.skipif(
+    not _can_build_ui(),
+    reason="Tk/tkdnd display server unavailable",
+)
+def test_stale_duplicates_and_removal() -> None:
+    from h4xtor_share.app import H4xtorShareApp
+    from h4xtor_share.models import Peer, PeerStatus
+
+    app = H4xtorShareApp(enable_tray=False)
+    try:
+        current = Peer("11" * 16, "SM-S928B", "192.168.0.190", 47474, "aa" * 32, "android")
+        stale = Peer("22" * 16, "S24 Ultra", "192.168.0.190", 47474, "bb" * 32, "android")
+        app.config_store.trust_outbound_peer(current.device_id, "t" * 40, "aa" * 32, "SM")
+        app._upsert_peer(stale)
+        assert stale.device_id in app.device_cards
+        app._upsert_peer(current)
+        assert stale.device_id not in app.device_cards  # untrusted duplicate dropped
+        app._update_peer_status(PeerStatus(current.device_id, True, 5.0))
+        app._upsert_peer(stale)
+        assert stale.device_id not in app.device_cards  # stale record ignored
+
+        lonely = Peer("33" * 16, "Old laptop", "192.168.0.50", 47474, "cc" * 32, "windows")
+        app._upsert_peer(lonely)
+        for _ in range(3):
+            app._update_peer_status(PeerStatus(lonely.device_id, False, None))
+        assert lonely.device_id not in app.device_cards  # unpaired + silent = gone
+
+        other = Peer("44" * 16, "Tablet", "192.168.0.60", 47474, "dd" * 32, "android")
+        app._upsert_peer(other)
+        app.remove_device(other)
+        assert other.device_id not in app.device_cards
+        app._upsert_peer(other)
+        assert other.device_id not in app.device_cards  # stays hidden
+        app.update()
+    finally:
+        app.close()

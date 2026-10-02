@@ -56,7 +56,9 @@ class DiscoveryService:
         config: Config,
         fingerprint: str,
         peer_callback: Callable[[Peer], None],
+        removed_callback: Callable[[str], None] | None = None,
     ) -> None:
+        self.removed_callback = removed_callback
         self.config = config
         self.fingerprint = fingerprint
         self.peer_callback = peer_callback
@@ -108,6 +110,11 @@ class DiscoveryService:
         name: str,
         state_change: ServiceStateChange,
     ) -> None:
+        if state_change == ServiceStateChange.Removed:
+            device_id = name.split(".", 1)[0]
+            if self.removed_callback is not None and device_id != self.config.device_id:
+                self.removed_callback(device_id)
+            return
         if state_change not in {
             ServiceStateChange.Added,
             ServiceStateChange.Updated,

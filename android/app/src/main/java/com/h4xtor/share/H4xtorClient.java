@@ -121,8 +121,14 @@ public final class H4xtorClient {
         HttpsURLConnection connection = open(
                 new URL(peer.endpoint() + "/api/v1/ping"), "GET", trustAllFactory(), timeoutMs);
         try {
-            if (!readJson(connection).optBoolean("pong", false)) {
+            JSONObject answer = readJson(connection);
+            if (!answer.optBoolean("pong", false)) {
                 throw new IllegalStateException("Peer did not answer the ping");
+            }
+            String answered = answer.optString("device_id", "");
+            if (!answered.isEmpty() && !answered.equals(peer.deviceId)) {
+                // Another device (or a reinstalled app with a new id) now owns this address.
+                throw new IllegalStateException("A different device answered");
             }
         } finally {
             connection.disconnect();

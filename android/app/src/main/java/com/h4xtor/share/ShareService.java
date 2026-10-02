@@ -114,6 +114,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     private final Map<String, Peer> peers = new ConcurrentHashMap<>();
     private final Map<String, Long> rtt = new ConcurrentHashMap<>();
     private final Map<String, Boolean> online = new ConcurrentHashMap<>();
+    private final Map<String, Integer> misses = new ConcurrentHashMap<>();
     private final Map<String, TransferItem> transfers = Collections.synchronizedMap(new LinkedHashMap<>());
     private final List<UiListener> listeners = new CopyOnWriteArrayList<>();
     private final AtomicBoolean scanning = new AtomicBoolean(false);
@@ -607,6 +608,21 @@ public final class ShareService extends Service implements H4xtorServer.Listener
                     time = -1;
                     isUp = false;
                 }
+                if (!peers.containsKey(peer.deviceId)) {
+                    return;
+                }
+                if (isUp) {
+                    misses.remove(peer.deviceId);
+                } else if (!identity.isOutboundTrusted(peer.deviceId)) {
+                    int count = misses.getOrDefault(peer.deviceId, 0) + 1;
+                    misses.put(peer.deviceId, count);
+                    if (count >= 3) {
+                        // Unpaired devices that stopped answering simply disappear.
+                        dropPeer(peer.deviceId);
+                        changed();
+                        return;
+                    }
+                }
                 Boolean previous = online.put(peer.deviceId, isUp);
                 rtt.put(peer.deviceId, time);
                 if (previous == null || previous != isUp) {
@@ -633,9 +649,38 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         }
     }
 
+    private void dropPeer(String peerId) {
+        peers.remove(peerId);
+        online.remove(peerId);
+        rtt.remove(peerId);
+        misses.remove(peerId);
+    }
+
     private void upsert(Peer peer) {
+        upsert(peer, false);
+    }
+
+    private synchronized void upsert(Peer peer, boolean explicit) {
         if (peer == null || identity.deviceId().equals(peer.deviceId)) {
             return;
+        }
+        boolean trusted = identity.isOutboundTrusted(peer.deviceId);
+        if (explicit) {
+            identity.unhidePeer(peer.deviceId);
+        } else if (!trusted && identity.hiddenPeers().contains(peer.deviceId)) {
+            return;
+        }
+        // One address = one device: drop stale records (reinstalled app, old cache).
+        for (Peer other : new ArrayList<>(peers.values())) {
+            if (other.deviceId.equals(peer.deviceId) || !other.address.equals(peer.address)
+                    || other.port != peer.port) {
+                continue;
+            }
+            if (!identity.isOutboundTrusted(other.deviceId)) {
+                dropPeer(other.deviceId);
+            } else if (!trusted && isOnline(other.deviceId)) {
+                return;
+            }
         }
         Peer existing = peers.get(peer.deviceId);
         final Peer merged = existing != null && !existing.address.equals(peer.address)
@@ -664,7 +709,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     public void probe(String address, int port, boolean reportErrors) {
         network.execute(() -> {
             try {
-                upsert(client.getInfo(address, port, 2_500));
+                upsert(client.getInfo(address, port, 2_500), reportErrors);
             } catch (Exception error) {
                 if (reportErrors) {
                     message("Fandt ingen h4xtor share på " + address, true);
@@ -764,7 +809,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         network.execute(() -> {
             try {
                 client.confirmPairing(peer, pairingId, code);
-                upsert(peer);
+                upsert(peer, true);
                 message("Forbundet med " + peer.name, false);
                 main.post(this::updateServiceNotification);
             } catch (Exception error) {
@@ -785,7 +830,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         network.execute(() -> {
             try {
                 Peer peer = client.pairWithInvite(invite);
-                upsert(peer);
+                upsert(peer, true);
                 message("Forbundet med " + peer.name + " ✓", false);
                 main.post(this::updateServiceNotification);
             } catch (Exception error) {
@@ -798,11 +843,22 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         server.rejectPairing(code);
     }
 
+    /** Remove a device from the list. Paired devices are unpaired on both sides. */
+    public void remove(Peer peer) {
+        if (identity.isOutboundTrusted(peer.deviceId)) {
+            forget(peer);
+            return;
+        }
+        identity.hidePeer(peer.deviceId);
+        dropPeer(peer.deviceId);
+        message(peer.name + " er fjernet fra listen", false);
+        changed();
+    }
+
     public void forget(Peer peer) {
         network.execute(() -> {
             client.unpair(peer);
-            peers.remove(peer.deviceId);
-            online.remove(peer.deviceId);
+            dropPeer(peer.deviceId);
             message(peer.name + " er glemt", false);
             changed();
             main.post(this::updateServiceNotification);
@@ -826,7 +882,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
 
     @Override
     public void onPeerPaired(Peer peer) {
-        upsert(peer);
+        upsert(peer, true);
         notifications.cancel(100);
         message("Forbundet med " + peer.name + " ✓", false);
         main.post(() -> {

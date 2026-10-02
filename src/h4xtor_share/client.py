@@ -121,6 +121,12 @@ class PeerClient:
             ssl=self.pairing_ssl(),
         ) as response:
             await _raise_for_status(response)
+            payload = await response.json(content_type=None)
+        # An address can be reused by another device (or a reinstalled app with a
+        # new id). Only count the peer as online when *it* answers.
+        answered = str((payload or {}).get("device_id") or "")
+        if answered and answered != peer.device_id:
+            raise RuntimeError("A different device answered on this address.")
         return (asyncio.get_running_loop().time() - started) * 1000.0
 
     async def request_pairing(self, peer: Peer) -> dict[str, Any]:

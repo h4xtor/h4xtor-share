@@ -23,7 +23,7 @@ import javax.security.auth.x500.X500Principal;
 
 public final class AppIdentity {
     public static final int PORT = 47474;
-    public static final String VERSION = "1.0.1";
+    public static final String VERSION = "1.0.2";
     public static final String[] CAPABILITIES = {
             "clipboard", "files", "resume", "folders", "links", "mutual-pair", "qr-pair",
             "unpair", "wifi-direct-host"
@@ -43,8 +43,44 @@ public final class AppIdentity {
             prefs.edit().putString("device_id", UUID.randomUUID().toString().replace("-", "")).apply();
         }
         if (!prefs.contains("device_name")) {
-            String model = Build.MODEL == null ? "Android" : Build.MODEL.trim();
-            prefs.edit().putString("device_name", model.isEmpty() ? "Android" : model).apply();
+            prefs.edit().putString("device_name", friendlyDeviceName(context)).apply();
+        }
+    }
+
+    /** The name the user gave the phone (e.g. "S24 Ultra"), else the model code. */
+    static String friendlyDeviceName(Context context) {
+        String[] keys = {"device_name", "bluetooth_name"};
+        for (String key : keys) {
+            try {
+                String value = android.provider.Settings.Global.getString(context.getContentResolver(), key);
+                if (value == null || value.trim().isEmpty()) {
+                    value = android.provider.Settings.Secure.getString(context.getContentResolver(), key);
+                }
+                if (value != null && !value.trim().isEmpty()) {
+                    return value.trim().length() > 80 ? value.trim().substring(0, 80) : value.trim();
+                }
+            } catch (Exception ignored) {
+                // Not readable on this device.
+            }
+        }
+        String model = Build.MODEL == null ? "Android" : Build.MODEL.trim();
+        return model.isEmpty() ? "Android" : model;
+    }
+
+    public synchronized java.util.Set<String> hiddenPeers() {
+        return new java.util.HashSet<>(prefs.getStringSet("hidden_peers", new java.util.HashSet<>()));
+    }
+
+    public synchronized void hidePeer(String peerId) {
+        java.util.Set<String> hidden = hiddenPeers();
+        hidden.add(peerId);
+        prefs.edit().putStringSet("hidden_peers", hidden).apply();
+    }
+
+    public synchronized void unhidePeer(String peerId) {
+        java.util.Set<String> hidden = hiddenPeers();
+        if (hidden.remove(peerId)) {
+            prefs.edit().putStringSet("hidden_peers", hidden).apply();
         }
     }
 

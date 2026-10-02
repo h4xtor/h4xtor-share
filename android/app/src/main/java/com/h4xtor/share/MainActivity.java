@@ -544,6 +544,14 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             });
             row.addView(connect);
         }
+        TextView more = ui.text("⋮", 22f, ui.muted, true);
+        more.setGravity(Gravity.CENTER);
+        more.setBackground(ui.ripple(ui.rounded(Color.TRANSPARENT, 0, 999), 999));
+        more.setOnClickListener(v -> peerMenu(peer));
+        more.setContentDescription("Flere valg");
+        LinearLayout.LayoutParams moreParams = new LinearLayout.LayoutParams(ui.dp(36), ui.dp(40));
+        moreParams.setMargins(ui.dp(4), 0, -ui.dp(8), 0);
+        row.addView(more, moreParams);
         card.addView(row);
         return card;
     }
@@ -577,11 +585,13 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                 labels.add("Forbind direkte via Wi-Fi Direct");
                 actions.add(() -> service.offerWifiDirect(peer));
             }
-            labels.add("Glem enhed");
+            labels.add("Fjern enhed");
             actions.add(() -> confirmForget(peer));
         } else {
             labels.add("Forbind");
             actions.add(() -> service.pair(peer));
+            labels.add("Fjern fra listen");
+            actions.add(() -> service.remove(peer));
         }
         new AlertDialog.Builder(this)
                 .setTitle(peer.name)
@@ -591,10 +601,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
 
     private void confirmForget(Peer peer) {
         new AlertDialog.Builder(this)
-                .setTitle("Glem " + peer.name + "?")
-                .setMessage("I skal parre igen for at dele. Den anden enhed glemmer også denne telefon.")
+                .setTitle("Fjern " + peer.name + "?")
+                .setMessage("I skal forbinde igen for at dele. Den anden enhed glemmer også denne telefon.")
                 .setNegativeButton("Annullér", null)
-                .setPositiveButton("Glem", (dialog, which) -> service.forget(peer))
+                .setPositiveButton("Fjern", (dialog, which) -> service.forget(peer))
                 .show();
     }
 
@@ -949,7 +959,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             LinearLayout.LayoutParams params = ui.weight(1);
             params.setMargins(ui.dp(12), 0, 0, 0);
             row.addView(label, params);
-            TextView forget = ui.button("Glem", "danger");
+            TextView forget = ui.button("Fjern", "danger");
             forget.setMinHeight(ui.dp(36));
             forget.setOnClickListener(v -> confirmForget(peer));
             row.addView(forget);

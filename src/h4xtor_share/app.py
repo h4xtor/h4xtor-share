@@ -301,6 +301,15 @@ class DeviceCard:
             for child in self.actions.winfo_children():
                 child.destroy()
             theme = app.theme
+            Button(
+                self.actions,
+                theme,
+                "Fjern",
+                lambda: app.confirm_remove(self.peer),
+                kind="ghost",
+                size="sm",
+                icon="✕",
+            ).pack(side="right")
             if paired:
                 Button(
                     self.actions,
@@ -363,9 +372,11 @@ class DeviceCard:
                 label="Send tekst eller link…", command=lambda: app.compose_text(self.peer)
             )
             menu.add_separator()
-            menu.add_command(label="Glem enhed", command=lambda: app.forget_peer(self.peer))
+            menu.add_command(label="Fjern enhed…", command=lambda: app.confirm_remove(self.peer))
         else:
             menu.add_command(label="Forbind…", command=lambda: app.pair_with_code(self.peer))
+            menu.add_separator()
+            menu.add_command(label="Fjern fra listen", command=lambda: app.remove_device(self.peer))
         x = self.menu_button.winfo_rootx()
         y = self.menu_button.winfo_rooty() + self.menu_button.winfo_height()
         try:
@@ -522,7 +533,12 @@ class H4xtorShareApp(TkinterDnD.Tk):
             fingerprint,
             self._receive_core_event,
         )
-        self.discovery = DiscoveryService(self.config_store, fingerprint, self._receive_peer)
+        self.discovery = DiscoveryService(
+            self.config_store,
+            fingerprint,
+            self._receive_peer,
+            removed_callback=lambda device_id: self.event_queue.put(("peer_gone", device_id)),
+        )
         self.udp_discovery = UdpDiscovery(
             self.config_store,
             fingerprint,
@@ -540,6 +556,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
 
         self.peers: dict[str, Peer] = {}
         self.peer_status: dict[str, PeerStatus] = {}
+        self.peer_misses: dict[str, int] = {}
         self.device_cards: dict[str, DeviceCard] = {}
         self.selected_id: str | None = None
         self.transfers: dict[str, TransferState] = {}
@@ -1629,7 +1646,12 @@ class H4xtorShareApp(TkinterDnD.Tk):
             pass
         elif tag == "services_started":
             self._set_me_status()
+        elif tag == "peer_gone":
+            if not self.config_store.is_trusted(value):
+                self._remove_peer_card(value)
         elif tag in {"peer", "manual_peer", "scan_peer"}:
+            if tag != "peer":
+                self.config_store.unhide_peer(value.device_id)
             self._upsert_peer(value)
             if tag == "manual_peer":
                 self.select_peer(value.device_id)
@@ -1648,6 +1670,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
         elif tag == "pair_confirmed":
             peer = value
             if isinstance(peer, Peer):
+                self.config_store.unhide_peer(peer.device_id)
                 self._upsert_peer(peer)
                 self.select_peer(peer.device_id)
                 self.toast.show(f"Forbundet med {peer.name}", "success")
@@ -1722,6 +1745,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
         if isinstance(event, PairingPrompt):
             self._show_pairing_code(event)
         elif isinstance(event, PeerPaired):
+            self.config_store.unhide_peer(event.peer.device_id)
             self._upsert_peer(event.peer)
             modal = self._pair_modals.pop(event.peer.device_id, None)
             if modal is not None:
@@ -1802,6 +1826,22 @@ class H4xtorShareApp(TkinterDnD.Tk):
 
     # ---------------------------------------------------------------- devices
     def _upsert_peer(self, peer: Peer) -> None:
+        trusted = self.config_store.is_trusted(peer.device_id)
+        if not trusted and peer.device_id in self.config_store.hidden_peers():
+            return
+        # One address = one device. A different id on the same address is either a
+        # stale record (old mDNS cache, reinstalled app) or a reused DHCP lease.
+        for other_id, other in list(self.peers.items()):
+            if other_id == peer.device_id or other.address != peer.address:
+                continue
+            if other.port != peer.port:
+                continue
+            other_trusted = self.config_store.is_trusted(other_id)
+            other_status = self.peer_status.get(other_id)
+            if not other_trusted:
+                self._remove_peer_card(other_id)
+            elif not trusted and other_status is not None and other_status.online:
+                return  # the paired device is alive on this address; this one is stale
         existing = self.peers.get(peer.device_id)
         if existing is not None and existing.address != peer.address:
             status = self.peer_status.get(peer.device_id)
@@ -1865,7 +1905,41 @@ class H4xtorShareApp(TkinterDnD.Tk):
         self._reorder_cards()
         self._draw_drop_zone()
 
+    def remove_device(self, peer: Peer) -> None:
+        """Remove a device from the list; paired devices are also unpaired."""
+        if self.config_store.is_trusted(peer.device_id):
+            self.forget_peer(peer)
+        else:
+            self.config_store.hide_peer(peer.device_id)
+            self._remove_peer_card(peer.device_id)
+            self.toast.show(f"{peer.name} er fjernet fra listen")
+
+    def confirm_remove(self, peer: Peer) -> None:
+        c = self.theme.c
+        px = self.theme.px
+        paired = self.config_store.is_trusted(peer.device_id)
+        modal = Modal(self, self.theme, "Fjern enhed")
+        modal.heading(
+            f"Fjern {peer.name}?",
+            "I skal forbinde igen for at dele. Den anden enhed glemmer også denne PC."
+            if paired
+            else "Enheden skjules. Den dukker op igen, hvis du scanner netværket eller parrer.",
+        )
+        buttons = tk.Frame(modal.body, bg=c["bg"])
+        buttons.pack(fill="x", pady=(px(20), 0))
+
+        def remove() -> None:
+            modal.close()
+            self.remove_device(peer)
+
+        Button(buttons, self.theme, "Fjern", remove, kind="danger").pack(side="right")
+        Button(buttons, self.theme, "Annullér", modal.close, kind="ghost").pack(
+            side="right", padx=(0, px(8))
+        )
+        modal.present()
+
     def _remove_peer_card(self, peer_id: str) -> None:
+        self.peer_misses.pop(peer_id, None)
         card = self.device_cards.pop(peer_id, None)
         if card is not None:
             card.destroy()
@@ -1879,11 +1953,20 @@ class H4xtorShareApp(TkinterDnD.Tk):
         self._draw_drop_zone()
 
     def _update_peer_status(self, status: PeerStatus) -> None:
-        previous = self.peer_status.get(status.device_id)
-        self.peer_status[status.device_id] = status
         peer = self.peers.get(status.device_id)
         if peer is None:
             return
+        if status.online:
+            self.peer_misses.pop(status.device_id, None)
+        elif not self.config_store.is_trusted(status.device_id):
+            misses = self.peer_misses.get(status.device_id, 0) + 1
+            self.peer_misses[status.device_id] = misses
+            if misses >= 3:
+                # Unpaired devices that stopped answering simply disappear.
+                self._remove_peer_card(status.device_id)
+                return
+        previous = self.peer_status.get(status.device_id)
+        self.peer_status[status.device_id] = status
         if previous is None or previous.online != status.online:
             self.history.record_connection(peer, status.online, status.rtt_ms)
             card = self.device_cards.get(peer.device_id)
