@@ -176,7 +176,7 @@ jobs:
             echo '--- lint ---'
             cat android/app/build/reports/lint-results.txt 2>/dev/null | grep -B2 -A6 "Error" | head -c 30000 || true
             echo '--- tail ---'
-            tail -c 15000 ci-output.log 2>/dev/null || true
+            grep -v -E "^\s+at |^\tat " ci-output.log | tail -c 8000 2>/dev/null || true
             echo '```'
           } > comment.md
           gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -F body=@comment.md || true

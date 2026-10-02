@@ -21,6 +21,7 @@ public final class ClipboardTileService extends TileService {
 
     @Override
     @SuppressWarnings("deprecation")
+    @android.annotation.SuppressLint("StartActivityAndCollapseDeprecated")
     public void onClick() {
         super.onClick();
         Intent intent = new Intent(this, ClipboardSendActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);

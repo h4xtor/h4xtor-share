@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import platform
 import socket
 from pathlib import Path
 from unittest import mock
@@ -101,7 +102,8 @@ def test_open_path_linux_xdg(tmp_path: Path) -> None:
     ), mock.patch("h4xtor_share.openers._start_detached") as launch:
         open_path(target)
     launch.assert_called_once_with(["xdg-open", str(target.resolve())])
-    assert target.stat().st_mode & 0o100
+    if platform.system() != "Windows":  # NTFS has no POSIX execute bit
+        assert target.stat().st_mode & 0o100
 
 
 def test_open_path_rejects_native_windows_types_on_linux(tmp_path: Path) -> None:

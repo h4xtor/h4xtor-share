@@ -175,13 +175,13 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     }
 
     private boolean hasWifiDirectPermission() {
-        String permission = Build.VERSION.SDK_INT >= 33
-                ? Manifest.permission.NEARBY_WIFI_DEVICES
-                : Manifest.permission.ACCESS_FINE_LOCATION;
-        if (checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) {
+        String[] permissions = Build.VERSION.SDK_INT >= 33
+                ? new String[]{Manifest.permission.NEARBY_WIFI_DEVICES}
+                : new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION};
+        if (checkSelfPermission(permissions[0]) == PackageManager.PERMISSION_GRANTED) {
             return true;
         }
-        requestPermissions(new String[]{permission}, REQUEST_WIFI_PERMISSION);
+        requestPermissions(permissions, REQUEST_WIFI_PERMISSION);
         return false;
     }
 
