@@ -23,13 +23,16 @@ import javax.security.auth.x500.X500Principal;
 
 public final class AppIdentity {
     public static final int PORT = 47474;
-    public static final String VERSION = "1.0.0";
+    public static final String VERSION = "1.0.1";
     public static final String[] CAPABILITIES = {
             "clipboard", "files", "resume", "folders", "links", "mutual-pair", "qr-pair",
             "unpair", "wifi-direct-host"
     };
     private static final String PREFS = "h4xtor_share";
-    private static final String TLS_ALIAS = "h4xtor_share_tls";
+    // v1: EC P-256. The original RSA key only allowed PKCS#1 signatures, which TLS 1.3
+    // forbids, so desktops could never complete a handshake with the phone.
+    private static final String TLS_ALIAS = "h4xtor_share_tls_ec";
+    private static final String LEGACY_TLS_ALIAS = "h4xtor_share_tls";
     private static final int HISTORY_LIMIT = 200;
 
     private final SharedPreferences prefs;
@@ -269,20 +272,35 @@ public final class AppIdentity {
         }
 
         KeyPairGenerator generator = KeyPairGenerator.getInstance(
-                KeyProperties.KEY_ALGORITHM_RSA,
+                KeyProperties.KEY_ALGORITHM_EC,
                 "AndroidKeyStore");
         generator.initialize(new KeyGenParameterSpec.Builder(
                         TLS_ALIAS,
                         KeyProperties.PURPOSE_SIGN | KeyProperties.PURPOSE_VERIFY)
-                .setKeySize(2048)
-                .setDigests(KeyProperties.DIGEST_SHA256, KeyProperties.DIGEST_SHA512)
-                .setSignaturePaddings(KeyProperties.SIGNATURE_PADDING_RSA_PKCS1)
+                .setAlgorithmParameterSpec(new java.security.spec.ECGenParameterSpec("secp256r1"))
+                .setDigests(KeyProperties.DIGEST_NONE, KeyProperties.DIGEST_SHA256,
+                        KeyProperties.DIGEST_SHA384, KeyProperties.DIGEST_SHA512)
                 .setCertificateSubject(new X500Principal("CN=" + commonName))
                 .setCertificateSerialNumber(new BigInteger(64, new java.security.SecureRandom()).abs().add(BigInteger.ONE))
                 .setCertificateNotBefore(start.getTime())
                 .setCertificateNotAfter(end.getTime())
                 .build());
         generator.generateKeyPair();
+        if (store.containsAlias(LEGACY_TLS_ALIAS)) {
+            // The certificate fingerprint changed, so every old pin is invalid: start clean.
+            try {
+                store.deleteEntry(LEGACY_TLS_ALIAS);
+            } catch (Exception ignored) {
+                // Leaving the unused legacy key behind is harmless.
+            }
+            SharedPreferences.Editor editor = prefs.edit();
+            for (String key : prefs.getAll().keySet()) {
+                if (key.startsWith("in_token_") || key.startsWith("out_token_") || key.startsWith("out_fp_")) {
+                    editor.remove(key);
+                }
+            }
+            editor.remove("known_peers").apply();
+        }
     }
 
     public static String toHex(byte[] data) {

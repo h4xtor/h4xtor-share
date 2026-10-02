@@ -123,6 +123,31 @@ def _format_eta(seconds: float) -> str:
     return f"{hours} t {minutes} min tilbage"
 
 
+def friendly_error(error: BaseException, peers: Any = ()) -> str:
+    """Turn low-level network errors into a short, actionable Danish sentence."""
+    import aiohttp
+
+    def name_for(host: str) -> str:
+        for peer in peers:
+            if getattr(peer, "address", None) == host:
+                return peer.name
+        return host
+
+    if isinstance(error, aiohttp.ServerFingerprintMismatch):
+        return (
+            f"{name_for(error.host)} har fået et nyt sikkerhedscertifikat "
+            "(fx efter en opdatering). Forbind igen med QR-koden."
+        )
+    if isinstance(error, aiohttp.ClientConnectorError):
+        return (
+            f"Kan ikke nå {name_for(error.host)}. Tjek at h4xtor share er åben på enheden "
+            "og at I er på samme Wi-Fi."
+        )
+    if isinstance(error, asyncio.TimeoutError | TimeoutError):
+        return "Enheden svarede ikke i tide. Prøv igen."
+    return str(error) or error.__class__.__name__
+
+
 def _sorted_lan_addresses() -> list[str]:
     """Local IPv4 addresses, the most likely reachable ones first."""
 
@@ -1681,7 +1706,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
         self.status_var.set("Online")
 
     def _show_error(self, error: BaseException) -> None:
-        message = str(error) or error.__class__.__name__
+        message = friendly_error(error, self.peers.values())
         self.status_var.set(message)
         self.toast.show(message, "danger", duration_ms=6000)
 

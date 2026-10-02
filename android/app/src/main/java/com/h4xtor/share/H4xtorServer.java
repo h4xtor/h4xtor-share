@@ -1155,8 +1155,22 @@ public final class H4xtorServer {
 
         @Override public String[] getClientAliases(String keyType, Principal[] issuers) { return null; }
         @Override public String chooseClientAlias(String[] keyType, Principal[] issuers, Socket socket) { return null; }
-        @Override public String[] getServerAliases(String keyType, Principal[] issuers) { return new String[]{"h4xtor"}; }
-        @Override public String chooseServerAlias(String keyType, Principal[] issuers, Socket socket) { return "h4xtor"; }
+        private boolean matches(String keyType) {
+            String algorithm = privateKey.getAlgorithm();
+            return keyType == null || algorithm == null
+                    || keyType.toUpperCase(Locale.ROOT).startsWith(algorithm.toUpperCase(Locale.ROOT))
+                    || ("EC".equalsIgnoreCase(algorithm) && keyType.toUpperCase(Locale.ROOT).contains("EC"));
+        }
+
+        @Override
+        public String[] getServerAliases(String keyType, Principal[] issuers) {
+            return matches(keyType) ? new String[]{"h4xtor"} : null;
+        }
+
+        @Override
+        public String chooseServerAlias(String keyType, Principal[] issuers, Socket socket) {
+            return matches(keyType) ? "h4xtor" : null;
+        }
         @Override public X509Certificate[] getCertificateChain(String alias) { return new X509Certificate[]{certificate}; }
         @Override public PrivateKey getPrivateKey(String alias) { return privateKey; }
     }
