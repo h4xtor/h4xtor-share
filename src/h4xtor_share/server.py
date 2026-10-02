@@ -122,7 +122,9 @@ class ShareServer:
         ssl_context: Any,
         fingerprint: str,
         event_callback: Callable[[object], None],
+        host: str = "0.0.0.0",
     ) -> None:
+        self.host = host
         self.config = config
         self.ssl_context = ssl_context
         self.fingerprint = fingerprint
@@ -161,7 +163,7 @@ class ShareServer:
         await self.runner.setup()
         self.site = web.TCPSite(
             self.runner,
-            host="0.0.0.0",
+            host=self.host,
             port=self.config.port,
             ssl_context=self.ssl_context,
         )

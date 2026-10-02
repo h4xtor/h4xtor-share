@@ -40,6 +40,7 @@ async def test_pair_clipboard_and_streamed_file_transfer(tmp_path: Path) -> None
         server_ssl_context(certificate, key),
         fingerprint,
         events.append,
+        host="127.0.0.1",
     )
     await server.start()
 

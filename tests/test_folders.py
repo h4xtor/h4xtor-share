@@ -59,6 +59,7 @@ async def _start_pairing(
         server_ssl_context(certificate, key),
         fingerprint,
         events.append,
+        host="127.0.0.1",
     )
     await server.start()
 

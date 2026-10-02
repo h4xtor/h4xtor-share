@@ -43,6 +43,7 @@ class Node:
             server_ssl_context(certificate, key),
             self.fingerprint,
             self.events.append,
+            host="127.0.0.1",
         )
         self.client = PeerClient(self.config, fingerprint=self.fingerprint)
 

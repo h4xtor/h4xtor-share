@@ -157,6 +157,7 @@ async def test_ping_endpoint_round_trip(tmp_path: Path) -> None:
         server_ssl_context(certificate, key),
         fingerprint,
         lambda _event: None,
+        host="127.0.0.1",
     )
     await server.start()
     try:
@@ -186,6 +187,7 @@ async def test_file_transfer_resumes_from_partial_offset(tmp_path: Path) -> None
         server_ssl_context(certificate, key),
         fingerprint,
         events.append,
+        host="127.0.0.1",
     )
     await server.start()
     try:
