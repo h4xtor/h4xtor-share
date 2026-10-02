@@ -55,6 +55,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         void onPairingCode(String peerName, String code, long expiresAt);
         void onNeedCode(Peer peer, String pairingId);
         void onLinkReceived(String peerName, String url);
+        void onStopped();
     }
 
     public interface ServiceAction {
@@ -63,6 +64,8 @@ public final class ShareService extends Service implements H4xtorServer.Listener
 
     public static final String ACTION_STOP = "com.h4xtor.share.STOP";
     public static final String ACTION_START = "com.h4xtor.share.START";
+    /** Carries shared URIs so their read grant lives as long as the service. */
+    public static final String ACTION_HOLD = "com.h4xtor.share.HOLD";
 
     private static final String CHANNEL_SERVICE = "h4xtor_service";
     private static final String CHANNEL_TRANSFERS = "h4xtor_transfers";
@@ -200,7 +203,10 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     public int onStartCommand(Intent intent, int flags, int startId) {
         startForegroundCompat();
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
-            identity.setFlag("run_in_background", false);
+            for (UiListener listener : listeners) {
+                listener.onStopped();
+            }
+            listeners.clear();
             stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
             return START_NOT_STICKY;

@@ -175,6 +175,19 @@ public final class ShareTargetActivity extends Activity {
 
     private void send(ShareService service, Peer peer) {
         if (!uris.isEmpty()) {
+            // Hand the read grant to the service: it outlives this short-lived sheet.
+            Intent hold = new Intent(this, ShareService.class).setAction(ShareService.ACTION_HOLD);
+            ClipData clip = ClipData.newRawUri("h4xtor", uris.get(0));
+            for (int index = 1; index < uris.size(); index++) {
+                clip.addItem(new ClipData.Item(uris.get(index)));
+            }
+            hold.setClipData(clip);
+            hold.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            try {
+                startForegroundService(hold);
+            } catch (Exception ignored) {
+                // Service already running in the foreground; grant attempt is best effort.
+            }
             service.sendUris(peer, uris);
             Toast.makeText(this, "Sender til " + peer.name + " – følg med i notifikationen", Toast.LENGTH_SHORT).show();
         } else {

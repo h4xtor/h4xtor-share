@@ -1044,6 +1044,15 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         if (peer == null) {
             return;
         }
+        // Keep read access even if this screen is closed during a long transfer.
+        int grant = Intent.FLAG_GRANT_READ_URI_PERMISSION;
+        if (data.getClipData() != null) {
+            for (int index = 0; index < data.getClipData().getItemCount(); index++) {
+                persist(data.getClipData().getItemAt(index).getUri(), grant);
+            }
+        } else if (data.getData() != null) {
+            persist(data.getData(), grant);
+        }
         if (requestCode == REQUEST_FILES) {
             List<Uri> uris = new ArrayList<>();
             ClipData clip = data.getClipData();
@@ -1065,6 +1074,14 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             toast("Sender mappe til " + peer.name, false);
             page = PAGE_TRANSFERS;
             render();
+        }
+    }
+
+    private void persist(Uri uri, int flags) {
+        try {
+            getContentResolver().takePersistableUriPermission(uri, flags);
+        } catch (Exception ignored) {
+            // Not every provider offers persistable grants; the activity grant still works.
         }
     }
 
@@ -1297,6 +1314,12 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         });
         dialog.show();
         input.requestFocus();
+    }
+
+    @Override
+    public void onStopped() {
+        service = null;
+        finishAndRemoveTask();
     }
 
     @Override
