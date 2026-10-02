@@ -36,9 +36,7 @@ class Node:
         self.config.data["port"] = available_tcp_port()
         self.config.data["incoming_directory"] = str(root / name / "incoming")
         self.config.save()
-        certificate, key, self.fingerprint = ensure_certificate(
-            self.config.path.parent, name
-        )
+        certificate, key, self.fingerprint = ensure_certificate(self.config.path.parent, name)
         self.events: list[object] = []
         self.server = ShareServer(
             self.config,
@@ -137,7 +135,9 @@ async def test_link_wifi_offer_and_unpair(nodes) -> None:
     with pytest.raises(RuntimeError, match="http"):
         await alpha.client.send_link(peer, "javascript:alert(1)")
 
-    await alpha.client.send_wifi_direct_offer(peer, "DIRECT-h4-test", "secretpass1", "192.168.49.1", 47474)
+    await alpha.client.send_wifi_direct_offer(
+        peer, "DIRECT-h4-test", "secretpass1", "192.168.49.1", 47474
+    )
     offer = next(event for event in beta.events if isinstance(event, WifiDirectOffer))
     assert offer.ssid == "DIRECT-h4-test"
     assert offer.passphrase == "secretpass1"
