@@ -28,6 +28,7 @@ BLOCK_CIPHER_HIDDEN_IMPORTS = [
 ]
 
 HIDDEN_IMPORTS = [
+    "segno",
     "aiofiles",
     "aiohttp",
     "ifaddr",
@@ -35,11 +36,12 @@ HIDDEN_IMPORTS = [
     "zeroconf",
     *BLOCK_CIPHER_HIDDEN_IMPORTS,
 ]
+if platform.system() == "Windows":
+    HIDDEN_IMPORTS += ["pystray._win32", "PIL.Image", "PIL.ImageDraw", "winreg"]
 
 # Keep the frozen binary lean; these modules are not used by the app.
 EXCLUDES = [
     "numpy",
-    "PIL",
     "pytest",
     "setuptools",
     "tkinter.test",

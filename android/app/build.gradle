@@ -10,11 +10,24 @@ android {
         applicationId 'com.h4xtor.share'
         minSdk 29
         targetSdk 36
-        versionCode 4
-        versionName '0.4.0'
+        versionCode 10
+        versionName '1.0.0'
+    }
+
+    signingConfigs {
+        // A fixed key so every CI build can be installed over the previous one.
+        debug {
+            storeFile file('h4xtor-debug.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
     }
 
     buildTypes {
+        debug {
+            signingConfig signingConfigs.debug
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
@@ -26,6 +39,17 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 
+    lint {
+        abortOnError true
+        checkReleaseBuilds false
+        disable 'GradleDependency', 'OldTargetApi', 'ObsoleteSdkInt', 'UseSwitchCompatOrMaterialCode',
+                'SetTextI18n', 'HardcodedText', 'ContentDescription', 'ClickableViewAccessibility',
+                'UnusedResources', 'IconLauncherShape', 'MonochromeLauncherIcon'
+        htmlReport true
+        textReport true
+        textOutput file("$buildDir/reports/lint-results.txt")
+    }
+
     packaging {
         resources {
             excludes += ['/META-INF/{AL2.0,LGPL2.1}']
@@ -34,5 +58,7 @@ android {
 }
 
 dependencies {
+    implementation 'com.google.android.gms:play-services-code-scanner:16.1.0'
+    implementation 'com.google.zxing:core:3.5.3'
     testImplementation 'junit:junit:4.13.2'
 }

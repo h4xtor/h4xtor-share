@@ -6,7 +6,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test:
@@ -23,13 +23,34 @@ jobs:
           cache: pip
       - name: Install Linux GUI dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install --yes python3-tk
+        run: sudo apt-get update && sudo apt-get install --yes python3-tk xvfb
       - name: Install
         run: python -m pip install -e ".[dev]"
       - name: Lint
-        run: ruff check .
+        shell: bash
+        run: set -o pipefail; ruff check . 2>&1 | tee ci-output.log
       - name: Test
-        run: pytest
+        shell: bash
+        run: |
+          set -o pipefail
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            xvfb-run -a pytest -rs 2>&1 | tee -a ci-output.log
+          else
+            pytest -rs 2>&1 | tee -a ci-output.log
+          fi
+      - name: Report failure on the commit
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "### CI failure: test (${{ matrix.os }})"
+            echo '```'
+            tail -c 60000 ci-output.log 2>/dev/null || echo "no log"
+            echo '```'
+          } > comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -F body=@comment.md || true
 
   python-package:
     needs: test
@@ -79,13 +100,43 @@ jobs:
         run: python -m pip install -e ".[dev]"
       - name: Package executable
         shell: bash
-        run: python -m PyInstaller --clean --noconfirm packaging/h4xtor-share.spec
+        run: |
+          set -o pipefail
+          python -m PyInstaller --clean --noconfirm packaging/h4xtor-share.spec 2>&1 | tee ci-output.log
+      - name: Smoke test frozen executable imports
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -o pipefail
+          python - <<'PY' 2>&1 | tee -a ci-output.log
+          import subprocess, sys, time
+          proc = subprocess.Popen(["dist/h4xtor-share.exe", "--minimized"])
+          time.sleep(12)
+          code = proc.poll()
+          if code is not None:
+              sys.exit(f"executable exited early with code {code}")
+          proc.kill()
+          print("frozen executable stayed up")
+          PY
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: dist/${{ matrix.binary }}
           if-no-files-found: error
+      - name: Report failure on the commit
+        if: failure()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "### CI failure: package (${{ matrix.os }})"
+            echo '```'
+            tail -c 60000 ci-output.log 2>/dev/null || echo "no log"
+            echo '```'
+          } > comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -F body=@comment.md || true
 
   android:
     runs-on: ubuntu-latest
@@ -98,10 +149,14 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.13"
-      - name: Test Android app
-        run: gradle -p android testDebugUnitTest lintDebug
+      - name: Test and lint Android app
+        run: |
+          set -o pipefail
+          gradle -p android testDebugUnitTest lintDebug --stacktrace 2>&1 | tee ci-output.log
       - name: Build installable APK
-        run: gradle -p android assembleDebug
+        run: |
+          set -o pipefail
+          gradle -p android assembleDebug 2>&1 | tee -a ci-output.log
       - name: Stage Android artifact
         run: cp android/app/build/outputs/apk/debug/app-debug.apk h4xtor-share-android.apk
       - uses: actions/upload-artifact@v4
@@ -109,3 +164,19 @@ jobs:
           name: h4xtor-share-android
           path: h4xtor-share-android.apk
           if-no-files-found: error
+      - name: Report failure on the commit
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "### CI failure: android"
+            echo '```'
+            grep -E "error:|Error|FAILED|What went wrong|e: |lint" ci-output.log | tail -n 80 || true
+            echo '--- lint ---'
+            cat android/app/build/reports/lint-results.txt 2>/dev/null | grep -B2 -A6 "Error" | head -c 30000 || true
+            echo '--- tail ---'
+            tail -c 15000 ci-output.log 2>/dev/null || true
+            echo '```'
+          } > comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -F body=@comment.md || true

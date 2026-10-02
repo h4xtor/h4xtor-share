@@ -79,13 +79,14 @@ public final class DiscoveryController {
             service.setAttribute("platform", "android");
             service.setAttribute("protocol", "1");
             service.setAttribute("fingerprint", identity.fingerprint());
+            service.setAttribute("capabilities", String.join(",", AppIdentity.CAPABILITIES));
         } catch (Exception error) {
             listener.onStatus("mDNS attributes unavailable: " + safeMessage(error));
         }
 
         registrationListener = new NsdManager.RegistrationListener() {
             @Override public void onRegistrationFailed(NsdServiceInfo serviceInfo, int errorCode) {
-                listener.onStatus("mDNS advertise failed (" + errorCode + ")");
+                listener.onStatus("mDNS kunne ikke annoncere (" + errorCode + ")");
             }
             @Override public void onUnregistrationFailed(NsdServiceInfo serviceInfo, int errorCode) { }
             @Override public void onServiceRegistered(NsdServiceInfo serviceInfo) { }
@@ -101,7 +102,7 @@ public final class DiscoveryController {
     private void discover() {
         discoveryListener = new NsdManager.DiscoveryListener() {
             @Override public void onStartDiscoveryFailed(String serviceType, int errorCode) {
-                listener.onStatus("mDNS discovery failed (" + errorCode + ")");
+                listener.onStatus("mDNS-søgning fejlede (" + errorCode + ")");
             }
 
             @Override public void onStopDiscoveryFailed(String serviceType, int errorCode) { }

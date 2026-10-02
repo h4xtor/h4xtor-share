@@ -1,8 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="h4_background">#08111D</color>
-    <color name="h4_panel">#101C2B</color>
-    <color name="h4_accent">#16D4B2</color>
-    <color name="h4_text">#EEF6FF</color>
-    <color name="h4_muted">#91A2B7</color>
+    <color name="h4_background">#FAF9F5</color>
+    <color name="h4_accent">#C96442</color>
 </resources>
