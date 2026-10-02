@@ -8,7 +8,7 @@ import ifaddr
 from zeroconf import ServiceBrowser, ServiceInfo, ServiceStateChange, Zeroconf
 
 from h4xtor_share.config import Config
-from h4xtor_share.models import Peer
+from h4xtor_share.models import DESKTOP_CAPABILITIES, Peer
 
 SERVICE_TYPE = "_h4xtor-share._tcp.local."
 
@@ -25,6 +25,24 @@ def local_ipv4_addresses() -> list[str]:
             if parsed.version == 4 and not parsed.is_loopback and not parsed.is_link_local:
                 addresses.add(str(parsed))
     return sorted(addresses)
+
+
+def local_broadcast_addresses() -> list[str]:
+    """Directed broadcast address of every active IPv4 interface (e.g. 192.168.1.255)."""
+    targets: set[str] = set()
+    for adapter in ifaddr.get_adapters():
+        for ip in adapter.ips:
+            value = ip.ip[0] if isinstance(ip.ip, tuple) else ip.ip
+            try:
+                interface = ipaddress.ip_interface(f"{value}/{ip.network_prefix}")
+            except ValueError:
+                continue
+            if interface.version != 4 or interface.ip.is_loopback or interface.ip.is_link_local:
+                continue
+            if interface.network.prefixlen >= 31:
+                continue
+            targets.add(str(interface.network.broadcast_address))
+    return sorted(targets)
 
 
 def property_text(properties: dict[bytes, bytes], key: str, default: str = "") -> str:
@@ -63,7 +81,7 @@ class DiscoveryService:
                 "fingerprint": self.fingerprint,
                 "platform": self.config.platform_name,
                 "protocol": "1",
-                "capabilities": "clipboard,files,resume,folders",
+                "capabilities": ",".join(DESKTOP_CAPABILITIES),
             },
             server=f"{self.config.device_id}.local.",
         )

@@ -13,16 +13,27 @@ from typing import Any
 import aiofiles
 from aiohttp import web
 
+from h4xtor_share import __version__
 from h4xtor_share.config import Config
 from h4xtor_share.models import (
+    DESKTOP_CAPABILITIES,
     ClipboardReceived,
     FileReceived,
     FolderReceived,
+    LinkReceived,
     PairingPrompt,
+    Peer,
+    PeerForgotten,
+    PeerPaired,
     TransferProgress,
+    WifiDirectOffer,
 )
 
 PAIRING_TTL_SECONDS = 120
+QR_SECRET_TTL_SECONDS = 300
+FINGERPRINT_PATTERN = re.compile(r"^[a-f0-9]{64}$")
+DEVICE_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
+MAX_URL_LENGTH = 8192
 CHUNK_SIZE = 1024 * 1024
 TRANSFER_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
 MAX_FOLDER_ENTRIES = 10_000
@@ -89,6 +100,21 @@ def safe_relative_path(value: str) -> str:
     return "/".join(segments)
 
 
+def remote_address(request: web.Request) -> str:
+    """IPv4 address of the connecting peer (IPv4-mapped IPv6 is unwrapped)."""
+    remote = request.remote or ""
+    if remote.startswith("::ffff:"):
+        remote = remote.removeprefix("::ffff:")
+    return remote
+
+
+def is_safe_url(url: str) -> bool:
+    if not url or len(url) > MAX_URL_LENGTH or any(ch.isspace() for ch in url):
+        return False
+    lowered = url.lower()
+    return lowered.startswith("http://") or lowered.startswith("https://")
+
+
 class ShareServer:
     def __init__(
         self,
@@ -104,6 +130,8 @@ class ShareServer:
         self.pending_pairings: dict[str, dict[str, Any]] = {}
         self.transfers: dict[str, dict[str, Any]] = {}
         self.folders: dict[str, dict[str, Any]] = {}
+        self.qr_secrets: dict[str, float] = {}
+        self.capabilities: tuple[str, ...] = DESKTOP_CAPABILITIES
         self.runner: web.AppRunner | None = None
         self.site: web.TCPSite | None = None
         self.app = web.Application(client_max_size=0)
@@ -113,6 +141,10 @@ class ShareServer:
                 web.get("/api/v1/ping", self.ping),
                 web.post("/api/v1/pair/request", self.pair_request),
                 web.post("/api/v1/pair/confirm", self.pair_confirm),
+                web.post("/api/v1/pair/qr", self.pair_qr),
+                web.post("/api/v1/unpair", self.unpair),
+                web.post("/api/v1/link", self.link),
+                web.post("/api/v1/wifi-direct/offer", self.wifi_direct_offer),
                 web.post("/api/v1/clipboard", self.clipboard),
                 web.post("/api/v1/files/init", self.file_init),
                 web.put("/api/v1/files/{transfer_id}", self.file_upload),
@@ -173,7 +205,8 @@ class ShareServer:
                 "platform": self.config.platform_name,
                 "port": self.config.port,
                 "fingerprint": self.fingerprint,
-                "capabilities": ["clipboard", "files", "resume", "folders"],
+                "capabilities": list(self.capabilities),
+                "version": __version__,
             }
         )
 
@@ -228,21 +261,122 @@ class ShareServer:
             raise web.HTTPUnauthorized(text="Pairing request expired.")
         if not secrets.compare_digest(pending["code"], code):
             raise web.HTTPUnauthorized(text="Incorrect pairing code.")
-
-        token = secrets.token_urlsafe(48)
-        self.config.trust_inbound_peer(
+        return self._complete_pairing(
+            request,
             pending["peer_id"],
-            token,
             pending["peer_name"],
+            payload.get("reverse"),
         )
+
+    # -- QR pairing ----------------------------------------------------------
+    def create_qr_secret(self, ttl_seconds: float = QR_SECRET_TTL_SECONDS) -> str:
+        """Return a one-time secret embedded in the pairing QR code."""
+        now = time.time()
+        self.qr_secrets = {
+            secret: expires for secret, expires in self.qr_secrets.items() if expires > now
+        }
+        secret = secrets.token_urlsafe(18)
+        self.qr_secrets[secret] = now + ttl_seconds
+        return secret
+
+    def revoke_qr_secret(self, secret: str) -> None:
+        self.qr_secrets.pop(secret, None)
+
+    async def pair_qr(self, request: web.Request) -> web.Response:
+        """Pair instantly with a device that scanned this device's QR code.
+
+        The QR code carries this device's certificate fingerprint (so the
+        scanner pins TLS from the very first byte) and a short-lived one-time
+        secret that replaces the six-digit code.
+        """
+        payload = await request.json()
+        secret = str(payload.get("secret") or "")
+        peer_id = str(payload.get("device_id") or "").strip()
+        peer_name = str(payload.get("name") or "Unknown device").strip()[:80]
+        if not DEVICE_ID_PATTERN.fullmatch(peer_id):
+            raise web.HTTPBadRequest(text="Invalid device id.")
+        match = next(
+            (
+                known
+                for known in list(self.qr_secrets)
+                if secrets.compare_digest(known, secret)
+            ),
+            None,
+        )
+        if match is None or self.qr_secrets.get(match, 0) < time.time():
+            raise web.HTTPUnauthorized(text="QR code expired. Show a new code.")
+        del self.qr_secrets[match]
+        if not isinstance(payload.get("reverse"), dict):
+            raise web.HTTPBadRequest(text="QR pairing requires reverse credentials.")
+        return self._complete_pairing(request, peer_id, peer_name, payload.get("reverse"))
+
+    def _complete_pairing(
+        self,
+        request: web.Request,
+        peer_id: str,
+        peer_name: str,
+        reverse: object,
+    ) -> web.Response:
+        token = secrets.token_urlsafe(48)
+        self.config.trust_inbound_peer(peer_id, token, peer_name)
+        mutual = False
+        if isinstance(reverse, dict):
+            peer = self._accept_reverse(request, peer_id, peer_name, reverse)
+            if peer is not None:
+                mutual = True
+                self.event_callback(PeerPaired(peer=peer, mutual=True))
         return web.json_response(
             {
                 "token": token,
                 "device_id": self.config.device_id,
                 "name": self.config.device_name,
                 "fingerprint": self.fingerprint,
+                "platform": self.config.platform_name,
+                "port": self.config.port,
+                "capabilities": list(self.capabilities),
+                "mutual": mutual,
             }
         )
+
+    def _accept_reverse(
+        self,
+        request: web.Request,
+        peer_id: str,
+        peer_name: str,
+        reverse: dict[str, Any],
+    ) -> Peer | None:
+        """Store the initiator's credentials so this device can send back."""
+        token = reverse.get("token")
+        fingerprint = str(reverse.get("fingerprint") or "").lower()
+        if not isinstance(token, str) or len(token) < 16:
+            return None
+        if not FINGERPRINT_PATTERN.fullmatch(fingerprint):
+            return None
+        try:
+            port = int(reverse.get("port") or self.config.port)
+        except (TypeError, ValueError):
+            return None
+        if not 0 < port < 65536:
+            return None
+        address = remote_address(request)
+        if not address:
+            return None
+        capabilities = reverse.get("capabilities") or []
+        peer = Peer(
+            device_id=peer_id,
+            name=peer_name,
+            address=address,
+            port=port,
+            fingerprint=fingerprint,
+            platform=str(reverse.get("platform") or "unknown")[:32],
+            transport="lan",
+            capabilities=tuple(str(item)[:32] for item in capabilities[:32])
+            if isinstance(capabilities, list)
+            else (),
+        )
+        self.config.trust_outbound_peer(peer_id, token, fingerprint, peer_name)
+        self.config.remember_peer(peer)
+        return peer
 
     def authenticate(self, request: web.Request) -> tuple[str, str]:
         peer_id = request.headers.get("X-H4xtor-Device", "")
@@ -266,6 +400,47 @@ class ShareServer:
             ClipboardReceived(peer_id=peer_id, peer_name=peer_name, text=text)
         )
         return web.json_response({"accepted": True, "characters": len(text)})
+
+    async def unpair(self, request: web.Request) -> web.Response:
+        peer_id, peer_name = self.authenticate(request)
+        self.config.forget_peer(peer_id)
+        self.event_callback(PeerForgotten(peer_id=peer_id, peer_name=peer_name))
+        return web.json_response({"forgotten": True})
+
+    async def link(self, request: web.Request) -> web.Response:
+        peer_id, peer_name = self.authenticate(request)
+        payload = await request.json()
+        url = str(payload.get("url") or "").strip()
+        if not is_safe_url(url):
+            raise web.HTTPBadRequest(text="Only http(s) links can be pushed.")
+        self.event_callback(LinkReceived(peer_id=peer_id, peer_name=peer_name, url=url))
+        return web.json_response({"accepted": True})
+
+    async def wifi_direct_offer(self, request: web.Request) -> web.Response:
+        peer_id, peer_name = self.authenticate(request)
+        payload = await request.json()
+        ssid = str(payload.get("ssid") or "")
+        passphrase = str(payload.get("passphrase") or "")
+        owner = str(payload.get("owner_address") or "192.168.49.1")
+        try:
+            port = int(payload.get("port") or self.config.port)
+        except (TypeError, ValueError) as error:
+            raise web.HTTPBadRequest(text="Invalid port.") from error
+        if not 0 < len(ssid) <= 32 or not 8 <= len(passphrase) <= 63:
+            raise web.HTTPBadRequest(text="Invalid Wi-Fi Direct credentials.")
+        if not re.fullmatch(r"\d{1,3}(\.\d{1,3}){3}", owner):
+            raise web.HTTPBadRequest(text="Invalid group owner address.")
+        self.event_callback(
+            WifiDirectOffer(
+                peer_id=peer_id,
+                peer_name=peer_name,
+                ssid=ssid,
+                passphrase=passphrase,
+                owner_address=owner,
+                port=port,
+            )
+        )
+        return web.json_response({"accepted": True})
 
     async def file_init(self, request: web.Request) -> web.Response:
         peer_id, peer_name = self.authenticate(request)
@@ -336,6 +511,7 @@ class ShareServer:
                         sent=actual_offset,
                         total=transfer["size"],
                         direction="receive",
+                        peer_name=transfer["peer_name"],
                     )
                 )
 
@@ -351,6 +527,7 @@ class ShareServer:
                     peer_name=transfer["peer_name"],
                     path=destination,
                     size=transfer["size"],
+                    transfer_id=transfer_id,
                 )
             )
             del self.transfers[transfer_id]
@@ -423,6 +600,8 @@ class ShareServer:
             "staging": staging,
             "files": files,
             "done": set(),
+            "received": {entry["id"]: entry["offset"] for entry in offsets},
+            "total": sum(metadata["size"] for metadata in files.values()),
         }
         return web.json_response(
             {
@@ -458,7 +637,8 @@ class ShareServer:
                 headers={"X-H4xtor-Offset": str(actual_offset)},
             )
 
-        display = f"{folder['name']}/{metadata['path']}"
+        # Progress is reported for the folder as a whole, not per file, so a
+        # folder with thousands of files shows up as one transfer.
         async with aiofiles.open(part_path, "ab") as output:
             async for chunk in request.content.iter_chunked(CHUNK_SIZE):
                 if not chunk:
@@ -467,13 +647,15 @@ class ShareServer:
                 actual_offset += len(chunk)
                 if actual_offset > metadata["size"]:
                     raise web.HTTPBadRequest(text="Received more bytes than declared.")
+                folder["received"][file_id] = actual_offset
                 self.event_callback(
                     TransferProgress(
-                        transfer_id=file_id,
-                        file_name=display,
-                        sent=actual_offset,
-                        total=metadata["size"],
+                        transfer_id=folder_id,
+                        file_name=folder["name"],
+                        sent=sum(folder["received"].values()),
+                        total=folder["total"],
                         direction="receive",
+                        peer_name=folder["peer_name"],
                     )
                 )
 
@@ -521,6 +703,7 @@ class ShareServer:
                 peer_name=folder["peer_name"],
                 path=destination,
                 size=total,
+                transfer_id=folder_id,
             )
         )
         del self.folders[folder_id]

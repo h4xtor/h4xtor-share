@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import secrets
 import uuid
 from collections.abc import AsyncIterator, Callable
 from pathlib import Path
@@ -9,19 +10,65 @@ from typing import Any
 import aiohttp
 
 from h4xtor_share.config import Config
-from h4xtor_share.models import Peer, TransferProgress
+from h4xtor_share.models import DESKTOP_CAPABILITIES, Peer, TransferProgress
+from h4xtor_share.pairing import PairingInvite
 
 CHUNK_SIZE = 1024 * 1024
 
 
+async def _raise_for_status(response: aiohttp.ClientResponse) -> None:
+    """Like ``raise_for_status`` but keeps the peer's human-readable reason."""
+    if response.status < 400:
+        return
+    try:
+        detail = (await response.text()).strip()
+    except Exception:  # noqa: BLE001
+        detail = ""
+    raise RuntimeError(detail[:300] or f"HTTP {response.status} {response.reason}")
+
+
 class PeerClient:
-    def __init__(self, config: Config) -> None:
+    def __init__(
+        self,
+        config: Config,
+        fingerprint: str | None = None,
+        capabilities: tuple[str, ...] = DESKTOP_CAPABILITIES,
+    ) -> None:
         self.config = config
+        #: This device's own certificate fingerprint. When known, pairing is
+        #: made mutual: the initiator hands the receiver a token for the
+        #: reverse direction so one pairing lets both sides send.
+        self.fingerprint = fingerprint
+        self.capabilities = capabilities
         self._resumable: dict[tuple[str, str], str] = {}
 
     @staticmethod
-    def pairing_ssl() -> bool:
+    def pairing_ssl(fingerprint: str | None = None) -> bool | aiohttp.Fingerprint:
+        """TLS policy for unauthenticated calls.
+
+        When the peer's fingerprint is already known (mDNS, UDP or a QR code)
+        the connection is pinned to it; otherwise only encryption is used and
+        the six-digit code authenticates the pairing.
+        """
+        if fingerprint and len(fingerprint) == 64:
+            try:
+                return PeerClient.pinned_ssl(fingerprint)
+            except RuntimeError:
+                return False
         return False
+
+    def _reverse_credentials(self, peer_id: str, peer_name: str) -> dict[str, Any] | None:
+        if not self.fingerprint:
+            return None
+        token = secrets.token_urlsafe(48)
+        self.config.trust_inbound_peer(peer_id, token, peer_name)
+        return {
+            "token": token,
+            "fingerprint": self.fingerprint,
+            "port": self.config.port,
+            "platform": self.config.platform_name,
+            "capabilities": list(self.capabilities),
+        }
 
     @staticmethod
     def pinned_ssl(fingerprint: str) -> aiohttp.Fingerprint:
@@ -39,14 +86,15 @@ class PeerClient:
         port: int,
         *,
         timeout_seconds: float = 8,
+        expected_fingerprint: str | None = None,
     ) -> Peer:
         endpoint = f"https://{address}:{port}"
         timeout = aiohttp.ClientTimeout(total=timeout_seconds)
         async with aiohttp.ClientSession(timeout=timeout) as session, session.get(
             f"{endpoint}/api/v1/info",
-            ssl=self.pairing_ssl(),
+            ssl=self.pairing_ssl(expected_fingerprint),
         ) as response:
-            response.raise_for_status()
+            await _raise_for_status(response)
             payload = await response.json()
         return Peer(
             device_id=str(payload["device_id"]),
@@ -72,7 +120,7 @@ class PeerClient:
             f"{peer.endpoint}/api/v1/ping",
             ssl=self.pairing_ssl(),
         ) as response:
-            response.raise_for_status()
+            await _raise_for_status(response)
         return (asyncio.get_running_loop().time() - started) * 1000.0
 
     async def request_pairing(self, peer: Peer) -> dict[str, Any]:
@@ -83,9 +131,9 @@ class PeerClient:
                 "device_id": self.config.device_id,
                 "name": self.config.device_name,
             },
-            ssl=self.pairing_ssl(),
+            ssl=self.pairing_ssl(peer.fingerprint),
         ) as response:
-            response.raise_for_status()
+            await _raise_for_status(response)
             return await response.json()
 
     async def confirm_pairing(
@@ -95,16 +143,20 @@ class PeerClient:
         code: str,
     ) -> None:
         timeout = aiohttp.ClientTimeout(total=10)
+        body: dict[str, Any] = {"pairing_id": pairing_id, "code": code}
+        reverse = self._reverse_credentials(peer.device_id, peer.name)
+        if reverse is not None:
+            body["reverse"] = reverse
         async with aiohttp.ClientSession(timeout=timeout) as session, session.post(
             f"{peer.endpoint}/api/v1/pair/confirm",
-            json={
-                "pairing_id": pairing_id,
-                "code": code,
-            },
-            ssl=self.pairing_ssl(),
+            json=body,
+            ssl=self.pairing_ssl(peer.fingerprint),
         ) as response:
-            response.raise_for_status()
+            await _raise_for_status(response)
             payload = await response.json()
+        self._store_pairing(peer, payload)
+
+    def _store_pairing(self, peer: Peer, payload: dict[str, Any]) -> None:
         returned_fingerprint = str(payload["fingerprint"])
         if returned_fingerprint != peer.fingerprint:
             raise RuntimeError("Peer certificate changed during pairing.")
@@ -114,6 +166,87 @@ class PeerClient:
             returned_fingerprint,
             str(payload["name"]),
         )
+        self.config.remember_peer(peer)
+
+    async def pair_with_qr(self, invite: PairingInvite) -> Peer:
+        """Pair using a scanned QR invite: find the peer, pin it, pair both ways."""
+        last_error: Exception | None = None
+        for address in invite.addresses:
+            try:
+                peer = await self.get_info(
+                    address,
+                    invite.port,
+                    timeout_seconds=4,
+                    expected_fingerprint=invite.fingerprint,
+                )
+            except Exception as error:  # noqa: BLE001 - try every advertised address
+                last_error = error
+                continue
+            if peer.device_id != invite.device_id:
+                last_error = RuntimeError("QR code belongs to a different device.")
+                continue
+            body: dict[str, Any] = {
+                "secret": invite.secret,
+                "device_id": self.config.device_id,
+                "name": self.config.device_name,
+                "reverse": self._reverse_credentials(peer.device_id, peer.name) or {},
+            }
+            timeout = aiohttp.ClientTimeout(total=10)
+            async with aiohttp.ClientSession(timeout=timeout) as session, session.post(
+                f"{peer.endpoint}/api/v1/pair/qr",
+                json=body,
+                ssl=self.pinned_ssl(invite.fingerprint),
+            ) as response:
+                await _raise_for_status(response)
+                payload = await response.json()
+            self._store_pairing(peer, payload)
+            return peer
+        raise RuntimeError(f"Could not reach the device from the QR code: {last_error}")
+
+    async def _authed_post(
+        self, peer: Peer, path: str, body: dict[str, Any], timeout_seconds: float = 15
+    ) -> dict[str, Any]:
+        headers, ssl_value = self.auth(peer)
+        timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+        async with aiohttp.ClientSession(timeout=timeout) as session, session.post(
+            f"{peer.endpoint}{path}",
+            json=body,
+            headers=headers,
+            ssl=ssl_value,
+        ) as response:
+            await _raise_for_status(response)
+            return await response.json()
+
+    async def send_link(self, peer: Peer, url: str) -> None:
+        """Push a URL that the receiver opens in its browser."""
+        if not peer.supports("links"):
+            await self.send_clipboard(peer, url)
+            return
+        await self._authed_post(peer, "/api/v1/link", {"url": url})
+
+    async def send_wifi_direct_offer(
+        self, peer: Peer, ssid: str, passphrase: str, owner_address: str, port: int
+    ) -> None:
+        await self._authed_post(
+            peer,
+            "/api/v1/wifi-direct/offer",
+            {
+                "ssid": ssid,
+                "passphrase": passphrase,
+                "owner_address": owner_address,
+                "port": port,
+            },
+        )
+
+    async def unpair(self, peer: Peer) -> None:
+        """Forget *peer* locally and, best effort, ask it to forget us too."""
+        try:
+            if peer.supports("unpair") and self.config.is_trusted(peer.device_id):
+                await self._authed_post(peer, "/api/v1/unpair", {}, timeout_seconds=4)
+        except Exception:  # noqa: BLE001 - the local forget must always happen
+            pass
+        finally:
+            self.config.forget_peer(peer.device_id)
 
     def auth(self, peer: Peer) -> tuple[dict[str, str], aiohttp.Fingerprint]:
         credentials = self.config.outbound_credentials(peer.device_id)
@@ -137,7 +270,7 @@ class PeerClient:
             headers=headers,
             ssl=ssl_value,
         ) as response:
-            response.raise_for_status()
+            await _raise_for_status(response)
 
     async def send_file(
         self,
@@ -168,7 +301,7 @@ class PeerClient:
                     headers=headers,
                     ssl=ssl_value,
                 ) as response:
-                    response.raise_for_status()
+                    await _raise_for_status(response)
                     metadata = await response.json()
                 offset = int(metadata["offset"])
                 progress_callback(
@@ -209,7 +342,7 @@ class PeerClient:
                     headers=upload_headers,
                     ssl=ssl_value,
                 ) as response:
-                    response.raise_for_status()
+                    await _raise_for_status(response)
                     result = await response.json()
                 if not result.get("complete"):
                     raise RuntimeError(
@@ -224,7 +357,8 @@ class PeerClient:
                         direction="send",
                     )
                 )
-        except Exception:
+        except BaseException:
+            # Also on cancellation: a later retry resumes from the same bytes.
             self._resumable[key] = transfer_id
             raise
 
@@ -270,13 +404,30 @@ class PeerClient:
                 headers=headers,
                 ssl=ssl_value,
             ) as response:
-                response.raise_for_status()
+                await _raise_for_status(response)
                 initialized = await response.json()
             offsets = {
                 str(entry["id"]): int(entry["offset"])
                 for entry in initialized.get("entries", [])
             }
             semaphore = asyncio.Semaphore(4)
+            # Aggregate per-file progress into one folder-level progress stream.
+            progress_by_file: dict[str, int] = dict.fromkeys(
+                (str(entry["id"]) for entry in entries), 0
+            )
+            progress_by_file.update(offsets)
+
+            def file_progress(event: TransferProgress) -> None:
+                progress_by_file[event.transfer_id] = event.sent
+                progress_callback(
+                    TransferProgress(
+                        transfer_id=folder_id,
+                        file_name=path.name,
+                        sent=sum(progress_by_file.values()),
+                        total=total,
+                        direction="send",
+                    )
+                )
 
             async def send_entry(entry: dict[str, Any], source: Path) -> None:
                 async with semaphore:
@@ -289,7 +440,7 @@ class PeerClient:
                         offsets.get(str(entry["id"]), 0),
                         headers,
                         ssl_value,
-                        progress_callback,
+                        file_progress,
                     )
 
             await asyncio.gather(
@@ -302,7 +453,7 @@ class PeerClient:
                 headers=headers,
                 ssl=ssl_value,
             ) as response:
-                response.raise_for_status()
+                await _raise_for_status(response)
         progress_callback(
             TransferProgress(
                 transfer_id=folder_id,
@@ -367,7 +518,7 @@ class PeerClient:
             headers=upload_headers,
             ssl=ssl_value,
         ) as response:
-            response.raise_for_status()
+            await _raise_for_status(response)
             result = await response.json()
         if not result.get("complete"):
             raise RuntimeError(

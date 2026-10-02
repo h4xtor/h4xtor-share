@@ -6,6 +6,19 @@ from typing import Literal
 
 TransportName = Literal["lan", "wifi", "wifi-direct", "bluetooth"]
 
+#: Capabilities this desktop build advertises over mDNS, UDP and ``/info``.
+DESKTOP_CAPABILITIES: tuple[str, ...] = (
+    "clipboard",
+    "files",
+    "resume",
+    "folders",
+    "links",
+    "mutual-pair",
+    "qr-pair",
+    "wifi-direct-join",
+    "unpair",
+)
+
 
 @dataclass(slots=True)
 class Peer:
@@ -25,6 +38,9 @@ class Peer:
     @property
     def supports_folders(self) -> bool:
         return "folders" in self.capabilities
+
+    def supports(self, capability: str) -> bool:
+        return capability in self.capabilities
 
 
 @dataclass(slots=True)
@@ -49,6 +65,7 @@ class FileReceived:
     peer_name: str
     path: Path
     size: int
+    transfer_id: str = ""
 
 
 @dataclass(slots=True)
@@ -57,6 +74,7 @@ class FolderReceived:
     peer_name: str
     path: Path
     size: int
+    transfer_id: str = ""
 
 
 @dataclass(slots=True)
@@ -66,6 +84,7 @@ class TransferProgress:
     sent: int
     total: int
     direction: Literal["send", "receive"]
+    peer_name: str = ""
 
     @property
     def percent(self) -> float:
@@ -79,6 +98,37 @@ class PeerStatus:
     device_id: str
     online: bool
     rtt_ms: float | None
+
+
+@dataclass(slots=True)
+class PeerPaired:
+    """A remote device completed pairing with this device (both directions)."""
+
+    peer: Peer
+    mutual: bool
+
+
+@dataclass(slots=True)
+class PeerForgotten:
+    peer_id: str
+    peer_name: str
+
+
+@dataclass(slots=True)
+class LinkReceived:
+    peer_id: str
+    peer_name: str
+    url: str
+
+
+@dataclass(slots=True)
+class WifiDirectOffer:
+    peer_id: str
+    peer_name: str
+    ssid: str
+    passphrase: str
+    owner_address: str
+    port: int
 
 
 @dataclass(slots=True)

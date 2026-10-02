@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import contextlib
 import json
 import socket
 import threading
 from collections.abc import Callable
 
 from h4xtor_share.config import Config
-from h4xtor_share.discovery import local_ipv4_addresses
+from h4xtor_share.discovery import local_broadcast_addresses
 from h4xtor_share.models import Peer
 
 ANNOUNCE_INTERVAL_SECONDS = 5.0
@@ -80,6 +81,8 @@ class UdpDiscovery:
         self.capabilities = capabilities
         self.peer_callback = peer_callback
         self.status_callback = status_callback
+        #: Extra unicast targets (last known addresses of paired peers).
+        self.extra_targets: Callable[[], list[str]] | None = None
         self._stop_event = threading.Event()
         self._listener_thread: threading.Thread | None = None
         self._announcer_thread: threading.Thread | None = None
@@ -150,12 +153,15 @@ class UdpDiscovery:
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         except OSError:
             return
-        datagram = encode_announcement(self.config, self.fingerprint, self.capabilities)
-        # The limited broadcast address covers the local subnet; unicasting to
-        # each interface address is a fallback when broadcast is restricted.
-        targets = [BROADCAST_ADDRESS, *local_ipv4_addresses()]
         while not self._stop_event.is_set():
-            for target in targets:
+            # Rebuilt every round: names, interfaces (Wi-Fi Direct, hotspot,
+            # VPN) and known peers change while the app is running.
+            datagram = encode_announcement(self.config, self.fingerprint, self.capabilities)
+            targets = [BROADCAST_ADDRESS, *local_broadcast_addresses()]
+            if self.extra_targets is not None:
+                with contextlib.suppress(Exception):
+                    targets.extend(self.extra_targets())
+            for target in dict.fromkeys(targets):
                 try:
                     sock.sendto(datagram, (target, self.config.port))
                 except OSError:

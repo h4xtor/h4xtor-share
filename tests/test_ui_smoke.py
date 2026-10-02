@@ -13,7 +13,7 @@ def _can_build_ui() -> bool:
     try:
         from h4xtor_share.app import H4xtorShareApp
 
-        app = H4xtorShareApp()
+        app = H4xtorShareApp(enable_tray=False)
     except Exception:
         # No display server, missing Tk runtime or tkdnd library: skip.
         return False
@@ -30,7 +30,7 @@ def test_ui_smoke_builds_and_shows_peer_state() -> None:
     from h4xtor_share.app import H4xtorShareApp
     from h4xtor_share.models import Peer, PeerStatus, TransferProgress
 
-    app = H4xtorShareApp()
+    app = H4xtorShareApp(enable_tray=False)
     try:
         peer = Peer(
             device_id="ab" * 16,
@@ -54,8 +54,11 @@ def test_ui_smoke_builds_and_shows_peer_state() -> None:
         )
         app.update_idletasks()
         app.update()
-        assert app.peer_tree.exists(peer.device_id)
+        assert peer.device_id in app.device_cards
         assert app.transfer_bars
         assert app.history.devices()
+        for page in ("transfers", "clipboard", "history", "settings", "share"):
+            app.show_page(page)
+            app.update()
     finally:
         app.close()

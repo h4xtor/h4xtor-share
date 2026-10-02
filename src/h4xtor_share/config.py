@@ -2,12 +2,15 @@ from __future__ import annotations
 
 import json
 import platform
+import secrets
 import socket
 import uuid
 from pathlib import Path
 from typing import Any
 
 from platformdirs import user_config_dir, user_downloads_dir
+
+from h4xtor_share.models import Peer
 
 APP_NAME = "h4xtor-share"
 DEFAULT_PORT = 47474
@@ -24,6 +27,7 @@ class Config:
             "trusted_peers": {},
             "platform": platform.system().lower(),
             "apply_received_clipboard": True,
+            "known_peers": {},
         }
         self.load()
 
@@ -141,4 +145,92 @@ class Config:
 
     def validate_inbound_token(self, peer_id: str, token: str) -> bool:
         entry = self.data.get("trusted_peers", {}).get(peer_id)
-        return isinstance(entry, dict) and entry.get("inbound_token") == token
+        if not isinstance(entry, dict):
+            return False
+        expected = entry.get("inbound_token")
+        return isinstance(expected, str) and secrets.compare_digest(expected, token)
+
+    def is_trusted(self, peer_id: str) -> bool:
+        return self.outbound_credentials(peer_id) is not None
+
+    def trusted_peer_ids(self) -> list[str]:
+        return [
+            peer_id
+            for peer_id in self.data.get("trusted_peers", {})
+            if self.outbound_credentials(peer_id) is not None
+        ]
+
+    def forget_peer(self, peer_id: str) -> None:
+        self.data.get("trusted_peers", {}).pop(peer_id, None)
+        self.data.get("known_peers", {}).pop(peer_id, None)
+        self.save()
+
+    # -- known peers --------------------------------------------------------
+    def remember_peer(self, peer: Peer) -> None:
+        """Persist the last address of a trusted peer so it reconnects at startup."""
+        known = self.data.setdefault("known_peers", {})
+        entry = {
+            "name": peer.name,
+            "address": peer.address,
+            "port": peer.port,
+            "fingerprint": peer.fingerprint,
+            "platform": peer.platform,
+            "transport": peer.transport,
+            "capabilities": list(peer.capabilities),
+        }
+        if known.get(peer.device_id) == entry:
+            return
+        known[peer.device_id] = entry
+        self.save()
+
+    def known_peers(self) -> list[Peer]:
+        peers: list[Peer] = []
+        for peer_id, entry in self.data.get("known_peers", {}).items():
+            if not isinstance(entry, dict):
+                continue
+            try:
+                peers.append(
+                    Peer(
+                        device_id=str(peer_id),
+                        name=str(entry.get("name") or peer_id),
+                        address=str(entry["address"]),
+                        port=int(entry.get("port") or DEFAULT_PORT),
+                        fingerprint=str(entry.get("fingerprint") or ""),
+                        platform=str(entry.get("platform") or "unknown"),
+                        transport=entry.get("transport") or "lan",
+                        capabilities=tuple(
+                            str(item) for item in entry.get("capabilities") or ()
+                        ),
+                    )
+                )
+            except (KeyError, TypeError, ValueError):
+                continue
+        return peers
+
+    # -- preferences ---------------------------------------------------------
+    def get_flag(self, key: str, default: bool) -> bool:
+        return bool(self.data.get(key, default))
+
+    def set_flag(self, key: str, value: bool) -> None:
+        self.data[key] = bool(value)
+        self.save()
+
+    @property
+    def open_links(self) -> bool:
+        return self.get_flag("open_links", True)
+
+    @open_links.setter
+    def open_links(self, value: bool) -> None:
+        self.set_flag("open_links", value)
+
+    @property
+    def theme(self) -> str:
+        value = str(self.data.get("theme") or "system")
+        return value if value in {"system", "light", "dark"} else "system"
+
+    @theme.setter
+    def theme(self, value: str) -> None:
+        if value not in {"system", "light", "dark"}:
+            raise ValueError("Unknown theme.")
+        self.data["theme"] = value
+        self.save()
