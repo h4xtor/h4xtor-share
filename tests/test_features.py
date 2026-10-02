@@ -249,3 +249,12 @@ async def test_failed_send_is_remembered_for_resume(tmp_path: Path) -> None:
 
     key = (peer.device_id, str(source.resolve()))
     assert key in client._resumable
+
+
+def test_version_comparison() -> None:
+    from h4xtor_share.app import is_newer_version
+
+    assert is_newer_version("v1.0.3", "1.0.2")
+    assert is_newer_version("1.1.0", "1.0.9")
+    assert not is_newer_version("v1.0.2", "1.0.2")
+    assert not is_newer_version("v0.9.9", "1.0.0")

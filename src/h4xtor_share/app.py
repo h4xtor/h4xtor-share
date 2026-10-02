@@ -57,7 +57,6 @@ from h4xtor_share.ui_kit import (
     Button,
     Card,
     Modal,
-    Pill,
     ProgressBar,
     QrCanvas,
     ScrollFrame,
@@ -148,6 +147,20 @@ def friendly_error(error: BaseException, peers: Any = ()) -> str:
     return str(error) or error.__class__.__name__
 
 
+def is_newer_version(candidate: str, current: str) -> bool:
+    def parts(value: str) -> tuple[int, ...]:
+        numbers = []
+        for piece in value.strip().lstrip("vV").split("."):
+            digits = "".join(ch for ch in piece if ch.isdigit())
+            numbers.append(int(digits or 0))
+        return tuple(numbers)
+
+    try:
+        return parts(candidate) > parts(current)
+    except ValueError:
+        return False
+
+
 def _sorted_lan_addresses() -> list[str]:
     """Local IPv4 addresses, the most likely reachable ones first."""
 
@@ -221,155 +234,139 @@ class TransferState:
 
 
 class DeviceCard:
-    """One device in the device list."""
+    """One device row. Paired devices and devices merely found on the LAN look
+    clearly different, and every row can be removed."""
 
     def __init__(self, app: H4xtorShareApp, parent: tk.Misc, peer: Peer) -> None:
         self.app = app
         self.peer = peer
+        self.parent = parent
+        self._mode = ""
+        self.card: Card | None = None
+        self.build()
+
+    def build(self) -> None:
+        app = self.app
         theme = app.theme
         c = theme.c
-        self.card = Card(parent, theme, padding=16)
+        px = theme.px
+        paired = app.config_store.is_trusted(self.peer.device_id)
+        self._mode = "paired" if paired else "lan"
+        if self.card is not None:
+            self.card.destroy()
+        parent = app.paired_list if paired else app.lan_list
+        self.card = Card(parent, theme, padding=12, radius=14)
         body = self.card.body
         body.grid_columnconfigure(1, weight=1)
 
-        self.avatar = Avatar(body, theme, peer.platform, size=44)
-        self.avatar.grid(row=0, column=0, rowspan=2, sticky="nw", padx=(0, theme.px(14)))
+        self.avatar = Avatar(body, theme, self.peer.platform, size=38)
+        self.avatar.grid(row=0, column=0, rowspan=2, sticky="w", padx=(0, px(12)))
         self.name_label = tk.Label(
-            body,
-            text=peer.name,
-            bg=c["card"],
-            fg=c["text"],
-            font=theme.font(12, "bold"),
-            anchor="w",
+            body, text="", bg=c["card"], fg=c["text"], font=theme.font(11, "bold"), anchor="w"
         )
         self.name_label.grid(row=0, column=1, sticky="ew")
+        meta = tk.Frame(body, bg=c["card"])
+        meta.grid(row=1, column=1, sticky="ew", pady=(px(1), 0))
+        self.dot = tk.Label(meta, text="●", bg=c["card"], fg=c["faint"], font=theme.font(8))
+        self.dot.pack(side="left")
         self.meta_label = tk.Label(
-            body, text="", bg=c["card"], fg=c["muted"], font=theme.font(9), anchor="w"
+            meta, text="", bg=c["card"], fg=c["muted"], font=theme.font(9), anchor="w"
         )
-        self.meta_label.grid(row=1, column=1, sticky="ew", pady=(theme.px(2), 0))
+        self.meta_label.pack(side="left", padx=(px(5), 0))
 
         right = tk.Frame(body, bg=c["card"])
-        right.grid(row=0, column=2, rowspan=2, sticky="ne")
+        right.grid(row=0, column=2, rowspan=2, sticky="e")
         self.signal = SignalBars(right, theme)
-        self.signal.pack(side="left", padx=(0, theme.px(10)))
-        self.signal_label = tk.Label(
-            right, text="", bg=c["card"], fg=c["success"], font=theme.font(9)
-        )
+        self.signal.pack(side="left", padx=(0, px(12)))
+        if paired:
+            Button(
+                right,
+                theme,
+                "Send filer",
+                lambda: app.send_files(self.peer),
+                kind="soft",
+                size="sm",
+                icon="↑",
+            ).pack(side="left")
+            self.menu_button = Button(
+                right, theme, "", self.open_menu, kind="ghost", icon="⋯", size="sm", width=32
+            )
+            self.menu_button.pack(side="left", padx=(px(4), 0))
+        else:
+            Button(
+                right,
+                theme,
+                "Forbind",
+                lambda: app.pair_with_code(self.peer),
+                kind="primary",
+                size="sm",
+            ).pack(side="left")
+            self.menu_button = Button(
+                right,
+                theme,
+                "",
+                lambda: app.remove_device(self.peer),
+                kind="ghost",
+                icon="✕",
+                size="sm",
+                width=32,
+            )
+            self.menu_button.pack(side="left", padx=(px(4), 0))
 
-        self.pill = Pill(right, theme, "Fundet")
-        self.pill.pack(side="left")
-        self.menu_button = Button(
-            right, theme, "", self.open_menu, kind="ghost", icon="⋯", size="sm", width=32
-        )
-        self.menu_button.pack(side="left", padx=(theme.px(6), 0))
+        clickable = (self.card, body, self.name_label, meta, self.meta_label, self.avatar, self.dot)
+        for widget in clickable:
+            widget.bind("<Button-1>", lambda _e: self._clicked())
+            widget.bind("<Button-3>", lambda _e: self.open_menu())
+            widget.configure(cursor="hand2")
+        self.update(self.peer)
 
-        self.actions = tk.Frame(body, bg=c["card"])
-        self.actions.grid(row=2, column=0, columnspan=3, sticky="ew", pady=(theme.px(14), 0))
-        self._action_mode = ""
-
-        for widget in (self.card, body, self.name_label, self.meta_label, self.avatar):
-            widget.bind("<Button-1>", lambda _e: self.app.select_peer(self.peer.device_id))
-        self.update(peer)
+    def _clicked(self) -> None:
+        if self.app.config_store.is_trusted(self.peer.device_id):
+            self.app.select_peer(self.peer.device_id)
+        else:
+            self.app.pair_with_code(self.peer)
 
     def update(self, peer: Peer) -> None:
         self.peer = peer
         app = self.app
         c = app.theme.c
-        status = app.peer_status.get(peer.device_id)
         paired = app.config_store.is_trusted(peer.device_id)
+        if ("paired" if paired else "lan") != self._mode:
+            self.build()
+            return
+        status = app.peer_status.get(peer.device_id)
         online = status is not None and status.online
-        selected = app.selected_id == peer.device_id
-
-        self.name_label.configure(text=peer.name)
+        selected = paired and app.selected_id == peer.device_id
         platform_label = PLATFORM_LABELS.get(peer.platform.lower(), peer.platform.title())
         transport = TRANSPORT_LABELS.get(peer.transport, peer.transport)
-        self.meta_label.configure(text=f"{platform_label}  ·  {transport}  ·  {peer.address}")
-        if online and paired:
-            self.pill.set("Forbundet", "success")
-        elif online:
-            self.pill.set("Klar til parring", "accent")
-        elif paired:
-            self.pill.set("Offline", "neutral")
+        self.name_label.configure(text=peer.name + ("   ✓ modtager" if selected else ""))
+        if paired:
+            state = "Online" if online else "Offline"
+            self.dot.configure(fg=c["success"] if online else c["faint"])
+            self.meta_label.configure(
+                text=f"{state}  ·  {platform_label}  ·  {transport}  ·  {peer.address}"
+            )
         else:
-            self.pill.set("Fundet", "neutral")
-        self.signal.set(status.rtt_ms if status is not None and status.online else None)
+            self.dot.configure(fg=c["accent"] if online else c["faint"])
+            self.meta_label.configure(
+                text=f"Ikke forbundet  ·  fundet på {transport}  ·  {platform_label}  ·  "
+                f"{peer.address}"
+            )
+        self.signal.set(status.rtt_ms if online and status is not None else None)
+        assert self.card is not None
         self.card.set_colors(outline=c["accent"] if selected else c["border"])
-
-        mode = "paired" if paired else "new"
-        if mode != self._action_mode:
-            self._action_mode = mode
-            for child in self.actions.winfo_children():
-                child.destroy()
-            theme = app.theme
-            Button(
-                self.actions,
-                theme,
-                "Fjern",
-                lambda: app.confirm_remove(self.peer),
-                kind="ghost",
-                size="sm",
-                icon="✕",
-            ).pack(side="right")
-            if paired:
-                Button(
-                    self.actions,
-                    theme,
-                    "Send filer",
-                    lambda: app.send_files(self.peer),
-                    kind="primary",
-                    icon="↑",
-                    size="sm",
-                ).pack(side="left")
-                Button(
-                    self.actions,
-                    theme,
-                    "Mappe",
-                    lambda: app.send_folder(self.peer),
-                    size="sm",
-                    icon="▤",
-                ).pack(side="left", padx=(theme.px(8), 0))
-                Button(
-                    self.actions,
-                    theme,
-                    "Tekst / link",
-                    lambda: app.compose_text(self.peer),
-                    size="sm",
-                    icon="✎",
-                ).pack(side="left", padx=(theme.px(8), 0))
-                Button(
-                    self.actions,
-                    theme,
-                    "Udklipsholder",
-                    lambda: app.send_clipboard(self.peer),
-                    size="sm",
-                    icon="⧉",
-                ).pack(side="left", padx=(theme.px(8), 0))
-            else:
-                Button(
-                    self.actions,
-                    theme,
-                    "Forbind",
-                    lambda: app.pair_with_code(self.peer),
-                    kind="primary",
-                    size="sm",
-                ).pack(side="left")
-                tk.Label(
-                    self.actions,
-                    text="Du får en 6-cifret kode på den anden enhed.",
-                    bg=c["card"],
-                    fg=c["muted"],
-                    font=theme.font(9),
-                ).pack(side="left", padx=(theme.px(12), 0))
 
     def open_menu(self) -> None:
         app = self.app
         menu = tk.Menu(app, tearoff=0)
-        paired = app.config_store.is_trusted(self.peer.device_id)
-        if paired:
+        if app.config_store.is_trusted(self.peer.device_id):
             menu.add_command(label="Send filer…", command=lambda: app.send_files(self.peer))
             menu.add_command(label="Send mappe…", command=lambda: app.send_folder(self.peer))
             menu.add_command(
                 label="Send tekst eller link…", command=lambda: app.compose_text(self.peer)
+            )
+            menu.add_command(
+                label="Send udklipsholder", command=lambda: app.send_clipboard(self.peer)
             )
             menu.add_separator()
             menu.add_command(label="Fjern enhed…", command=lambda: app.confirm_remove(self.peer))
@@ -385,7 +382,8 @@ class DeviceCard:
             menu.grab_release()
 
     def destroy(self) -> None:
-        self.card.destroy()
+        if self.card is not None:
+            self.card.destroy()
 
 
 class TransferRow:
@@ -600,6 +598,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
         self.after(600, self._schedule_health_checks)
         self.after(1000, self._schedule_clipboard_watch)
         self.runtime.submit(self._start_services(), "services_started")
+        self.runtime.submit(self._check_for_update(), "update_check")
         for peer in self.config_store.known_peers():
             if self.config_store.is_trusted(peer.device_id):
                 self._upsert_peer(peer)
@@ -697,27 +696,47 @@ class H4xtorShareApp(TkinterDnD.Tk):
         c = self.theme.c
         px = self.theme.px
         brand = tk.Frame(self.sidebar, bg=c["sidebar"])
-        brand.pack(fill="x", padx=px(18), pady=(px(22), px(26)))
-        logo = tk.Canvas(brand, width=px(34), height=px(34), bg=c["sidebar"], highlightthickness=0)
-        round_rect(logo, 0, 0, px(34), px(34), px(9), fill=c["accent"], outline=c["accent"])
-        logo.create_text(px(17), px(17), text="⇄", fill="#FFFFFF", font=self.theme.font(14, "bold"))
-        logo.pack(side="left")
-        names = tk.Frame(brand, bg=c["sidebar"])
-        names.pack(side="left", padx=(px(11), 0))
+        brand.pack(fill="x", padx=px(18), pady=(px(20), px(18)))
         tk.Label(
-            names,
+            brand,
+            text="✻",
+            bg=c["sidebar"],
+            fg=c["accent"],
+            font=self.theme.font(17, family=self.theme.symbol),
+        ).pack(side="left")
+        tk.Label(
+            brand,
             text="h4xtor share",
             bg=c["sidebar"],
             fg=c["text"],
-            font=self.theme.title_font(13),
-        ).pack(anchor="w")
-        tk.Label(
-            names,
-            text=f"version {VERSION}",
+            font=self.theme.title_font(15),
+        ).pack(side="left", padx=(px(8), 0))
+
+        # "New chat"-style primary action at the top, like Claude.ai.
+        new = tk.Frame(self.sidebar, bg=c["sidebar"], cursor="hand2")
+        new.pack(fill="x", padx=px(10), pady=(0, px(10)))
+        plus = tk.Canvas(new, width=px(26), height=px(26), bg=c["sidebar"], highlightthickness=0)
+        plus.create_oval(1, 1, px(26) - 1, px(26) - 1, fill=c["accent"], outline=c["accent"])
+        plus.create_text(px(13), px(13), text="+", fill="#FFFFFF", font=self.theme.font(13, "bold"))
+        plus.pack(side="left", padx=(px(8), px(10)), pady=px(6))
+        new_label = tk.Label(
+            new,
+            text="Forbind ny enhed",
             bg=c["sidebar"],
-            fg=c["faint"],
-            font=self.theme.font(8),
-        ).pack(anchor="w")
+            fg=c["accent"],
+            font=self.theme.font(10, "bold"),
+            anchor="w",
+        )
+        new_label.pack(side="left", fill="x", expand=True)
+        for widget in (new, plus, new_label):
+            widget.bind("<Button-1>", lambda _e: self.show_qr_pairing())
+            widget.bind(
+                "<Enter>",
+                lambda _e: [w.configure(bg=c["nav_active"]) for w in (new, plus, new_label)],
+            )
+            widget.bind(
+                "<Leave>", lambda _e: [w.configure(bg=c["sidebar"]) for w in (new, plus, new_label)]
+            )
 
         self.nav_rows: dict[str, tuple[tk.Frame, tk.Label, tk.Label]] = {}
         for key, icon, label in self.NAV_ITEMS:
@@ -731,7 +750,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
                 fg=c["muted"],
                 font=self.theme.font(12, family=self.theme.symbol),
             )
-            icon_label.pack(side="left", padx=(px(10), px(6)), pady=px(8))
+            icon_label.pack(side="left", padx=(px(9), px(8)), pady=px(7))
             text_label = tk.Label(
                 row,
                 text=label,
@@ -756,26 +775,20 @@ class H4xtorShareApp(TkinterDnD.Tk):
         spacer = tk.Frame(self.sidebar, bg=c["sidebar"])
         spacer.pack(fill="both", expand=True)
 
-        connect = Button(
-            self.sidebar,
-            self.theme,
-            "Forbind ny enhed",
-            self.show_qr_pairing,
-            kind="primary",
-            icon="＋",
-            width=200,
-            bg=c["sidebar"],
-        )
-        connect.pack(padx=px(18), pady=(0, px(14)))
-
+        tk.Frame(self.sidebar, bg=c["border"], height=1).pack(fill="x", padx=px(14))
         me = tk.Frame(self.sidebar, bg=c["sidebar"])
-        me.pack(fill="x", padx=px(18), pady=(0, px(20)))
-        self.me_dot = tk.Label(
-            me, text="●", bg=c["sidebar"], fg=c["warning"], font=self.theme.font(9)
+        me.pack(fill="x", padx=px(14), pady=px(14))
+        initial = (self.config_store.device_name[:1] or "P").upper()
+        badge_canvas = tk.Canvas(
+            me, width=px(32), height=px(32), bg=c["sidebar"], highlightthickness=0
         )
-        self.me_dot.pack(side="left", anchor="n", pady=(px(2), 0))
+        badge_canvas.create_oval(1, 1, px(32) - 1, px(32) - 1, fill=c["text"], outline=c["text"])
+        badge_canvas.create_text(
+            px(16), px(16), text=initial, fill=c["sidebar"], font=self.theme.font(11, "bold")
+        )
+        badge_canvas.pack(side="left")
         texts = tk.Frame(me, bg=c["sidebar"])
-        texts.pack(side="left", padx=(px(8), 0), fill="x", expand=True)
+        texts.pack(side="left", padx=(px(10), 0), fill="x", expand=True)
         self.me_name = tk.Label(
             texts,
             text=self.config_store.device_name,
@@ -785,17 +798,28 @@ class H4xtorShareApp(TkinterDnD.Tk):
             anchor="w",
         )
         self.me_name.pack(fill="x")
+        status_row = tk.Frame(texts, bg=c["sidebar"])
+        status_row.pack(fill="x")
+        self.me_dot = tk.Label(
+            status_row, text="●", bg=c["sidebar"], fg=c["warning"], font=self.theme.font(7)
+        )
+        self.me_dot.pack(side="left")
         self.me_status = tk.Label(
-            texts,
+            status_row,
             text="Starter…",
             bg=c["sidebar"],
             fg=c["muted"],
             font=self.theme.font(8),
             anchor="w",
-            justify="left",
-            wraplength=px(170),
         )
-        self.me_status.pack(fill="x")
+        self.me_status.pack(side="left", padx=(px(4), 0))
+        tk.Label(
+            self.sidebar,
+            text=f"version {VERSION}",
+            bg=c["sidebar"],
+            fg=c["faint"],
+            font=self.theme.font(7),
+        ).pack(anchor="w", padx=px(18), pady=(0, px(10)))
 
     def _nav_hover(self, name: str, hover: bool) -> None:
         if name == getattr(self, "active_page", ""):
@@ -851,133 +875,315 @@ class H4xtorShareApp(TkinterDnD.Tk):
         return page, actions
 
     # ------------------------------------------------------------- share page
+    def _greeting(self) -> str:
+        hour = time.localtime().tm_hour
+        if hour < 5:
+            return "God nat"
+        if hour < 10:
+            return "Godmorgen"
+        if hour < 12:
+            return "God formiddag"
+        if hour < 18:
+            return "God eftermiddag"
+        return "God aften"
+
     def _build_share_page(self) -> None:
         c = self.theme.c
         px = self.theme.px
-        page, actions = self._page(
-            "share", "Del", "Træk filer hertil – eller vælg en enhed og send med ét klik."
-        )
-        Button(actions, self.theme, "Scan netværk", self.scan_lan, icon="⟳").pack(side="left")
-        Button(actions, self.theme, "Tilføj via IP", self.add_manual_peer, kind="ghost").pack(
-            side="left", padx=(px(8), 0)
-        )
+        page = tk.Frame(self.page_container, bg=c["bg"])
+        self.pages["share"] = page
 
-        self.banner = tk.Frame(page, bg=c["bg"])
-        self.banner.pack(fill="x", padx=px(36))
+        top = tk.Frame(page, bg=c["bg"])
+        top.pack(fill="x", padx=px(24), pady=(px(14), 0))
+        Button(
+            top, self.theme, "Tilføj via IP", self.add_manual_peer, kind="ghost", size="sm"
+        ).pack(side="right")
+        Button(
+            top, self.theme, "Scan netværk", self.scan_lan, kind="ghost", size="sm", icon="⟳"
+        ).pack(side="right", padx=(0, px(4)))
 
-        self.drop_zone = tk.Canvas(page, height=px(118), bg=c["bg"], highlightthickness=0)
-        self.drop_zone.pack(fill="x", padx=px(36), pady=(0, px(18)))
-        self.drop_zone.bind("<Configure>", lambda _e: self._draw_drop_zone())
-        self.drop_zone.bind("<Button-1>", lambda _e: self.send_files())
-        self.drop_zone.configure(cursor="hand2")
+        scroll = ScrollFrame(page, self.theme)
+        scroll.pack(fill="both", expand=True)
+        outer = scroll.inner
+        center = tk.Frame(outer, bg=c["bg"])
+        center.pack(fill="x", padx=px(48), pady=(px(26), px(30)))
+
+        def recenter(event: tk.Event) -> None:
+            pad = max(px(32), (event.width - px(760)) // 2)
+            center.pack_configure(padx=pad)
+
+        scroll.canvas.bind("<Configure>", recenter, add="+")
+
+        self.banner = tk.Frame(center, bg=c["bg"])
+        self.banner.pack(fill="x")
+
+        hero = tk.Frame(center, bg=c["bg"])
+        hero.pack(pady=(px(18), px(22)))
+        tk.Label(
+            hero,
+            text="✻",
+            bg=c["bg"],
+            fg=c["accent"],
+            font=self.theme.font(26, family=self.theme.symbol),
+        ).pack(side="left", padx=(0, px(12)))
+        self.greeting_label = tk.Label(
+            hero,
+            text=f"{self._greeting()}, hvad skal deles?",
+            bg=c["bg"],
+            fg=c["text"],
+            font=self.theme.title_font(26),
+        )
+        self.greeting_label.pack(side="left")
+
+        # The composer: Claude's prompt box, but for files, links and text.
+        self.composer = Card(center, self.theme, padding=14, radius=20, outline=c["border_strong"])
+        self.composer.pack(fill="x")
+        body = self.composer.body
+        self._composer_placeholder = (
+            "Skriv en besked eller indsæt et link …  eller træk filer hertil"
+        )
+        self.composer_text = tk.Text(
+            body,
+            height=3,
+            bg=c["card"],
+            fg=c["faint"],
+            insertbackground=c["text"],
+            relief="flat",
+            highlightthickness=0,
+            borderwidth=0,
+            font=self.theme.font(11),
+            wrap="word",
+            padx=px(4),
+            pady=px(4),
+        )
+        self.composer_text.insert("1.0", self._composer_placeholder)
+        self.composer_text.pack(fill="x")
+        self.composer_text.bind("<FocusIn>", lambda _e: self._composer_focus(True))
+        self.composer_text.bind("<FocusOut>", lambda _e: self._composer_focus(False))
+        self.composer_text.bind("<Return>", self._composer_enter)
+
+        bar = tk.Frame(body, bg=c["card"])
+        bar.pack(fill="x", pady=(px(8), 0))
+        Button(
+            bar,
+            self.theme,
+            "Filer",
+            lambda: self.send_files(),
+            kind="ghost",
+            size="sm",
+            icon="＋",
+            bg=c["card"],
+        ).pack(side="left")
+        Button(
+            bar,
+            self.theme,
+            "Mappe",
+            lambda: self.send_folder(),
+            kind="ghost",
+            size="sm",
+            icon="▤",
+            bg=c["card"],
+        ).pack(side="left")
+        Button(
+            bar,
+            self.theme,
+            "Udklipsholder",
+            lambda: self.send_clipboard(),
+            kind="ghost",
+            size="sm",
+            icon="⧉",
+            bg=c["card"],
+        ).pack(side="left")
+        self.send_button = Button(
+            bar,
+            self.theme,
+            "",
+            self._composer_send,
+            kind="primary",
+            icon="↑",
+            size="md",
+            width=36,
+            bg=c["card"],
+        )
+        self.send_button.pack(side="right")
+        self.target_button = Button(
+            bar,
+            self.theme,
+            "Vælg modtager ▾",
+            self._choose_target,
+            kind="ghost",
+            size="sm",
+            bg=c["card"],
+        )
+        self.target_button.pack(side="right", padx=(0, px(6)))
+
+        self.composer_hint = tk.Label(
+            center,
+            text="",
+            bg=c["bg"],
+            fg=c["faint"],
+            font=self.theme.font(9),
+        )
+        self.composer_hint.pack(pady=(px(8), 0))
         self._drop_active = False
 
-        list_header = tk.Frame(page, bg=c["bg"])
-        list_header.pack(fill="x", padx=px(36), pady=(0, px(8)))
-        tk.Label(
-            list_header, text="ENHEDER", bg=c["bg"], fg=c["faint"], font=self.theme.font(8, "bold")
-        ).pack(side="left")
-        self.device_count = tk.Label(
-            list_header, text="", bg=c["bg"], fg=c["faint"], font=self.theme.font(8)
+        # Sections
+        section = tk.Frame(center, bg=c["bg"])
+        section.pack(fill="x", pady=(px(30), 0))
+        self.paired_title = tk.Label(
+            section,
+            text="Dine enheder",
+            bg=c["bg"],
+            fg=c["muted"],
+            font=self.theme.font(9, "bold"),
+            anchor="w",
         )
-        self.device_count.pack(side="left", padx=(px(8), 0))
+        self.paired_title.pack(fill="x", pady=(0, px(8)))
+        self.paired_empty = self._build_empty_state(section)
+        self.paired_list = tk.Frame(section, bg=c["bg"])
+        self.paired_list.pack(fill="x")
 
-        self.device_scroll = ScrollFrame(page, self.theme)
-        self.device_scroll.pack(fill="both", expand=True, padx=(px(36), px(24)), pady=(0, px(16)))
-        self.device_list = self.device_scroll.inner
-        self.empty_state = self._build_empty_state(self.device_list)
-        self.empty_state.pack(fill="x")
+        self.lan_section = tk.Frame(center, bg=c["bg"])
+        head = tk.Frame(self.lan_section, bg=c["bg"])
+        head.pack(fill="x", pady=(0, px(2)))
+        self.lan_title = tk.Label(
+            head,
+            text="Fundet på netværket",
+            bg=c["bg"],
+            fg=c["muted"],
+            font=self.theme.font(9, "bold"),
+            anchor="w",
+        )
+        self.lan_title.pack(side="left")
+        tk.Label(
+            self.lan_section,
+            text=(
+                "Enheder med h4xtor share på dit Wi-Fi, som du ikke har forbundet. "
+                "Klik Forbind – eller ✕ for at skjule."
+            ),
+            bg=c["bg"],
+            fg=c["faint"],
+            font=self.theme.font(8),
+            anchor="w",
+        ).pack(fill="x", pady=(0, px(8)))
+        self.lan_list = tk.Frame(self.lan_section, bg=c["bg"])
+        self.lan_list.pack(fill="x")
+        self.device_list = self.paired_list
+        self._reorder_cards()
+        self._draw_drop_zone()
 
     def _build_empty_state(self, parent: tk.Misc) -> tk.Frame:
         c = self.theme.c
         px = self.theme.px
-        card = Card(parent, self.theme, padding=28)
-        body = card.body
+        frame = tk.Frame(parent, bg=c["bg"])
         tk.Label(
-            body,
-            text="Ingen enheder endnu",
-            bg=c["card"],
-            fg=c["text"],
-            font=self.theme.font(13, "bold"),
-            anchor="w",
-        ).pack(fill="x")
-        tk.Label(
-            body,
-            text=(
-                "Åbn h4xtor share på din telefon eller en anden computer. Enheder på samme "
-                "netværk dukker automatisk op her. Første gang forbinder du med en QR-kode."
-            ),
-            bg=c["card"],
+            frame,
+            text="Ingen forbundne enheder endnu. Kom i gang med et af disse:",
+            bg=c["bg"],
             fg=c["muted"],
             font=self.theme.font(10),
-            justify="left",
             anchor="w",
-            wraplength=px(560),
-        ).pack(fill="x", pady=(px(6), px(16)))
-        row = tk.Frame(body, bg=c["card"])
-        row.pack(fill="x")
-        Button(row, self.theme, "Vis QR-kode", self.show_qr_pairing, kind="primary").pack(
-            side="left"
-        )
-        Button(row, self.theme, "Scan netværk", self.scan_lan).pack(side="left", padx=(px(8), 0))
-        return card
+        ).pack(fill="x", pady=(0, px(10)))
+        chips = tk.Frame(frame, bg=c["bg"])
+        chips.pack(fill="x")
+        for label, icon, command in (
+            ("Forbind din telefon med QR", "▣", self.show_qr_pairing),
+            ("Scan netværket", "⟳", self.scan_lan),
+            ("Tilføj via IP-adresse", "⌁", self.add_manual_peer),
+        ):
+            Button(chips, self.theme, label, command, kind="secondary", size="sm", icon=icon).pack(
+                side="left", padx=(0, px(8))
+            )
+        return frame
+
+    def _composer_focus(self, focused: bool) -> None:
+        c = self.theme.c
+        text = self.composer_text.get("1.0", "end").strip()
+        if focused and text == self._composer_placeholder:
+            self.composer_text.delete("1.0", "end")
+            self.composer_text.configure(fg=c["text"])
+        elif not focused and not text:
+            self.composer_text.insert("1.0", self._composer_placeholder)
+            self.composer_text.configure(fg=c["faint"])
+
+    def _composer_value(self) -> str:
+        text = self.composer_text.get("1.0", "end").strip()
+        return "" if text == self._composer_placeholder else text
+
+    def _composer_enter(self, event: tk.Event) -> str | None:
+        if event.state & 0x1:  # Shift+Enter: new line
+            return None
+        self._composer_send()
+        return "break"
+
+    def _composer_send(self) -> None:
+        text = self._composer_value()
+        if not text:
+            self.send_files()
+            return
+
+        def deliver(peer: Peer) -> None:
+            self._send_text(peer, text)
+            self.composer_text.delete("1.0", "end")
+            self.toast.show(
+                f"Link sendt til {peer.name} – åbner i browseren"
+                if is_link(text)
+                else f"Tekst sendt til {peer.name} – klar i udklipsholderen",
+                "success",
+            )
+
+        target = self._drop_target_peer()
+        if target is not None:
+            deliver(target)
+        else:
+            self._choose_peer(deliver, "Send til…")
+
+    def _choose_target(self) -> None:
+        trusted = [p for p in self.peers.values() if self.config_store.is_trusted(p.device_id)]
+        if not trusted:
+            self.show_qr_pairing()
+            return
+        menu = tk.Menu(self, tearoff=0)
+        for peer in sorted(trusted, key=lambda item: item.name.lower()):
+            status = self.peer_status.get(peer.device_id)
+            online = status is not None and status.online
+            mark = "✓ " if self.selected_id == peer.device_id else "   "
+            menu.add_command(
+                label=f"{mark}{peer.name}   ({'online' if online else 'offline'})",
+                command=lambda value=peer.device_id: self.select_peer(value),
+            )
+        menu.add_separator()
+        menu.add_command(label="Forbind ny enhed…", command=self.show_qr_pairing)
+        x = self.target_button.winfo_rootx()
+        y = self.target_button.winfo_rooty() + self.target_button.winfo_height()
+        try:
+            menu.tk_popup(x, y)
+        finally:
+            menu.grab_release()
 
     def _draw_drop_zone(self) -> None:
-        canvas = self.drop_zone
-        c = self.theme.c
-        px = self.theme.px
-        canvas.delete("all")
-        width = canvas.winfo_width()
-        height = canvas.winfo_height()
-        if width < 10:
+        """Refresh the composer: target chip, drop highlight and hint line."""
+        if not hasattr(self, "composer"):
             return
-        active = self._drop_active
-        fill = c["accent_soft"] if active else c["card"]
-        outline = c["accent"] if active else c["border_strong"]
-        round_rect(canvas, 2, 2, width - 2, height - 2, px(16), fill=fill, outline=fill)
-        canvas.create_line(px(16), 2, width - px(16), 2, fill=outline, dash=(6, 5), width=1)
-        canvas.create_line(
-            px(16), height - 2, width - px(16), height - 2, fill=outline, dash=(6, 5)
-        )
-        canvas.create_line(2, px(16), 2, height - px(16), fill=outline, dash=(6, 5))
-        canvas.create_line(width - 2, px(16), width - 2, height - px(16), fill=outline, dash=(6, 5))
-        for x1, y1, start in (
-            (2, 2, 90),
-            (width - 2 - 2 * px(16), 2, 0),
-            (2, height - 2 - 2 * px(16), 180),
-            (width - 2 - 2 * px(16), height - 2 - 2 * px(16), 270),
-        ):
-            canvas.create_arc(
-                x1,
-                y1,
-                x1 + 2 * px(16),
-                y1 + 2 * px(16),
-                start=start,
-                extent=90,
-                style="arc",
-                outline=outline,
-                dash=(6, 5),
-            )
+        c = self.theme.c
         target = self._drop_target_peer()
-        title = "Slip filer eller mapper her" if not active else "Slip for at sende"
-        if target is not None:
-            subtitle = f"Sendes til {target.name}  ·  eller klik for at vælge filer"
+        self.target_button.set_text(f"Til: {target.name} ▾" if target else "Vælg modtager ▾")
+        active = self._drop_active
+        self.composer.set_colors(outline=c["accent"] if active else c["border_strong"])
+        if active:
+            hint = (
+                f"Slip for at sende til {target.name}" if target else "Slip – så vælger du modtager"
+            )
+            self.composer_hint.configure(text=hint, fg=c["accent"])
+        elif target is not None:
+            self.composer_hint.configure(
+                text="Enter sender · Shift+Enter ny linje · links åbner direkte i browseren",
+                fg=c["faint"],
+            )
         else:
-            subtitle = "Forbind en enhed først – så sendes alt du slipper her direkte til den"
-        canvas.create_text(
-            width / 2,
-            height / 2 - px(12),
-            text="↑  " + title,
-            fill=c["text"],
-            font=self.theme.font(12, "bold"),
-        )
-        canvas.create_text(
-            width / 2,
-            height / 2 + px(14),
-            text=subtitle,
-            fill=c["muted"],
-            font=self.theme.font(9),
-        )
+            self.composer_hint.configure(
+                text="Forbind en enhed for at begynde at dele", fg=c["faint"]
+            )
 
     def _drop_highlight(self, active: bool) -> str:
         self._drop_active = active
@@ -1609,6 +1815,27 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self.event_queue.put(("status", f"mDNS utilgængelig: {error}"))
         await asyncio.to_thread(self.udp_discovery.start)
 
+    async def _check_for_update(self) -> tuple[str, str] | None:
+        """Ask GitHub (best effort, internet optional) whether a newer release exists."""
+        import aiohttp
+
+        url = "https://api.github.com/repos/h4xtor/h4xtor-share/releases/latest"
+        try:
+            timeout = aiohttp.ClientTimeout(total=8)
+            async with (
+                aiohttp.ClientSession(timeout=timeout, trust_env=True) as session,
+                session.get(url, headers={"Accept": "application/vnd.github+json"}) as response,
+            ):
+                if response.status != 200:
+                    return None
+                payload = await response.json()
+        except Exception:  # noqa: BLE001 - offline is perfectly fine
+            return None
+        tag = str(payload.get("tag_name") or "")
+        if is_newer_version(tag, VERSION):
+            return tag.lstrip("v"), str(payload.get("html_url") or "")
+        return None
+
     async def _stop_services(self) -> None:
         await asyncio.to_thread(self.udp_discovery.stop)
         with contextlib.suppress(Exception):
@@ -1644,6 +1871,9 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self._show_error(value)
         elif tag == "cancelled":
             pass
+        elif tag == "update_check":
+            if value:
+                self._show_update_banner(*value)
         elif tag == "services_started":
             self._set_me_status()
         elif tag == "peer_gone":
@@ -1875,29 +2105,51 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self.config_store.remember_peer(peer)
         card = self.device_cards.get(peer.device_id)
         if card is None:
-            self.empty_state.pack_forget()
             card = DeviceCard(self, self.device_list, peer)
             self.device_cards[peer.device_id] = card
-            self._reorder_cards()
         else:
             card.update(peer)
-        self.device_count.configure(text=str(len(self.device_cards)))
+        self._reorder_cards()
         self._draw_drop_zone()
 
     def _reorder_cards(self) -> None:
-        def sort_key(peer: Peer) -> tuple[int, int, str]:
+        """Lay out the two sections: paired devices, then devices only found on the LAN."""
+        px = self.theme.px
+
+        def sort_key(peer: Peer) -> tuple[int, str]:
             status = self.peer_status.get(peer.device_id)
-            return (
-                0 if self.config_store.is_trusted(peer.device_id) else 1,
-                0 if status is not None and status.online else 1,
-                peer.name.lower(),
-            )
+            return (0 if status is not None and status.online else 1, peer.name.lower())
 
         for card in self.device_cards.values():
-            card.card.pack_forget()
-        ordered = sorted((card.peer for card in self.device_cards.values()), key=sort_key)
-        for peer in ordered:
-            self.device_cards[peer.device_id].card.pack(fill="x", pady=(0, self.theme.px(10)))
+            if card.card is not None:
+                card.card.pack_forget()
+        paired = [c.peer for c in self.device_cards.values() if c._mode == "paired"]
+        lan = [c.peer for c in self.device_cards.values() if c._mode == "lan"]
+        for peer in sorted(paired, key=sort_key):
+            card = self.device_cards[peer.device_id].card
+            assert card is not None
+            card.pack(fill="x", pady=(0, px(8)))
+        for peer in sorted(lan, key=sort_key):
+            card = self.device_cards[peer.device_id].card
+            assert card is not None
+            card.pack(fill="x", pady=(0, px(8)))
+        online = sum(
+            1
+            for peer in paired
+            if (status := self.peer_status.get(peer.device_id)) is not None and status.online
+        )
+        self.paired_title.configure(
+            text=f"Dine enheder  ·  {online} online" if paired else "Dine enheder"
+        )
+        if paired:
+            self.paired_empty.pack_forget()
+        else:
+            self.paired_empty.pack(fill="x", before=self.paired_list)
+        if lan:
+            self.lan_section.pack(fill="x", pady=(px(18), 0))
+            self.lan_title.configure(text=f"Fundet på netværket  ·  {len(lan)}")
+        else:
+            self.lan_section.pack_forget()
 
     def _refresh_device_cards(self) -> None:
         for card in self.device_cards.values():
@@ -1947,9 +2199,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
         self.peer_status.pop(peer_id, None)
         if self.selected_id == peer_id:
             self.selected_id = None
-        if not self.device_cards:
-            self.empty_state.pack(fill="x")
-        self.device_count.configure(text=str(len(self.device_cards)) if self.device_cards else "")
+        self._reorder_cards()
         self._draw_drop_zone()
 
     def _update_peer_status(self, status: PeerStatus) -> None:
@@ -2397,15 +2647,45 @@ class H4xtorShareApp(TkinterDnD.Tk):
         self._previous_wifi = None
         self.runtime.submit(run(), "wifi_restored")
 
+    def _show_update_banner(self, version: str, url: str) -> None:
+        c = self.theme.c
+        px = self.theme.px
+        card = Card(
+            self.banner, self.theme, padding=12, fill=c["accent_soft"], outline=c["accent_soft"]
+        )
+        card.pack(fill="x", pady=(0, px(6)))
+        tk.Label(
+            card.body,
+            text=f"Ny version {version} er klar  ·  du kører {VERSION}",
+            bg=c["accent_soft"],
+            fg=c["accent"],
+            font=self.theme.font(10, "bold"),
+        ).pack(side="left")
+        Button(
+            card.body,
+            self.theme,
+            "Hent opdatering",
+            lambda: webbrowser.open(url),
+            kind="primary",
+            size="sm",
+        ).pack(side="right")
+
     def _show_wifi_banner(self) -> None:
-        for child in self.banner.winfo_children():
+        if not hasattr(self, "wifi_banner"):
+            self.wifi_banner = tk.Frame(self.banner, bg=self.theme.c["bg"])
+            self.wifi_banner.pack(fill="x")
+        for child in self.wifi_banner.winfo_children():
             child.destroy()
         if not self._previous_wifi or not wifidirect.p2p_address():
             return
         c = self.theme.c
         px = self.theme.px
         card = Card(
-            self.banner, self.theme, padding=12, fill=c["accent_soft"], outline=c["accent_soft"]
+            self.wifi_banner,
+            self.theme,
+            padding=12,
+            fill=c["accent_soft"],
+            outline=c["accent_soft"],
         )
         card.pack(fill="x", pady=(0, px(14)))
         tk.Label(

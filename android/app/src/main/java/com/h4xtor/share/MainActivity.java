@@ -385,7 +385,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         }
 
         LinearLayout sectionRow = ui.row();
-        sectionRow.addView(ui.label("Enheder"), ui.weight(1));
+        sectionRow.addView(ui.label("Dine enheder"), ui.weight(1));
         TextView refresh = ui.text(service.isScanning()
                 ? "Scanner " + Math.round(service.scanProgress() * 100) + "%"
                 : "Scan netværk", 13.5f, ui.accent, true);
@@ -410,9 +410,26 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             empty.addView(spinner, ui.margins(0, 12, 0, 0));
             content.addView(empty);
         }
+        List<Peer> lan = new ArrayList<>();
         for (Peer peer : peers) {
+            if (!service.identity().isOutboundTrusted(peer.deviceId)) {
+                lan.add(peer);
+                continue;
+            }
             content.addView(deviceCard(peer, target != null && target.deviceId.equals(peer.deviceId)),
                     ui.margins(0, 0, 0, 10));
+        }
+        if (!peers.isEmpty() && lan.size() == peers.size()) {
+            content.addView(ui.text("Ingen forbundne enheder endnu – tryk Forbind på en enhed herunder, "
+                    + "eller scan QR-koden på din PC.", 13.5f, ui.muted, false), ui.margins(4, 0, 0, 6));
+        }
+        if (!lan.isEmpty()) {
+            content.addView(ui.label("Fundet på netværket · " + lan.size()), ui.margins(4, 14, 0, 4));
+            content.addView(ui.text("Ikke forbundet. Tryk Forbind – eller ⋮ for at skjule.", 12.5f,
+                    ui.faint, false), ui.margins(4, 0, 0, 8));
+            for (Peer peer : lan) {
+                content.addView(deviceCard(peer, false), ui.margins(0, 0, 0, 10));
+            }
         }
 
         content.addView(wifiDirectCard(), ui.margins(0, 14, 0, 0));
@@ -518,8 +535,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         name.setEllipsize(TextUtils.TruncateAt.END);
         texts.addView(name);
         String transport = "wifi-direct".equals(peer.transport) ? "Wi-Fi Direct" : "Wi-Fi";
-        TextView meta = ui.text(Ui.platformLabel(peer.platform) + " · " + transport + " · " + peer.address,
-                12.5f, ui.muted, false);
+        String prefix = paired ? (online ? "Online · " : "Offline · ") : "Ikke forbundet · fundet på ";
+        TextView meta = ui.text(prefix + (paired ? Ui.platformLabel(peer.platform) + " · " + transport
+                : transport + " · " + Ui.platformLabel(peer.platform)) + " · " + peer.address,
+                12.5f, paired && online ? ui.success : ui.muted, false);
         meta.setSingleLine(true);
         meta.setEllipsize(TextUtils.TruncateAt.END);
         texts.addView(meta, ui.margins(0, 2, 0, 0));

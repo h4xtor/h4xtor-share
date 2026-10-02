@@ -14,19 +14,21 @@ import tkinter.font as tkfont
 from collections.abc import Callable
 from typing import Any
 
+# Palettes modelled on Claude.ai: warm paper whites, warm charcoal darks,
+# one terracotta accent and very quiet borders.
 LIGHT = {
     "bg": "#FAF9F5",
-    "sidebar": "#F2F0E8",
+    "sidebar": "#F5F4ED",
     "card": "#FFFFFF",
-    "card_hover": "#FCFBF8",
-    "border": "#E6E2D6",
-    "border_strong": "#D6D0C0",
-    "text": "#1F1E1D",
-    "muted": "#6F6B62",
-    "faint": "#A49F94",
-    "accent": "#C96442",
-    "accent_hover": "#B4553A",
-    "accent_soft": "#F7E8E0",
+    "card_hover": "#F8F7F2",
+    "border": "#E8E6DC",
+    "border_strong": "#D9D6C9",
+    "text": "#141413",
+    "muted": "#73726C",
+    "faint": "#A3A19A",
+    "accent": "#C6613F",
+    "accent_hover": "#B0532F",
+    "accent_soft": "#F5E6DE",
     "accent_text": "#FFFFFF",
     "success": "#2E8B57",
     "success_soft": "#E3F2E9",
@@ -34,38 +36,38 @@ LIGHT = {
     "warning_soft": "#FBF0DC",
     "danger": "#C2412D",
     "danger_soft": "#FBE5E1",
-    "neutral_soft": "#EFECE4",
-    "nav_active": "#E9E5DA",
-    "track": "#ECE8DE",
+    "neutral_soft": "#EFEDE6",
+    "nav_active": "#EAE8E0",
+    "track": "#ECE9E0",
     "entry": "#FFFFFF",
     "shadow": "#EDEAE1",
 }
 
 DARK = {
-    "bg": "#1E1D1B",
-    "sidebar": "#181715",
-    "card": "#282725",
-    "card_hover": "#2E2D2A",
-    "border": "#383632",
-    "border_strong": "#4A4742",
-    "text": "#F3F1EA",
-    "muted": "#A8A397",
-    "faint": "#77736A",
+    "bg": "#262624",
+    "sidebar": "#1F1E1D",
+    "card": "#30302E",
+    "card_hover": "#363633",
+    "border": "#3E3E3A",
+    "border_strong": "#4D4D48",
+    "text": "#F5F4EE",
+    "muted": "#A6A39A",
+    "faint": "#77756D",
     "accent": "#D97757",
-    "accent_hover": "#E48B6D",
-    "accent_soft": "#3D2C24",
+    "accent_hover": "#E38A6C",
+    "accent_soft": "#3E2D25",
     "accent_text": "#FFFFFF",
-    "success": "#4CC38A",
-    "success_soft": "#1F3529",
+    "success": "#5BC38E",
+    "success_soft": "#24372B",
     "warning": "#E2A84B",
     "warning_soft": "#3A2F1C",
     "danger": "#EF6B55",
-    "danger_soft": "#3E2420",
-    "neutral_soft": "#33312D",
-    "nav_active": "#2C2B28",
-    "track": "#3A3834",
-    "entry": "#22211F",
-    "shadow": "#161513",
+    "danger_soft": "#41261F",
+    "neutral_soft": "#383835",
+    "nav_active": "#2E2E2B",
+    "track": "#41413C",
+    "entry": "#30302E",
+    "shadow": "#1A1A19",
 }
 
 PLATFORM_STYLE = {
@@ -127,6 +129,15 @@ class Theme:
             ),
             self.family,
         )
+        # Claude.ai pairs a serif display face with a clean sans for UI text.
+        self.serif = next(
+            (
+                name
+                for name in ("Georgia", "Cambria", "Iowan Old Style", "DejaVu Serif", "Noto Serif")
+                if name in families
+            ),
+            self.display_family,
+        )
         self._fonts: dict[tuple[str, int, str], tkfont.Font] = {}
 
     def px(self, value: float) -> int:
@@ -139,6 +150,9 @@ class Theme:
         return self._fonts[key]
 
     def title_font(self, size: int) -> tkfont.Font:
+        return self.font(size, "normal", self.serif)
+
+    def ui_title_font(self, size: int) -> tkfont.Font:
         return self.font(size, "bold", self.display_family)
 
 

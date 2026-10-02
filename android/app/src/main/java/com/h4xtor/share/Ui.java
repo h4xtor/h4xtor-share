@@ -25,7 +25,7 @@ import java.util.Locale;
 
 /** Tiny design system: one palette (light + dark), rounded surfaces, typography. */
 public final class Ui {
-    public static final int ACCENT_LIGHT = Color.parseColor("#C96442");
+    public static final int ACCENT_LIGHT = Color.parseColor("#C6613F");
 
     public final Context context;
     public final boolean dark;
@@ -56,16 +56,16 @@ public final class Ui {
         dark = mode == Configuration.UI_MODE_NIGHT_YES;
         density = context.getResources().getDisplayMetrics().density;
         if (dark) {
-            bg = Color.parseColor("#1E1D1B");
-            surface = Color.parseColor("#282725");
-            surfaceAlt = Color.parseColor("#302F2C");
-            border = Color.parseColor("#383632");
-            text = Color.parseColor("#F3F1EA");
-            muted = Color.parseColor("#A8A397");
+            bg = Color.parseColor("#262624");
+            surface = Color.parseColor("#30302E");
+            surfaceAlt = Color.parseColor("#383835");
+            border = Color.parseColor("#3E3E3A");
+            text = Color.parseColor("#F5F4EE");
+            muted = Color.parseColor("#A6A39A");
             faint = Color.parseColor("#77736A");
             accent = Color.parseColor("#D97757");
             accentPressed = Color.parseColor("#E48B6D");
-            accentSoft = Color.parseColor("#3D2C24");
+            accentSoft = Color.parseColor("#3E2D25");
             success = Color.parseColor("#4CC38A");
             successSoft = Color.parseColor("#1F3529");
             warning = Color.parseColor("#E2A84B");
@@ -77,13 +77,13 @@ public final class Ui {
         } else {
             bg = Color.parseColor("#FAF9F5");
             surface = Color.parseColor("#FFFFFF");
-            surfaceAlt = Color.parseColor("#F4F2EC");
-            border = Color.parseColor("#E6E2D6");
-            text = Color.parseColor("#1F1E1D");
-            muted = Color.parseColor("#6F6B62");
+            surfaceAlt = Color.parseColor("#F5F4ED");
+            border = Color.parseColor("#E8E6DC");
+            text = Color.parseColor("#141413");
+            muted = Color.parseColor("#73726C");
             faint = Color.parseColor("#A49F94");
             accent = ACCENT_LIGHT;
-            accentPressed = Color.parseColor("#B4553A");
+            accentPressed = Color.parseColor("#B0532F");
             accentSoft = Color.parseColor("#F7E8E0");
             success = Color.parseColor("#2E8B57");
             successSoft = Color.parseColor("#E3F2E9");
@@ -161,9 +161,10 @@ public final class Ui {
         return view;
     }
 
+    /** Serif display titles, like Claude.ai. */
     public TextView title(String value, float sizeSp) {
-        TextView view = text(value, sizeSp, text, true);
-        view.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+        TextView view = text(value, sizeSp, text, false);
+        view.setTypeface(Typeface.create(Typeface.SERIF, Typeface.NORMAL));
         view.setLetterSpacing(-0.01f);
         return view;
     }
