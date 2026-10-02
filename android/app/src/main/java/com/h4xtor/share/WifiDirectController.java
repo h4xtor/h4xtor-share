@@ -97,6 +97,7 @@ public final class WifiDirectController {
         return value;
     }
 
+    @SuppressLint("MissingPermission")
     private boolean ensureManager() {
         if (manager != null && channel != null) {
             return true;
@@ -175,6 +176,7 @@ public final class WifiDirectController {
         });
     }
 
+    @SuppressLint("MissingPermission")
     public void stop(Callback callback) {
         if (!ensureManager()) {
             active = false;
