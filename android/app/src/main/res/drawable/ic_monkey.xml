@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- h4xtor share's monkey mascot (original artwork, vector). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="96dp"
+    android:height="96dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+    <!-- ears -->
+    <path android:fillColor="#8B5A3C" android:pathData="M2,50a14,14 0 1,0 28,0a14,14 0 1,0 -28,0" />
+    <path android:fillColor="#E9B98F" android:pathData="M8,50a8,8 0 1,0 16,0a8,8 0 1,0 -16,0" />
+    <path android:fillColor="#8B5A3C" android:pathData="M70,50a14,14 0 1,0 28,0a14,14 0 1,0 -28,0" />
+    <path android:fillColor="#E9B98F" android:pathData="M76,50a8,8 0 1,0 16,0a8,8 0 1,0 -16,0" />
+    <!-- head + tuft -->
+    <path android:fillColor="#8B5A3C" android:pathData="M17,50a33,33 0 1,0 66,0a33,33 0 1,0 -66,0" />
+    <path android:strokeColor="#8B5A3C" android:strokeWidth="4" android:strokeLineCap="round"
+        android:fillColor="#00000000" android:pathData="M44,19Q50,6 55,18" />
+    <!-- face -->
+    <path android:fillColor="#F2D3B1" android:pathData="M27,45a12,12 0 1,0 24,0a12,12 0 1,0 -24,0" />
+    <path android:fillColor="#F2D3B1" android:pathData="M49,45a12,12 0 1,0 24,0a12,12 0 1,0 -24,0" />
+    <path android:fillColor="#F2D3B1" android:pathData="M28,65a22,15 0 1,0 44,0a22,15 0 1,0 -44,0" />
+    <!-- eyes -->
+    <path android:fillColor="#3B2A20" android:pathData="M35.6,45a4.4,4.4 0 1,0 8.8,0a4.4,4.4 0 1,0 -8.8,0" />
+    <path android:fillColor="#3B2A20" android:pathData="M55.6,45a4.4,4.4 0 1,0 8.8,0a4.4,4.4 0 1,0 -8.8,0" />
+    <path android:fillColor="#FFFFFF" android:pathData="M40,43.4a1.4,1.4 0 1,0 2.8,0a1.4,1.4 0 1,0 -2.8,0" />
+    <path android:fillColor="#FFFFFF" android:pathData="M60,43.4a1.4,1.4 0 1,0 2.8,0a1.4,1.4 0 1,0 -2.8,0" />
+    <!-- nose + smile -->
+    <path android:fillColor="#3B2A20" android:pathData="M44.4,60a1.6,1.6 0 1,0 3.2,0a1.6,1.6 0 1,0 -3.2,0" />
+    <path android:fillColor="#3B2A20" android:pathData="M52.4,60a1.6,1.6 0 1,0 3.2,0a1.6,1.6 0 1,0 -3.2,0" />
+    <path android:strokeColor="#3B2A20" android:strokeWidth="2.6" android:strokeLineCap="round"
+        android:fillColor="#00000000" android:pathData="M41,67Q50,75 59,67" />
+</vector>

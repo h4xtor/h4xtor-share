@@ -764,3 +764,39 @@ def entry(parent: tk.Misc, theme: Theme, variable: tk.Variable, **kwargs: Any) -
         font=theme.font(10),
         **kwargs,
     )
+
+
+class Monkey(tk.Canvas):
+    """A small friendly monkey mascot, drawn with vector shapes (scales cleanly)."""
+
+    BROWN = "#8B5A3C"
+    FACE = "#F2D3B1"
+    INNER = "#E9B98F"
+    DARK = "#3B2A20"
+
+    def __init__(self, parent: tk.Misc, theme: Theme, size: int = 64) -> None:
+        super().__init__(
+            parent, width=size, height=size, bg=theme.c["bg"], highlightthickness=0, bd=0
+        )
+        self._draw(size / 100.0)
+
+    def _circle(self, x: float, y: float, r: float, s: float, fill: str) -> None:
+        self.create_oval((x - r) * s, (y - r) * s, (x + r) * s, (y + r) * s, fill=fill, outline="")
+
+    def _draw(self, s: float) -> None:
+        for x in (16, 84):  # ears
+            self._circle(x, 50, 14, s, self.BROWN)
+            self._circle(x, 50, 8, s, self.INNER)
+        self._circle(50, 50, 33, s, self.BROWN)  # head
+        self.create_line(44 * s, 19 * s, 50 * s, 11 * s, 55 * s, 18 * s, fill=self.BROWN,
+                         width=max(2, 4 * s), smooth=True, capstyle="round")
+        self._circle(39, 45, 12, s, self.FACE)  # face lobes
+        self._circle(61, 45, 12, s, self.FACE)
+        self.create_oval(28 * s, 50 * s, 72 * s, 80 * s, fill=self.FACE, outline="")  # muzzle
+        for x in (40, 60):  # eyes
+            self._circle(x, 45, 4.4, s, self.DARK)
+            self._circle(x + 1.4, 43.4, 1.4, s, "#FFFFFF")
+        for x in (46, 54):  # nostrils
+            self._circle(x, 60, 1.6, s, self.DARK)
+        self.create_arc(40 * s, 58 * s, 60 * s, 74 * s, start=200, extent=140, style="arc",
+                        outline=self.DARK, width=max(1.5, 2.6 * s))

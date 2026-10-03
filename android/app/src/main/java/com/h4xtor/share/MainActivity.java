@@ -481,9 +481,15 @@ public final class MainActivity extends Activity implements ShareService.UiListe
 
     private View greeting(Peer target) {
         LinearLayout box = ui.column();
-        int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
-        String hello = hour < 5 ? "God nat" : hour < 10 ? "Godmorgen" : hour < 17 ? "God dag" : "God aften";
-        box.addView(ui.title(hello + ",\nhvad skal deles?", 31));
+        LinearLayout headline = ui.row();
+        headline.addView(ui.title("Velkommen til\nH4xtor Share", 31), ui.weight(1));
+        android.widget.ImageView monkey = new android.widget.ImageView(this);
+        monkey.setImageResource(R.drawable.ic_monkey);
+        monkey.setContentDescription("H4xtor Share-aben");
+        LinearLayout.LayoutParams monkeyParams = new LinearLayout.LayoutParams(ui.dp(84), ui.dp(84));
+        monkeyParams.setMargins(ui.dp(12), 0, 0, 0);
+        headline.addView(monkey, monkeyParams);
+        box.addView(headline);
         if (target != null) {
             boolean online = service.isOnline(target.deviceId);
             box.addView(ui.text(online

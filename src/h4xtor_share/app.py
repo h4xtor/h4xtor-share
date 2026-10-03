@@ -59,6 +59,7 @@ from h4xtor_share.ui_kit import (
     Button,
     Card,
     Modal,
+    Monkey,
     ProgressBar,
     QrCanvas,
     ScrollFrame,
@@ -893,18 +894,6 @@ class H4xtorShareApp(TkinterDnD.Tk):
         return page, actions
 
     # ------------------------------------------------------------- share page
-    def _greeting(self) -> str:
-        hour = time.localtime().tm_hour
-        if hour < 5:
-            return "God nat"
-        if hour < 10:
-            return "Godmorgen"
-        if hour < 12:
-            return "God formiddag"
-        if hour < 18:
-            return "God eftermiddag"
-        return "God aften"
-
     def _build_share_page(self) -> None:
         c = self.theme.c
         px = self.theme.px
@@ -937,16 +926,10 @@ class H4xtorShareApp(TkinterDnD.Tk):
 
         hero = tk.Frame(center, bg=c["bg"])
         hero.pack(pady=(px(18), px(22)))
-        tk.Label(
-            hero,
-            text="✻",
-            bg=c["bg"],
-            fg=c["accent"],
-            font=self.theme.font(26, family=self.theme.symbol),
-        ).pack(side="left", padx=(0, px(12)))
+        Monkey(hero, self.theme, size=px(72)).pack(side="left", padx=(0, px(16)))
         self.greeting_label = tk.Label(
             hero,
-            text=f"{self._greeting()}, hvad skal deles?",
+            text="Velkommen til H4xtor Share",
             bg=c["bg"],
             fg=c["text"],
             font=self.theme.title_font(26),
