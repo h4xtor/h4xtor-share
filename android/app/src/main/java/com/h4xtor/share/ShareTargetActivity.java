@@ -115,7 +115,21 @@ public final class ShareTargetActivity extends Activity {
         TextView sub = ui.text(what, 14f, ui.muted, false);
         sub.setSingleLine(true);
         sub.setEllipsize(TextUtils.TruncateAt.END);
-        sheet.addView(sub, ui.margins(0, 4, 0, 16));
+        sheet.addView(sub, ui.margins(0, 4, 0, 14));
+        if (uris.isEmpty() && text != null) {
+            LinearLayout preview = ui.row();
+            preview.setPadding(ui.dp(14), ui.dp(12), ui.dp(14), ui.dp(12));
+            preview.setBackground(ui.rounded(ui.surfaceAlt, 0, 16));
+            preview.addView(ui.icon(Ui.isLink(text) ? R.drawable.ic_link : R.drawable.ic_clipboard, ui.accent, 18));
+            TextView value = ui.text(text.trim().replace('\n', ' '), 14f, ui.text, false);
+            value.setMaxLines(2);
+            value.setEllipsize(TextUtils.TruncateAt.END);
+            LinearLayout.LayoutParams valueParams = ui.weight(1);
+            valueParams.setMargins(ui.dp(10), 0, 0, 0);
+            preview.addView(value, valueParams);
+            sheet.addView(preview, ui.margins(0, 0, 0, 16));
+        }
+        sheet.addView(ui.label("Vælg enhed"), ui.margins(2, 0, 0, 8));
 
         ScrollView scroll = new ScrollView(this);
         list = ui.column();
@@ -204,7 +218,8 @@ public final class ShareTargetActivity extends Activity {
             Toast.makeText(this, "Sender til " + peer.name + " – følg med i notifikationen", Toast.LENGTH_SHORT).show();
         } else {
             service.sendText(peer, text);
-            Toast.makeText(this, "Sendt til " + peer.name, Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, (Ui.isLink(text) ? "Link sendt – åbner på " : "Sendt til ") + peer.name,
+                    Toast.LENGTH_SHORT).show();
         }
         finish();
     }
