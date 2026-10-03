@@ -1,0 +1,13 @@
+QR pairing (phone -> PC) and mutual trust
+phone shows the paired PC
+clipboard PC -> phone
+3 MB file PC -> phone lands in Downloads/h4xtor-share
+folder with subfolder PC -> phone
+link PC -> phone
+share sheet link phone -> PC (opens in Chrome on the PC)
+'Send til PC' from the text selection menu
+share sheet file phone -> PC (3 MB, byte-identical)
+second PC paired
+share sheet with two PCs: pick AdminPC, link arrives there
+folder phone -> PC via the system picker (subfolders intact)
+unpair from PC removes the pairing on the phone too

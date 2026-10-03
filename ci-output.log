@@ -1,0 +1,14 @@
+OK QR pairing (phone -> PC) and mutual trust
+OK phone shows the paired PC
+OK clipboard PC -> phone
+OK 3 MB file PC -> phone lands in Downloads/h4xtor-share
+OK folder with subfolder PC -> phone
+OK link PC -> phone
+OK share sheet link phone -> PC (opens in Chrome on the PC)
+OK 'Send til PC' from the text selection menu
+OK share sheet file phone -> PC (3 MB, byte-identical)
+OK second PC paired
+OK share sheet with two PCs: pick AdminPC, link arrives there
+OK folder phone -> PC via the system picker (subfolders intact)
+OK unpair from PC removes the pairing on the phone too
+ALL ANDROID E2E CHECKS PASSED
