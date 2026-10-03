@@ -347,6 +347,14 @@ public final class Ui {
         return params;
     }
 
+    /** Wrap-content params with margins, for items inside a horizontal row. */
+    public LinearLayout.LayoutParams wrap(int left, int top, int right, int bottom) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.setMargins(dp(left), dp(top), dp(right), dp(bottom));
+        return params;
+    }
+
     public LinearLayout.LayoutParams weight(float weight) {
         return new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, weight);
     }

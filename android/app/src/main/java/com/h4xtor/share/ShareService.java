@@ -1119,6 +1119,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
             if (identity.flag("apply_clipboard", true)) {
                 try {
                     clipboardObserved = text;
+                    lastSharedClipboard = text;
                     clipboardSuppress = text;
                     clipboardSuppressUntil = SystemClock.elapsedRealtime() + CLIPBOARD_SUPPRESS_MS;
                     clipboard.setPrimaryClip(ClipData.newPlainText("h4xtor share", text));
@@ -1203,8 +1204,20 @@ public final class ShareService extends Service implements H4xtorServer.Listener
             }
         }
         if (count > 0) {
+            lastSharedClipboard = text;
             message("Udklipsholder synkroniseret til " + count + (count == 1 ? " enhed" : " enheder"), false);
         }
+    }
+
+    /** Text already on the other devices: came from them or was synced to them. */
+    private volatile String lastSharedClipboard = "";
+
+    public boolean isClipboardShared(String text) {
+        return text != null && text.trim().equals(lastSharedClipboard.trim());
+    }
+
+    public void markClipboardShared(String text) {
+        lastSharedClipboard = text == null ? "" : text;
     }
 
     public String currentClipboard() {

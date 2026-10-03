@@ -120,11 +120,11 @@ class Desktop:
     def run(self, coroutine, timeout: float = 60):
         return asyncio.run_coroutine_threadsafe(coroutine, self.loop).result(timeout)
 
-    def wait_for(self, kind: type, timeout: float = 45.0):
+    def wait_for(self, kind: type, timeout: float = 45.0, match=None):
         deadline = time.time() + timeout
         while time.time() < deadline:
             for event in list(self.events):
-                if isinstance(event, kind):
+                if isinstance(event, kind) and (match is None or match(event)):
                     self.events.remove(event)
                     return event
             time.sleep(0.2)
@@ -203,8 +203,7 @@ def main() -> None:
         "--es android.intent.extra.TEXT 'https://example.com/fra-telefon' "
         f"-n {PKG}/.ShareTargetActivity"
     )
-    link: LinkReceived = desktop.wait_for(LinkReceived)
-    assert link.url == "https://example.com/fra-telefon"
+    desktop.wait_for(LinkReceived, match=lambda event: event.url == "https://example.com/fra-telefon")
     ok("share sheet link phone -> PC (opens in Chrome on the PC)")
 
     shell(
@@ -212,8 +211,8 @@ def main() -> None:
         "--es android.intent.extra.PROCESS_TEXT 'markeret tekst' "
         f"-n {PKG}/.ShareTargetActivity"
     )
-    text: ClipboardReceived = desktop.wait_for(ClipboardReceived)
-    assert text.text == "markeret tekst"
+    # The phone may also sync its own clipboard when it gains focus: wait for ours.
+    desktop.wait_for(ClipboardReceived, match=lambda event: event.text == "markeret tekst")
     ok("'Send til PC' from the text selection menu")
 
     # Phone -> PC file through the share sheet (content:// from MediaStore).

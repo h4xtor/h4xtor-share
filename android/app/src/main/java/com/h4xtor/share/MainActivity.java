@@ -548,9 +548,9 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         TextView name = ui.text(target.name + "  ▾", 14f, ui.text, true);
         name.setSingleLine(true);
         name.setEllipsize(TextUtils.TruncateAt.END);
-        chip.addView(name, ui.margins(7, 0, 0, 0));
+        chip.addView(name, ui.wrap(7, 0, 0, 0));
         chip.setOnClickListener(v -> choosePeer(this::select));
-        to.addView(chip, ui.margins(8, 0, 0, 0));
+        to.addView(chip, ui.wrap(8, 0, 0, 0));
         card.addView(to);
 
         card.addView(composerInput(), ui.margins(0, 6, 0, 4));
@@ -581,12 +581,16 @@ public final class MainActivity extends Activity implements ShareService.UiListe
 
     private View toolChip(int icon, String label, View.OnClickListener click) {
         LinearLayout chip = ui.row();
-        chip.setPadding(ui.dp(10), ui.dp(7), ui.dp(12), ui.dp(7));
+        chip.setPadding(ui.dp(9), ui.dp(7), ui.dp(11), ui.dp(7));
         chip.setBackground(ui.ripple(ui.rounded(Color.TRANSPARENT, ui.border, 999), 999));
         chip.setClickable(true);
         chip.setOnClickListener(click);
-        chip.addView(ui.icon(icon, ui.muted, 16));
-        chip.addView(ui.text(label, 13.5f, ui.text, false), ui.margins(6, 0, 0, 0));
+        chip.setContentDescription(label);
+        chip.addView(ui.icon(icon, ui.muted, 15));
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        labelParams.setMargins(ui.dp(5), 0, 0, 0);
+        chip.addView(ui.text(label, 13f, ui.text, false), labelParams);
         return chip;
     }
 
@@ -619,7 +623,8 @@ public final class MainActivity extends Activity implements ShareService.UiListe
 
     private View clipboardSuggestion(Peer target) {
         String clip = service.currentClipboard();
-        if (clip == null || clip.trim().isEmpty() || clip.equals(dismissedClip)) {
+        if (clip == null || clip.trim().isEmpty() || clip.equals(dismissedClip)
+                || service.isClipboardShared(clip)) {
             return null;
         }
         clip = clip.trim();
@@ -644,6 +649,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         String value = clip;
         send.setOnClickListener(v -> {
             service.sendText(target, value);
+            service.markClipboardShared(value);
             dismissedClip = value;
             toast("Sendt til " + target.name, false);
             render();
@@ -770,7 +776,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             row.addView(signalBars(service.rtt(peer.deviceId)), barsParams);
         }
         if (selected) {
-            row.addView(ui.text("✓", 17f, ui.accent, true), ui.margins(2, 0, 2, 0));
+            LinearLayout.LayoutParams checkParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            checkParams.setMargins(ui.dp(2), 0, ui.dp(2), 0);
+            row.addView(ui.text("✓", 17f, ui.accent, true), checkParams);
         }
         if (!paired) {
             TextView connect = ui.button("Forbind", "soft");
