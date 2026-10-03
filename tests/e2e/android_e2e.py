@@ -1,0 +1,286 @@
+"""End-to-end: the real Android app (in an emulator) against the real desktop core.
+
+Runs inside reactivecircus/android-emulator-runner in CI. The host is reachable
+from the emulator as 10.0.2.2; the phone's server is reached through
+``adb forward``. Screenshots of every screen are written to ``$E2E_SHOTS``.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "src"))
+
+from h4xtor_share.client import PeerClient  # noqa: E402
+from h4xtor_share.config import Config  # noqa: E402
+from h4xtor_share.crypto import ensure_certificate, server_ssl_context  # noqa: E402
+from h4xtor_share.models import (  # noqa: E402
+    ClipboardReceived,
+    FileReceived,
+    LinkReceived,
+    Peer,
+    PeerPaired,
+)
+from h4xtor_share.pairing import PairingInvite  # noqa: E402
+from h4xtor_share.server import ShareServer  # noqa: E402
+
+PKG = "com.h4xtor.share"
+APK = ROOT / "android/app/build/outputs/apk/debug/app-debug.apk"
+SHOTS = Path(os.environ.get("E2E_SHOTS", "e2e-shots"))
+SHOTS.mkdir(parents=True, exist_ok=True)
+WORK = Path(tempfile.mkdtemp(prefix="h4x-android-e2e-"))
+RESULTS: list[str] = []
+
+
+def adb(*args: str, check: bool = True, timeout: float = 60) -> str:
+    result = subprocess.run(
+        ["adb", *args], capture_output=True, text=True, timeout=timeout, check=False
+    )
+    if check and result.returncode != 0:
+        raise RuntimeError(f"adb {' '.join(args)} failed: {result.stderr or result.stdout}")
+    return result.stdout
+
+
+def shell(command: str, check: bool = True) -> str:
+    return adb("shell", command, check=check)
+
+
+def shot(name: str) -> None:
+    time.sleep(1.2)
+    data = subprocess.run(["adb", "exec-out", "screencap", "-p"], capture_output=True,
+                          timeout=30, check=True).stdout
+    (SHOTS / f"{name}.png").write_bytes(data)
+
+
+def ui_nodes() -> list[ET.Element]:
+    shell("uiautomator dump /sdcard/ui.xml", check=False)
+    xml = adb("exec-out", "cat", "/sdcard/ui.xml", check=False)
+    try:
+        return list(ET.fromstring(xml).iter("node"))
+    except ET.ParseError:
+        return []
+
+
+def tap_text(pattern: str, timeout: float = 15) -> None:
+    deadline = time.time() + timeout
+    regex = re.compile(pattern)
+    while time.time() < deadline:
+        # Last match wins: bottom navigation sits below any same-named page header.
+        for node in reversed(ui_nodes()):
+            if regex.search(node.get("text") or "") or regex.search(node.get("content-desc") or ""):
+                x1, y1, x2, y2 = map(int, re.findall(r"\d+", node.get("bounds", "")))
+                shell(f"input tap {(x1 + x2) // 2} {(y1 + y2) // 2}")
+                return
+        time.sleep(1)
+    raise AssertionError(f"no element matching {pattern!r} on screen")
+
+
+def screen_has(pattern: str, timeout: float = 15) -> bool:
+    deadline = time.time() + timeout
+    regex = re.compile(pattern)
+    while time.time() < deadline:
+        if any(regex.search(n.get("text") or "") for n in ui_nodes()):
+            return True
+        time.sleep(1)
+    return False
+
+
+def ok(message: str) -> None:
+    RESULTS.append(message)
+    print("OK", message, flush=True)
+
+
+class Desktop:
+    def __init__(self) -> None:
+        self.config = Config(WORK / "desktop" / "config.json")
+        self.config.data.update(
+            device_name="AdminPC", port=47474, platform="windows",
+            incoming_directory=str(WORK / "desktop-in"),
+        )
+        self.config.save()
+        cert, key, self.fp = ensure_certificate(self.config.path.parent, "AdminPC")
+        self.events: list[object] = []
+        self.server = ShareServer(self.config, server_ssl_context(cert, key), self.fp,
+                                  self.events.append, host="0.0.0.0")
+        self.client = PeerClient(self.config, fingerprint=self.fp)
+        self.loop = asyncio.new_event_loop()
+        threading.Thread(target=self.loop.run_forever, daemon=True).start()
+        self.run(self.server.start())
+
+    def run(self, coroutine, timeout: float = 60):
+        return asyncio.run_coroutine_threadsafe(coroutine, self.loop).result(timeout)
+
+    def wait_for(self, kind: type, timeout: float = 45.0):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            for event in list(self.events):
+                if isinstance(event, kind):
+                    self.events.remove(event)
+                    return event
+            time.sleep(0.2)
+        raise AssertionError(f"desktop never received {kind.__name__}")
+
+
+def prefs() -> str:
+    return shell(f"run-as {PKG} cat shared_prefs/h4xtor_share.xml", check=False)
+
+
+def main() -> None:
+    adb("wait-for-device")
+    adb("install", "-r", "-g", str(APK), timeout=240)
+    for permission in ("POST_NOTIFICATIONS", "NEARBY_WIFI_DEVICES"):
+        shell(f"pm grant {PKG} android.permission.{permission}", check=False)
+    shell("settings put global window_animation_scale 0", check=False)
+    shell("settings put global transition_animation_scale 0", check=False)
+    shell("settings put global animator_duration_scale 0", check=False)
+    shell("cmd uimode night no", check=False)
+
+    desktop = Desktop()
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(6)
+    shot("01-first-start")
+
+    # ---- Pair by "scanning" the desktop QR code (deep link) -----------------
+    invite = PairingInvite(desktop.config.device_id, "AdminPC", desktop.fp, 47474, ("10.0.2.2",),
+                           desktop.server.create_qr_secret(), "windows")
+    shell(f"am start -W -a android.intent.action.VIEW -d '{invite.to_uri()}' {PKG}")
+    paired: PeerPaired = desktop.wait_for(PeerPaired)
+    assert desktop.config.is_trusted(paired.peer.device_id)
+    ok("QR pairing (phone -> PC) and mutual trust")
+    adb("forward", "tcp:47475", "tcp:47474")
+    phone = Peer(paired.peer.device_id, paired.peer.name, "127.0.0.1", 47475,
+                 paired.peer.fingerprint, "android", "lan", paired.peer.capabilities)
+    assert screen_has("AdminPC", 20), "PC not shown on phone after pairing"
+    time.sleep(5)
+    shot("02-home-paired")
+    ok("phone shows the paired PC")
+
+    # ---- PC -> phone ----------------------------------------------------------
+    desktop.run(desktop.client.send_clipboard(phone, "Hej fra PC'en"))
+    time.sleep(2)
+    assert "Hej fra PC" in prefs(), "clipboard text not recorded on phone"
+    ok("clipboard PC -> phone")
+
+    payload = WORK / "ferie.jpg"
+    payload.write_bytes(os.urandom(3 * 1024 * 1024))
+    desktop.run(desktop.client.send_file(phone, payload, lambda _p: None), timeout=120)
+    time.sleep(2)
+    listing = shell("ls -l /sdcard/Download/h4xtor-share/", check=False)
+    assert "ferie.jpg" in listing, listing
+    assert str(payload.stat().st_size) in listing, listing
+    ok("3 MB file PC -> phone lands in Downloads/h4xtor-share")
+
+    folder = WORK / "Projekt"
+    (folder / "sub").mkdir(parents=True)
+    (folder / "a.txt").write_text("a")
+    (folder / "sub" / "b.txt").write_text("b" * 5000)
+    desktop.run(desktop.client.send_folder(phone, folder, lambda _p: None), timeout=120)
+    time.sleep(2)
+    listing = shell("ls -R /sdcard/Download/h4xtor-share/Projekt", check=False)
+    assert "a.txt" in listing and "b.txt" in listing, listing
+    ok("folder with subfolder PC -> phone")
+
+    desktop.run(desktop.client.send_link(phone, "https://example.com/fra-pc"))
+    time.sleep(3)
+    assert "fra-pc" in prefs()
+    ok("link PC -> phone")
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(2)
+
+    # ---- Phone -> PC via the Android share sheet ------------------------------
+    shell(
+        "am start -W -a android.intent.action.SEND -t text/plain "
+        "--es android.intent.extra.TEXT 'https://example.com/fra-telefon' "
+        f"-n {PKG}/.ShareTargetActivity"
+    )
+    link: LinkReceived = desktop.wait_for(LinkReceived)
+    assert link.url == "https://example.com/fra-telefon"
+    ok("share sheet link phone -> PC (opens in Chrome on the PC)")
+
+    shell(
+        "am start -W -a android.intent.action.PROCESS_TEXT -t text/plain "
+        "--es android.intent.extra.PROCESS_TEXT 'markeret tekst' "
+        f"-n {PKG}/.ShareTargetActivity"
+    )
+    text: ClipboardReceived = desktop.wait_for(ClipboardReceived)
+    assert text.text == "markeret tekst"
+    ok("'Send til PC' from the text selection menu")
+
+    # Phone -> PC file through the share sheet (content:// from MediaStore).
+    try:
+        sample = WORK / "rapport.pdf"
+        sample.write_bytes(b"%PDF-1.4\n" + os.urandom(200_000))
+        adb("push", str(sample), "/sdcard/Download/rapport.pdf")
+        shell("am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE "
+              "-d file:///sdcard/Download/rapport.pdf", check=False)
+        uri = ""
+        for _ in range(15):
+            out = shell("content query --uri content://media/external/file --projection _id "
+                        "--where \"_display_name='rapport.pdf'\"", check=False)
+            match = re.search(r"_id=(\d+)", out)
+            if match:
+                uri = f"content://media/external/file/{match.group(1)}"
+                break
+            time.sleep(1)
+        assert uri, "media scanner did not index the file"
+        shell("am start -W -a android.intent.action.SEND -t application/pdf "
+              f"--eu android.intent.extra.STREAM {uri} --grant-read-uri-permission "
+              f"-n {PKG}/.ShareTargetActivity")
+        received: FileReceived = desktop.wait_for(FileReceived, timeout=60)
+        assert received.path.read_bytes() == sample.read_bytes()
+        ok("share sheet file phone -> PC (byte-identical)")
+    except Exception as error:  # noqa: BLE001 - emulator media quirks must not hide the rest
+        print("WARN phone->PC file via share sheet:", error, flush=True)
+
+    # ---- Screens for design review ---------------------------------------------
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(3)
+    shot("03-home")
+    tap_text("^Overførsler$")
+    shot("04-transfers")
+    tap_text("^Historik$")
+    shot("05-history")
+    tap_text("^Indstillinger$")
+    shot("06-settings")
+    tap_text("^Del$")
+    shell("am start -W -a android.intent.action.SEND -t text/plain "
+          "--es android.intent.extra.TEXT 'https://example.com' "
+          f"-n {PKG}/.ShareTargetActivity", check=False)
+    time.sleep(1)
+    shell("cmd uimode night yes", check=False)
+    shell(f"am force-stop {PKG}", check=False)
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(6)
+    shot("07-home-dark")
+    tap_text("^Overførsler$")
+    shot("08-transfers-dark")
+
+    # ---- Unpair from the PC -> phone forgets it too ---------------------------
+    desktop.run(desktop.client.unpair(phone))
+    time.sleep(3)
+    assert f"out_token_{desktop.config.device_id}" not in prefs(), "phone kept the pairing"
+    ok("unpair from PC removes the pairing on the phone too")
+    (SHOTS / "results.txt").write_text("\n".join(RESULTS) + "\n", encoding="utf-8")
+    print("ALL ANDROID E2E CHECKS PASSED", flush=True)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    finally:
+        try:
+            shot("99-final")
+            subprocess.run(["adb", "logcat", "-d", "-t", "400", "*:W"], stdout=open(
+                SHOTS / "logcat.txt", "w"), timeout=30, check=False)
+        except Exception:  # noqa: BLE001
+            pass

@@ -47,6 +47,12 @@ public final class ShareTargetActivity extends Activity {
             return;
         }
         String action = intent.getAction();
+        if (Intent.ACTION_PROCESS_TEXT.equals(action)) {
+            // "Send til PC" in the text-selection menu of any app.
+            CharSequence value = intent.getCharSequenceExtra(Intent.EXTRA_PROCESS_TEXT);
+            text = value == null ? null : value.toString();
+            return;
+        }
         if (Intent.ACTION_SEND.equals(action)) {
             Uri stream = Build.VERSION.SDK_INT >= 33
                     ? intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri.class)
@@ -129,6 +135,12 @@ public final class ShareTargetActivity extends Activity {
     }
 
     private void renderDevices(ShareService service) {
+        List<Peer> paired = service.pairedPeers();
+        if (paired.size() == 1) {
+            // Only one place it can go: send straight away, no extra tap.
+            send(service, paired.get(0));
+            return;
+        }
         renderList(service);
         // Refresh the online state once the service had time to ping everyone.
         list.postDelayed(() -> {
