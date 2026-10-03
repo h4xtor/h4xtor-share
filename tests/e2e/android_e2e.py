@@ -280,7 +280,8 @@ if __name__ == "__main__":
     finally:
         try:
             shot("99-final")
-            subprocess.run(["adb", "logcat", "-d", "-t", "400", "*:W"], stdout=open(
-                SHOTS / "logcat.txt", "w"), timeout=30, check=False)
+            with open(SHOTS / "logcat.txt", "w", encoding="utf-8") as log:
+                subprocess.run(["adb", "logcat", "-d", "-t", "3000", "AndroidRuntime:E", "h4xtor:V",
+                                "ShareService:V", "*:S"], stdout=log, timeout=30, check=False)
         except Exception:  # noqa: BLE001
             pass

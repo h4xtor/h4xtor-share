@@ -451,8 +451,9 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         LinearLayout bar = ui.row();
         TextView mark = ui.text("✻", 22f, ui.accent, true);
         bar.addView(mark);
-        bar.addView(ui.text("h4xtor share", 16.5f, ui.text, true), ui.margins(8, 0, 0, 0));
-        bar.addView(new View(this), ui.weight(1));
+        LinearLayout.LayoutParams nameParams = ui.weight(1);
+        nameParams.setMargins(ui.dp(8), 0, ui.dp(8), 0);
+        bar.addView(ui.text("h4xtor share", 16.5f, ui.text, true), nameParams);
 
         boolean online = "Online".equals(service.status());
         LinearLayout status = ui.row();
