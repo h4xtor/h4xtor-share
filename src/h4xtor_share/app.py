@@ -341,7 +341,7 @@ class DeviceCard:
         selected = paired and app.selected_id == peer.device_id
         platform_label = PLATFORM_LABELS.get(peer.platform.lower(), peer.platform.title())
         transport = TRANSPORT_LABELS.get(peer.transport, peer.transport)
-        self.name_label.configure(text=peer.name + ("   ✓ modtager" if selected else ""))
+        self.name_label.configure(text=peer.name + ("   ✓ valgt" if selected else ""))
         if paired:
             state = "Online" if online else "Offline"
             self.dot.configure(fg=c["success"] if online else c["faint"])
@@ -1524,12 +1524,12 @@ class H4xtorShareApp(TkinterDnD.Tk):
                 ("name", "Hvad", 340),
                 ("peer", "Enhed", 160),
                 ("size", "Størrelse", 100),
-                ("ts", "Tidspunkt", 160),
+                ("ts", "Tidspunkt", 190),
             )
         tree.configure(columns=tuple(name for name, _title, _width in columns))
         for name, title, width in columns:
             tree.heading(name, text=title, anchor="w")
-            tree.column(name, width=self.theme.px(width), anchor="w")
+            tree.column(name, width=self.theme.px(width), anchor="w", stretch=name == "name")
         kinds = {"file": "Fil", "folder": "Mappe", "clipboard": "Tekst", "link": "Link"}
         if self.history_mode == "devices":
             for index, item in enumerate(self.history.devices()):
@@ -2025,7 +2025,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
             batch, peer_name, count = value
             self.batches.pop(batch, None)
             self._refresh_history()
-            self.toast.show(f"{count} element(er) sendt til {peer_name}", "success")
+            self.toast.show(f"{_items(count)} sendt til {peer_name}", "success")
             self._update_transfer_badge()
         elif tag == "batch_failed":
             batch, error = value
@@ -3000,7 +3000,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self._choose_peer(
                 lambda peer: self._send_paths(peer, paths),
                 "Hvor skal filerne hen?",
-                f"{len(paths)} element(er) klar til at blive sendt.",
+                f"{_items(len(paths))} klar til at blive sendt.",
             )
         return "break"
 
@@ -3046,7 +3046,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self.event_queue.put(("batch_done", (batch, peer.name, len(files) + len(folders))))
 
         count = len(files) + len(folders)
-        self.toast.show(f"Sender {count} element(er) til {peer.name}…")
+        self.toast.show(f"Sender {_items(count)} til {peer.name}…")
         future = asyncio.run_coroutine_threadsafe(send_all(), self.runtime.loop)
         self.batches[batch] = future
         self.show_page("transfers")
@@ -3509,7 +3509,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
         self._choose_peer(
             lambda peer: self._send_paths(peer, paths),
             "Hvor skal det sendes hen?",
-            f"{len(paths)} element(er) klar til at blive sendt.",
+            f"{_items(len(paths))} klar til at blive sendt.",
         )
 
     def show_window(self) -> None:
@@ -3546,8 +3546,16 @@ class H4xtorShareApp(TkinterDnD.Tk):
         if self.tray is not None:
             self.tray.stop()
         self.runtime.stop()
+        # Cancel pending timers so Tk does not complain about dead callbacks.
+        with contextlib.suppress(tk.TclError):
+            for after_id in self.tk.splitlist(self.tk.call("after", "info")):
+                self.after_cancel(after_id)
         with contextlib.suppress(tk.TclError):
             self.destroy()
+
+
+def _items(count: int) -> str:
+    return "1 element" if count == 1 else f"{count} elementer"
 
 
 def _enable_high_dpi() -> None:

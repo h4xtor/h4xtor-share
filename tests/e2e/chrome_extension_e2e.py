@@ -83,6 +83,20 @@ class Phone:
         raise AssertionError(f"phone never received {kind.__name__}")
 
 
+def snap(app: H4xtorShareApp, name: str) -> None:
+    """Screenshot the app window (for design review); never fails the test."""
+    import subprocess
+
+    pump(app, 0.6)
+    try:
+        app.lift()
+        app.update()
+        subprocess.run(["import", "-window", str(app.winfo_id()), str(SHOTS / f"pc-{name}.png")],
+                       timeout=20, check=False, capture_output=True)
+    except Exception as error:  # noqa: BLE001
+        print("WARN screenshot", name, error)
+
+
 def pump(app: H4xtorShareApp, seconds: float) -> None:
     end = time.time() + seconds
     while time.time() < end:
@@ -106,6 +120,13 @@ def main() -> None:
     status = app.peer_status.get(peer.device_id)
     assert status is not None and status.online, "phone not shown online"
     print("OK pairing + online status")
+    app.geometry("1180x780")
+    from h4xtor_share.models import Peer as _Peer
+
+    stranger = _Peer("f" * 32, "Stues-PC", "192.168.1.77", 47474, "ab" * 32, "windows")
+    app.peers[stranger.device_id] = stranger
+    app._upsert_peer(stranger)
+    snap(app, "01-share")
 
     # Serve an image for the "send image" flow.
     web_root = WORK / "web"
@@ -250,7 +271,24 @@ def main() -> None:
     received = phone.wait_for(FileReceived, timeout=30)
     assert received.path.read_bytes() == sample.read_bytes()
     print("OK right-click send of a file")
+    for page in ("transfers", "history", "settings"):
+        if page in app.pages:
+            app.show_page(page)
+            snap(app, f"02-{page}")
+    app.show_page("share")
     app.update()
+    app.close()
+
+    # Same app in dark mode, for design review.
+    dark = Config(app.config_store.path)
+    dark.theme = "dark"
+    dark.save()
+    app = H4xtorShareApp(enable_tray=False)
+    app.geometry("1180x780")
+    pump(app, 4)
+    snap(app, "03-share-dark")
+    app.show_page("settings")
+    snap(app, "04-settings-dark")
     app.close()
     print("ALL E2E CHECKS PASSED")
 

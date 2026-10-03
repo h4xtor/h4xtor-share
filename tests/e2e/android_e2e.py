@@ -27,6 +27,7 @@ from h4xtor_share.crypto import ensure_certificate, server_ssl_context  # noqa: 
 from h4xtor_share.models import (  # noqa: E402
     ClipboardReceived,
     FileReceived,
+    FolderReceived,
     LinkReceived,
     Peer,
     PeerPaired,
@@ -101,14 +102,16 @@ def ok(message: str) -> None:
 
 
 class Desktop:
-    def __init__(self) -> None:
-        self.config = Config(WORK / "desktop" / "config.json")
+    def __init__(self, name: str = "AdminPC", port: int = 47474) -> None:
+        self.name = name
+        self.port = port
+        self.config = Config(WORK / name / "config.json")
         self.config.data.update(
-            device_name="AdminPC", port=47474, platform="windows",
-            incoming_directory=str(WORK / "desktop-in"),
+            device_name=name, port=port, platform="windows",
+            incoming_directory=str(WORK / f"{name}-in"),
         )
         self.config.save()
-        cert, key, self.fp = ensure_certificate(self.config.path.parent, "AdminPC")
+        cert, key, self.fp = ensure_certificate(self.config.path.parent, name)
         self.events: list[object] = []
         self.server = ShareServer(self.config, server_ssl_context(cert, key), self.fp,
                                   self.events.append, host="0.0.0.0")
@@ -235,6 +238,49 @@ def main() -> None:
     assert received.path.name.startswith("ferie"), received.path
     assert received.path.read_bytes() == payload.read_bytes(), "file changed on the way"
     ok("share sheet file phone -> PC (3 MB, byte-identical)")
+
+    # ---- A second PC: the share sheet now asks where to send ----------------
+    laptop = Desktop("Bærbar", 47478)
+    invite2 = PairingInvite(laptop.config.device_id, "Bærbar", laptop.fp, 47478, ("10.0.2.2",),
+                            laptop.server.create_qr_secret(), "windows")
+    shell(f"am start -W -a android.intent.action.VIEW -d '{invite2.to_uri()}' {PKG}")
+    laptop.wait_for(PeerPaired)
+    ok("second PC paired")
+    time.sleep(4)
+    desktop.events.clear()
+    shell("am start -W -a android.intent.action.SEND -t text/plain "
+          "--es android.intent.extra.TEXT 'https://example.com/valgt' "
+          f"-n {PKG}/.ShareTargetActivity")
+    assert screen_has("Bærbar", 15) and screen_has("AdminPC", 5), "sheet does not list both PCs"
+    shot("09-share-sheet")
+    tap_text("^AdminPC$")
+    desktop.wait_for(LinkReceived, match=lambda event: event.url == "https://example.com/valgt")
+    ok("share sheet with two PCs: pick AdminPC, link arrives there")
+
+    # ---- Folder phone -> PC through the system folder picker -----------------
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(3)
+    desktop.events.clear()
+    tap_text("^Mappe$")
+    time.sleep(3)
+    shot("10-folder-picker")
+    for _ in range(8):
+        texts = " ".join(n.get("text") or "" for n in ui_nodes())
+        if "a.txt" in texts:  # inside Projekt
+            break
+        for name in ("^Projekt$", "^h4xtor-share$", "^Download$", "^Downloads$"):
+            if any(re.search(name, n.get("text") or "") for n in ui_nodes()):
+                tap_text(name)
+                break
+        time.sleep(2)
+    tap_text("(?i)^use this folder$")
+    time.sleep(1.5)
+    tap_text("(?i)^allow$")
+    folder_event: FolderReceived = desktop.wait_for(FolderReceived, timeout=90)
+    got = folder_event.path
+    assert (got / "a.txt").read_text() == "a", list(got.rglob("*"))
+    assert (got / "sub" / "b.txt").read_text() == "b" * 5000
+    ok("folder phone -> PC via the system picker (subfolders intact)")
 
     # ---- Screens for design review ---------------------------------------------
     shell(f"am start -W -n {PKG}/.MainActivity")
