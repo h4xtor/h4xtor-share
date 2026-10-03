@@ -3202,12 +3202,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
         folder = self.config_store.incoming_directory
         folder.mkdir(parents=True, exist_ok=True)
         try:
-            if platform.system() == "Windows":
-                import os
-
-                os.startfile(str(folder))  # noqa: S606
-            else:
-                reveal_in_folder(folder / ".")
+            reveal_in_folder(folder)
         except Exception as error:  # noqa: BLE001
             self._show_error(error)
 

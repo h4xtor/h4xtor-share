@@ -141,6 +141,27 @@ def test_reveal_in_folder_uses_parent(tmp_path: Path) -> None:
     launch.assert_called_once_with(["xdg-open", str(tmp_path.resolve())])
 
 
+def test_reveal_on_windows_uses_explorer_never_shell_default(tmp_path: Path) -> None:
+    """Regression: os.startfile(folder) ran our "Send med h4xtor share" verb."""
+    target = tmp_path / "fb.mp4"
+    target.write_text("x")
+    with mock.patch("h4xtor_share.openers._IS_WINDOWS", True), mock.patch(
+        "h4xtor_share.openers._start_detached"
+    ) as launch, mock.patch.object(openers_mod.os, "startfile", create=True) as startfile:
+        reveal_in_folder(target)
+        reveal_in_folder(tmp_path)
+    startfile.assert_not_called()
+    assert launch.call_args_list[0].args[0] == ["explorer.exe", f"/select,{target.resolve()}"]
+    assert launch.call_args_list[1].args[0] == ["explorer.exe", str(tmp_path.resolve())]
+
+
+def test_context_menu_never_on_directory_default_verb() -> None:
+    from h4xtor_share import integration
+
+    assert all("Directory" not in key and "\\*\\" not in key for key in integration._MENU_KEYS)
+    assert any("Directory" in key for key in integration._LEGACY_MENU_KEYS)
+
+
 def test_open_path_missing_file_raises(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         open_path(tmp_path / "does-not-exist")

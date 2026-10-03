@@ -359,7 +359,12 @@ def open_url(url: str, browser: str = "chrome") -> str:
 
 
 # -- Explorer right-click menu (Windows) -----------------------------------------
-_MENU_KEYS = (
+# One verb for files *and* folders. It lives on AllFilesystemObjects (lowest
+# precedence) and is flagged NeverDefault, so opening a folder from code or
+# Explorer can never pick it by accident. (v1.0/1.1 put it on Directory\shell,
+# where ShellExecute chose it as the default for folders - see legacy keys.)
+_MENU_KEYS = (r"Software\Classes\AllFilesystemObjects\shell\h4xtorshare",)
+_LEGACY_MENU_KEYS = (
     r"Software\Classes\*\shell\h4xtorshare",
     r"Software\Classes\Directory\shell\h4xtorshare",
 )
@@ -392,6 +397,7 @@ def install_context_menu() -> None:
             winreg.SetValueEx(key, "MUIVerb", 0, winreg.REG_SZ, "Send med h4xtor share")
             winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, icon)
             winreg.SetValueEx(key, "MultiSelectModel", 0, winreg.REG_SZ, "Player")
+            winreg.SetValueEx(key, "NeverDefault", 0, winreg.REG_SZ, "")
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path + r"\command") as key:
             winreg.SetValueEx(key, "", 0, winreg.REG_SZ, line)
 
@@ -401,7 +407,7 @@ def remove_context_menu() -> None:
         return
     import winreg
 
-    for key_path in _MENU_KEYS:
+    for key_path in (*_MENU_KEYS, *_LEGACY_MENU_KEYS):
         for path in (key_path + r"\command", key_path):
             with contextlib.suppress(OSError):
                 winreg.DeleteKey(winreg.HKEY_CURRENT_USER, path)
@@ -410,7 +416,16 @@ def remove_context_menu() -> None:
 def ensure_shell_integration(config: Any) -> list[str]:
     """First run on Windows: add right-click menu and Send to entry. Returns what was added."""
     added: list[str] = []
-    if _SYSTEM != "Windows" or config.get_flag("shell_integration_done", False):
+    if _SYSTEM != "Windows":
+        return added
+    if config.get_flag("shell_integration_done", False):
+        # Upgrade: move the old menu entry (it hijacked "open folder") to the safe key.
+        if not config.get_flag("shell_menu_v2", False):
+            with contextlib.suppress(Exception):
+                if _legacy_menu_installed():
+                    remove_context_menu()
+                    install_context_menu()
+            config.set_flag("shell_menu_v2", True)
         return added
     with contextlib.suppress(Exception):
         install_context_menu()
@@ -419,4 +434,17 @@ def ensure_shell_integration(config: Any) -> list[str]:
         install_send_to()
         added.append("Send til")
     config.set_flag("shell_integration_done", True)
+    config.set_flag("shell_menu_v2", True)
     return added
+
+
+def _legacy_menu_installed() -> bool:
+    import winreg
+
+    for key_path in _LEGACY_MENU_KEYS:
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, key_path):
+                return True
+        except OSError:
+            continue
+    return False

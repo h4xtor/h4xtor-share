@@ -77,8 +77,16 @@ def reveal_in_folder(path: str | Path) -> None:
     """Open the folder containing *path* with the file selected where possible."""
     resolved = Path(path).expanduser().resolve()
     if _IS_WINDOWS:
-        os.startfile(str(resolved.parent))  # noqa: S606
+        # Always go through explorer.exe: ShellExecute on a folder uses whatever
+        # verb is registered as default, which other apps can hijack.
+        if resolved.is_dir():
+            _start_detached(["explorer.exe", str(resolved)])
+        else:
+            _start_detached(["explorer.exe", f"/select,{resolved}"])
     elif _IS_MACOS:
-        _start_detached(["open", "-R", str(resolved)])
+        if resolved.is_dir():
+            _start_detached(["open", str(resolved)])
+        else:
+            _start_detached(["open", "-R", str(resolved)])
     else:
-        _start_detached(["xdg-open", str(resolved.parent)])
+        _start_detached(["xdg-open", str(resolved if resolved.is_dir() else resolved.parent)])
