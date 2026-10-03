@@ -42,6 +42,9 @@ h4xtor-share = "h4xtor_share.app:main"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+[tool.setuptools.package-data]
+h4xtor_share = ["chrome_extension/*", "chrome_extension/icons/*"]
+
 [tool.pytest.ini_options]
 addopts = "-q"
 testpaths = ["tests"]

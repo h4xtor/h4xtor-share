@@ -52,6 +52,31 @@ jobs:
           } > comment.md
           gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -F body=@comment.md || true
 
+  desktop-e2e:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install
+        run: |
+          sudo apt-get update && sudo apt-get install --yes python3-tk xvfb
+          python -m pip install -e ".[dev]" playwright
+          python -m playwright install --with-deps chromium
+      - name: Desktop app + Chrome extension end-to-end
+        run: |
+          set -o pipefail
+          xvfb-run -a -s "-screen 0 1400x1000x24" python tests/e2e/chrome_extension_e2e.py 2>&1 | tee ci-output.log
+      - name: Report failure on the commit
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          { echo "### CI failure: desktop-e2e"; echo '```'; tail -c 30000 ci-output.log; echo '```'; } > comment.md
+          gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/comments" -F body=@comment.md || true
+
   python-package:
     needs: test
     runs-on: ubuntu-22.04

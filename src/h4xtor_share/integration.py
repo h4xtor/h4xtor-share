@@ -289,3 +289,134 @@ def system_prefers_dark() -> bool:
         except (OSError, subprocess.TimeoutExpired):
             return False
     return "dark" in os.environ.get("GTK_THEME", "").lower()
+
+
+# -- opening links ---------------------------------------------------------------
+def find_chrome() -> str | None:
+    """Path of Google Chrome, if installed."""
+    import shutil
+
+    if _SYSTEM == "Windows":
+        candidates = []
+        for variable in ("PROGRAMFILES", "PROGRAMFILES(X86)", "LOCALAPPDATA"):
+            base = os.environ.get(variable)
+            if base:
+                candidates.append(Path(base) / "Google" / "Chrome" / "Application" / "chrome.exe")
+        try:
+            import winreg
+
+            for root in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+                try:
+                    with winreg.OpenKey(
+                        root, r"Software\Microsoft\Windows\CurrentVersion\App Paths\chrome.exe"
+                    ) as key:
+                        value, _kind = winreg.QueryValueEx(key, "")
+                        candidates.insert(0, Path(value))
+                except OSError:
+                    continue
+        except ImportError:
+            pass
+        for candidate in candidates:
+            if candidate.is_file():
+                return str(candidate)
+        return None
+    if _SYSTEM == "Darwin":
+        app = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+        return str(app) if app.exists() else None
+    for name in ("google-chrome", "google-chrome-stable", "chromium", "chromium-browser"):
+        found = shutil.which(name)
+        if found:
+            return found
+    return None
+
+
+def open_url(url: str, browser: str = "chrome") -> str:
+    """Open *url* in Chrome when preferred and installed, else the default browser.
+
+    Returns which browser was used ("chrome" or "default").
+    """
+    import webbrowser
+
+    if browser == "chrome":
+        chrome = find_chrome()
+        if chrome:
+            try:
+                kwargs: dict[str, Any] = {
+                    "stdin": subprocess.DEVNULL,
+                    "stdout": subprocess.DEVNULL,
+                    "stderr": subprocess.DEVNULL,
+                }
+                if _SYSTEM == "Windows":
+                    kwargs["creationflags"] = 0x00000008 | 0x00000200  # detached, new group
+                else:
+                    kwargs["start_new_session"] = True
+                subprocess.Popen([chrome, url], **kwargs)  # noqa: S603 - user-approved link
+                return "chrome"
+            except OSError:
+                pass
+    webbrowser.open(url)
+    return "default"
+
+
+# -- Explorer right-click menu (Windows) -----------------------------------------
+_MENU_KEYS = (
+    r"Software\Classes\*\shell\h4xtorshare",
+    r"Software\Classes\Directory\shell\h4xtorshare",
+)
+
+
+def is_context_menu_installed() -> bool:
+    if _SYSTEM != "Windows":
+        return False
+    import winreg
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _MENU_KEYS[0]):
+            return True
+    except OSError:
+        return False
+
+
+def install_context_menu() -> None:
+    """Add "Send med h4xtor share" to the right-click menu of files and folders."""
+    if _SYSTEM != "Windows":
+        raise RuntimeError("The right-click menu is only available on Windows.")
+    import winreg
+
+    command = launch_command()
+    icon = command[0]
+    line = subprocess.list2cmdline([*command, "--send"]) + ' "%1"'
+    for key_path in _MENU_KEYS:
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path) as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, "Send med h4xtor share")
+            winreg.SetValueEx(key, "MUIVerb", 0, winreg.REG_SZ, "Send med h4xtor share")
+            winreg.SetValueEx(key, "Icon", 0, winreg.REG_SZ, icon)
+            winreg.SetValueEx(key, "MultiSelectModel", 0, winreg.REG_SZ, "Player")
+        with winreg.CreateKey(winreg.HKEY_CURRENT_USER, key_path + r"\command") as key:
+            winreg.SetValueEx(key, "", 0, winreg.REG_SZ, line)
+
+
+def remove_context_menu() -> None:
+    if _SYSTEM != "Windows":
+        return
+    import winreg
+
+    for key_path in _MENU_KEYS:
+        for path in (key_path + r"\command", key_path):
+            with contextlib.suppress(OSError):
+                winreg.DeleteKey(winreg.HKEY_CURRENT_USER, path)
+
+
+def ensure_shell_integration(config: Any) -> list[str]:
+    """First run on Windows: add right-click menu and Send to entry. Returns what was added."""
+    added: list[str] = []
+    if _SYSTEM != "Windows" or config.get_flag("shell_integration_done", False):
+        return added
+    with contextlib.suppress(Exception):
+        install_context_menu()
+        added.append("højreklik-menu")
+    with contextlib.suppress(Exception):
+        install_send_to()
+        added.append("Send til")
+    config.set_flag("shell_integration_done", True)
+    return added

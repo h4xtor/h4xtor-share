@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="da">
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <span class="spark">✻</span>
+    <span class="brand">h4xtor share</span>
+    <span id="pc" class="pc"></span>
+  </header>
+
+  <section id="state-loading" class="state">
+    <p class="muted">Forbinder …</p>
+  </section>
+
+  <section id="state-offline" class="state hidden">
+    <h1>Start h4xtor share</h1>
+    <p class="muted">Programmet kører ikke på denne PC. Start <b>h4xtor share</b> – så virker udvidelsen med det samme.</p>
+    <button id="retry" class="secondary">Prøv igen</button>
+  </section>
+
+  <section id="state-connect" class="state hidden">
+    <h1>Forbind Chrome</h1>
+    <p class="muted">Tryk Forbind og vælg <b>Tillad</b> i h4xtor share-vinduet på din PC.</p>
+    <button id="connect" class="primary">Forbind</button>
+    <p id="connect-wait" class="muted small hidden">Venter på at du trykker Tillad på PC'en …</p>
+  </section>
+
+  <section id="state-ready" class="state hidden">
+    <h1 id="greeting">Send til</h1>
+    <div id="devices" class="devices"></div>
+    <button id="send-tab" class="primary wide">Send denne fane</button>
+    <div class="composer">
+      <textarea id="text" rows="2" placeholder="Skriv tekst eller indsæt et link …"></textarea>
+      <button id="send-text" class="round" title="Send">↑</button>
+    </div>
+    <p class="muted small tip">Tip: højreklik på et link, et billede eller markeret tekst → <b>Send med h4xtor share</b>. Genvej: Alt+Shift+S sender fanen.</p>
+  </section>
+
+  <div id="toast" class="toast hidden"></div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

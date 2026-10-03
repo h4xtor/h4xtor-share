@@ -13,6 +13,7 @@ import contextlib
 import ipaddress
 import platform
 import queue
+import shutil
 import sys
 import threading
 import time
@@ -32,6 +33,7 @@ from h4xtor_share.config import Config
 from h4xtor_share.crypto import ensure_certificate, server_ssl_context
 from h4xtor_share.discovery import DiscoveryService, local_ipv4_addresses
 from h4xtor_share.history import HistoryStore, is_link
+from h4xtor_share.local_api import LOCAL_API_PORT_OFFSET, LocalApi
 from h4xtor_share.models import (
     DESKTOP_CAPABILITIES,
     ClipboardReceived,
@@ -551,6 +553,14 @@ class H4xtorShareApp(TkinterDnD.Tk):
             lambda message: self.event_queue.put(("ipc", message)),
         )
         self.instance.start()
+        self.local_api = LocalApi(
+            self.config_store,
+            self.config_store.port + LOCAL_API_PORT_OFFSET,
+            self._api_devices,
+            self._api_send,
+            self._api_approve,
+        )
+        self._ipc_paths: list[Path] = []
 
         self.peers: dict[str, Peer] = {}
         self.peer_status: dict[str, PeerStatus] = {}
@@ -604,6 +614,14 @@ class H4xtorShareApp(TkinterDnD.Tk):
                 self._upsert_peer(peer)
         if self._pending_send:
             self.after(800, self._flush_pending_send)
+        added = integration.ensure_shell_integration(self.config_store)
+        if added:
+            self.after(
+                1500,
+                lambda: self.toast.show(
+                    "Klar: højreklik på filer → “Send med h4xtor share”", "success", 6000
+                ),
+            )
 
     # ------------------------------------------------------------------ theme
     def _wants_dark(self) -> bool:
@@ -1426,7 +1444,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
                     card.body,
                     self.theme,
                     "Åbn",
-                    lambda value=text: webbrowser.open(value),
+                    lambda value=text: self._open_link(value),
                     size="sm",
                     kind="ghost",
                 ).pack(side="right", padx=(0, px(6)))
@@ -1635,10 +1653,11 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self._divider(behaviour.body)
             self._toggle_row(
                 behaviour.body,
-                "“Send til” i Stifinder",
-                "Højreklik på en fil → Send til → h4xtor-share.",
-                integration.is_send_to_installed(),
-                self._set_send_to,
+                "Højreklik i Stifinder",
+                "“Send med h4xtor share” på filer og mapper (Windows 11: Vis flere indstillinger) "
+                "samt Send til → h4xtor-share.",
+                integration.is_context_menu_installed() or integration.is_send_to_installed(),
+                self._set_shell_menu,
             )
         self._divider(behaviour.body)
         self._toggle_row(
@@ -1670,6 +1689,71 @@ class H4xtorShareApp(TkinterDnD.Tk):
             )
             button.pack(side="right", padx=(px(6), 0))
             self.theme_buttons[key] = button
+
+        browser = section("Links og Chrome")
+        browser_row = tk.Frame(browser.body, bg=c["card"])
+        browser_row.pack(fill="x")
+        texts = tk.Frame(browser_row, bg=c["card"])
+        texts.pack(side="left", fill="x", expand=True)
+        tk.Label(
+            texts,
+            text="Åbn modtagne links i",
+            bg=c["card"],
+            fg=c["text"],
+            font=self.theme.font(10, "bold"),
+            anchor="w",
+        ).pack(fill="x")
+        chrome_found = integration.find_chrome() is not None
+        tk.Label(
+            texts,
+            text="Google Chrome er fundet på denne PC."
+            if chrome_found
+            else "Chrome blev ikke fundet – standardbrowseren bruges.",
+            bg=c["card"],
+            fg=c["muted"],
+            font=self.theme.font(9),
+            anchor="w",
+        ).pack(fill="x")
+        current = str(self.config_store.data.get("link_browser") or "chrome")
+        self.browser_buttons: dict[str, Button] = {}
+        for key, label in (("default", "Standardbrowser"), ("chrome", "Chrome")):
+            button = Button(
+                browser_row,
+                self.theme,
+                label,
+                lambda value=key: self._set_link_browser(value),
+                size="sm",
+                kind="soft" if current == key else "ghost",
+            )
+            button.pack(side="right", padx=(px(6), 0))
+            self.browser_buttons[key] = button
+        self._divider(browser.body)
+        ext_row = tk.Frame(browser.body, bg=c["card"])
+        ext_row.pack(fill="x")
+        ext_texts = tk.Frame(ext_row, bg=c["card"])
+        ext_texts.pack(side="left", fill="x", expand=True)
+        tk.Label(
+            ext_texts,
+            text="Chrome-udvidelse",
+            bg=c["card"],
+            fg=c["text"],
+            font=self.theme.font(10, "bold"),
+            anchor="w",
+        ).pack(fill="x")
+        tk.Label(
+            ext_texts,
+            text=(
+                "Højreklik på en side, et link, et billede eller markeret tekst "
+                "→ send til telefonen."
+            ),
+            bg=c["card"],
+            fg=c["muted"],
+            font=self.theme.font(9),
+            anchor="w",
+        ).pack(fill="x")
+        Button(ext_row, self.theme, "Installér", self.install_chrome_extension, size="sm").pack(
+            side="right"
+        )
 
         direct = section("Wi-Fi Direct")
         tk.Label(
@@ -1788,6 +1872,26 @@ class H4xtorShareApp(TkinterDnD.Tk):
             return
         self.toast.show("Starter nu sammen med computeren" if value else "Autostart slået fra")
 
+    def _set_shell_menu(self, value: bool) -> None:
+        try:
+            if value:
+                integration.install_context_menu()
+                integration.install_send_to()
+            else:
+                integration.remove_context_menu()
+                integration.remove_send_to()
+        except Exception as error:  # noqa: BLE001
+            self._show_error(error)
+            return
+        self.toast.show("Højreklik-menuen er klar" if value else "Højreklik-menuen er fjernet")
+
+    def _set_link_browser(self, value: str) -> None:
+        self.config_store.data["link_browser"] = value
+        self.config_store.save()
+        for key, button in self.browser_buttons.items():
+            button.kind = "soft" if key == value else "ghost"
+            button._draw()
+
     def _set_send_to(self, value: bool) -> None:
         try:
             if value:
@@ -1814,6 +1918,12 @@ class H4xtorShareApp(TkinterDnD.Tk):
         except Exception as error:  # noqa: BLE001 - UDP and scanning still work
             self.event_queue.put(("status", f"mDNS utilgængelig: {error}"))
         await asyncio.to_thread(self.udp_discovery.start)
+        try:
+            await self.local_api.start()
+        except OSError as error:
+            self.event_queue.put(
+                ("status", f"Chrome-udvidelsens forbindelse er utilgængelig: {error}")
+            )
 
     async def _check_for_update(self) -> tuple[str, str] | None:
         """Ask GitHub (best effort, internet optional) whether a newer release exists."""
@@ -1837,6 +1947,8 @@ class H4xtorShareApp(TkinterDnD.Tk):
         return None
 
     async def _stop_services(self) -> None:
+        with contextlib.suppress(Exception):
+            await self.local_api.stop()
         await asyncio.to_thread(self.udp_discovery.stop)
         with contextlib.suppress(Exception):
             await asyncio.to_thread(self.discovery.stop)
@@ -1941,6 +2053,8 @@ class H4xtorShareApp(TkinterDnD.Tk):
         elif tag == "unpaired":
             self._remove_peer_card(value)
             self._refresh_paired_list()
+        elif tag == "approve_extension":
+            self._ask_extension_approval(value)
         elif tag == "ipc":
             self._handle_ipc(value)
         elif tag == "show":
@@ -2000,15 +2114,16 @@ class H4xtorShareApp(TkinterDnD.Tk):
                 self._clipboard_suppress_until = time.monotonic() + CLIPBOARD_SUPPRESS_SECONDS
             self._record_remote_text(event.peer_id, event.text, received=True)
             if is_link(event.text) and self.config_store.open_links:
-                webbrowser.open(event.text.strip())
+                self._open_link(event.text.strip())
                 self._notify(f"Link fra {event.peer_name} åbnet")
             else:
                 self._notify(f"Udklipsholder fra {event.peer_name} – klar til Ctrl+V")
         elif isinstance(event, LinkReceived):
             self._record_remote_text(event.peer_id, event.url, received=True)
             if self.config_store.open_links:
-                webbrowser.open(event.url)
-                self._notify(f"Link fra {event.peer_name} åbnet i browseren")
+                used = self._open_link(event.url)
+                where = "Chrome" if used == "chrome" else "browseren"
+                self._notify(f"Link fra {event.peer_name} åbnet i {where}")
             else:
                 self._copy_to_clipboard(event.url)
                 self._notify(f"Link fra {event.peer_name} kopieret")
@@ -3133,7 +3248,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
         if item is None:
             return
         if item.get("kind") == "link":
-            webbrowser.open(str(item.get("text", "")))
+            self._open_link(str(item.get("text", "")))
             return
         if item.get("kind") == "clipboard":
             self._copy_to_clipboard(str(item.get("text", "")))
@@ -3178,12 +3293,206 @@ class H4xtorShareApp(TkinterDnD.Tk):
     def _handle_ipc(self, message: dict[str, Any]) -> None:
         command = message.get("cmd")
         if command == "send":
+            # Explorer starts one process per selected file: collect them briefly.
             paths = [Path(str(raw)) for raw in message.get("paths") or []]
-            self.show_window()
-            self._pending_send = [path for path in paths if path.exists()]
-            self._flush_pending_send()
+            first = not self._ipc_paths
+            self._ipc_paths.extend(path for path in paths if path.exists())
+            if first:
+                self.after(700, self._flush_ipc_paths)
         else:
             self.show_window()
+
+    def _flush_ipc_paths(self) -> None:
+        paths = list(dict.fromkeys(self._ipc_paths))
+        self._ipc_paths = []
+        self.show_window()
+        self._pending_send = paths
+        self._flush_pending_send()
+
+    # -------------------------------------------------- Chrome extension API
+    def _api_devices(self) -> list[dict[str, Any]]:
+        result = []
+        for peer in list(self.peers.values()):
+            if not self.config_store.is_trusted(peer.device_id):
+                continue
+            status = self.peer_status.get(peer.device_id)
+            result.append(
+                {
+                    "id": peer.device_id,
+                    "name": peer.name,
+                    "platform": peer.platform,
+                    "online": bool(status is not None and status.online),
+                    "selected": peer.device_id == self.selected_id,
+                }
+            )
+        result.sort(key=lambda item: (not item["selected"], not item["online"], item["name"]))
+        return result
+
+    async def _api_send(self, device_id: str, kind: str, value: str) -> None:
+        peer = self.peers.get(device_id)
+        if peer is None:
+            raise RuntimeError("Enheden er ikke tilgængelig.")
+        if kind == "link":
+            await self.client.send_link(peer, value)
+            self.history.record_sent_text(peer, value)
+        elif kind == "text":
+            await self.client.send_clipboard(peer, value)
+            self.history.record_sent_text(peer, value)
+        else:
+            await self._send_download(peer, value)
+        self.event_queue.put(("status", f"Sendt fra Chrome til {peer.name}"))
+
+    async def _send_download(self, peer: Peer, url: str) -> None:
+        """Download a file from the web (e.g. an image) and send it as a real file."""
+        import tempfile
+        import urllib.parse
+
+        import aiohttp
+
+        name = Path(urllib.parse.urlsplit(url).path).name or "download"
+        directory = Path(tempfile.mkdtemp(prefix="h4xtor-web-"))
+        target = directory / name[:120]
+        timeout = aiohttp.ClientTimeout(total=120)
+        async with (
+            aiohttp.ClientSession(timeout=timeout, trust_env=True) as session,
+            session.get(url) as response,
+        ):
+            response.raise_for_status()
+            if "." not in target.name:
+                subtype = (response.content_type or "").split("/")[-1]
+                if subtype and len(subtype) < 8:
+                    target = target.with_name(f"{target.name}.{subtype}")
+            with target.open("wb") as output:
+                async for chunk in response.content.iter_chunked(256 * 1024):
+                    output.write(chunk)
+
+        def progress(event: TransferProgress) -> None:
+            self.event_queue.put(("core_event", ("", peer.name, event)))
+
+        try:
+            await self.client.send_file(peer, target, progress)
+            self.history.record_sent_file(peer, target.name, target.stat().st_size, url)
+        finally:
+            shutil.rmtree(directory, ignore_errors=True)
+
+    async def _api_approve(self, name: str, origin: str) -> bool:
+        loop = asyncio.get_running_loop()
+        decision: asyncio.Future[bool] = loop.create_future()
+        self.event_queue.put(("approve_extension", (name, origin, loop, decision)))
+        try:
+            return await asyncio.wait_for(decision, timeout=120)
+        except TimeoutError:
+            return False
+
+    def _ask_extension_approval(self, value: tuple[Any, ...]) -> None:
+        name, origin, loop, decision = value
+        c = self.theme.c
+        px = self.theme.px
+        self.show_window()
+        modal = Modal(self, self.theme, "Chrome-udvidelse")
+        modal.heading(
+            f"{name} vil forbinde til h4xtor share",
+            "Udvidelsen kan så sende faner, links, tekst og billeder fra Chrome til dine "
+            "enheder. Tillad kun, hvis du selv lige har trykket Forbind i udvidelsen.",
+        )
+        tk.Label(modal.body, text=origin, bg=c["bg"], fg=c["faint"], font=self.theme.font(8)).pack(
+            anchor="w", pady=(px(8), 0)
+        )
+
+        def answer(value: bool) -> None:
+            modal.on_close = None
+            modal.close()
+            if not decision.done():
+                loop.call_soon_threadsafe(lambda: decision.done() or decision.set_result(value))
+            if value:
+                self.toast.show("Chrome-udvidelsen er forbundet", "success")
+
+        modal.on_close = lambda: answer(False)
+        buttons = tk.Frame(modal.body, bg=c["bg"])
+        buttons.pack(fill="x", pady=(px(20), 0))
+        Button(buttons, self.theme, "Tillad", lambda: answer(True), kind="primary").pack(
+            side="right"
+        )
+        Button(buttons, self.theme, "Afvis", lambda: answer(False), kind="ghost").pack(
+            side="right", padx=(0, px(8))
+        )
+        modal.present()
+
+    def _open_link(self, url: str) -> str:
+        browser = str(self.config_store.data.get("link_browser") or "chrome")
+        try:
+            return integration.open_url(url, browser)
+        except Exception:  # noqa: BLE001
+            webbrowser.open(url)
+            return "default"
+
+    def install_chrome_extension(self) -> None:
+        source = Path(__file__).with_name("chrome_extension")
+        if not source.is_dir():
+            self._show_error(FileNotFoundError("Udvidelsen mangler i denne installation."))
+            return
+        target = self.config_store.path.parent / "chrome-extension"
+        shutil.rmtree(target, ignore_errors=True)
+        shutil.copytree(source, target)
+        c = self.theme.c
+        px = self.theme.px
+        modal = Modal(self, self.theme, "Chrome-udvidelse", width=520)
+        modal.heading(
+            "Installér h4xtor share i Chrome",
+            "Tre klik – så kan du højreklikke på sider, links, billeder og markeret tekst "
+            "i Chrome og sende dem direkte til telefonen.",
+        )
+        for number, text in (
+            ("1", "Chrome åbner siden Udvidelser – slå “Udviklertilstand” til øverst til højre"),
+            ("2", "Klik “Indlæs upakket” og vælg mappen, der lige blev åbnet"),
+            ("3", "Klik på h4xtor-ikonet i Chrome og tryk “Forbind”"),
+        ):
+            row = tk.Frame(modal.body, bg=c["bg"])
+            row.pack(fill="x", pady=(px(8), 0))
+            tk.Label(
+                row,
+                text=number,
+                width=2,
+                bg=c["accent_soft"],
+                fg=c["accent"],
+                font=self.theme.font(10, "bold"),
+            ).pack(side="left", anchor="n")
+            tk.Label(
+                row,
+                text=text,
+                bg=c["bg"],
+                fg=c["text"],
+                font=self.theme.font(10),
+                anchor="w",
+                justify="left",
+                wraplength=px(400),
+            ).pack(side="left", padx=(px(10), 0), fill="x")
+        tk.Label(
+            modal.body,
+            text=str(target),
+            bg=c["bg"],
+            fg=c["faint"],
+            font=self.theme.font(8),
+            anchor="w",
+        ).pack(fill="x", pady=(px(12), 0))
+        buttons = tk.Frame(modal.body, bg=c["bg"])
+        buttons.pack(fill="x", pady=(px(16), 0))
+
+        def go() -> None:
+            modal.close()
+            self.reveal_path_safely(str(target / "manifest.json"))
+            chrome = integration.find_chrome()
+            if chrome:
+                import subprocess
+
+                with contextlib.suppress(OSError):
+                    subprocess.Popen([chrome, "chrome://extensions/"])  # noqa: S603
+
+        Button(buttons, self.theme, "Åbn Chrome og mappen", go, kind="primary").pack(side="right")
+        Button(buttons, self.theme, "Luk", modal.close, kind="ghost").pack(
+            side="right", padx=(0, px(8))
+        )
+        modal.present()
 
     def _flush_pending_send(self) -> None:
         paths, self._pending_send = self._pending_send, []
