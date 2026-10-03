@@ -942,6 +942,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
             } catch (Exception error) {
                 item.status = item.cancel.isCancelled() ? "cancelled" : "failed";
                 item.error = H4xtorClient.safeMessage(error);
+                android.util.Log.w("h4xtor", "transfer " + item.name + " failed", error);
                 if (!item.cancel.isCancelled()) {
                     message("Overførsel fejlede: " + item.error, true);
                 }
@@ -1119,7 +1120,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
             if (identity.flag("apply_clipboard", true)) {
                 try {
                     clipboardObserved = text;
-                    lastSharedClipboard = text;
+                    markClipboardShared(text);
                     clipboardSuppress = text;
                     clipboardSuppressUntil = SystemClock.elapsedRealtime() + CLIPBOARD_SUPPRESS_MS;
                     clipboard.setPrimaryClip(ClipData.newPlainText("h4xtor share", text));
@@ -1204,20 +1205,25 @@ public final class ShareService extends Service implements H4xtorServer.Listener
             }
         }
         if (count > 0) {
-            lastSharedClipboard = text;
+            markClipboardShared(text);
             message("Udklipsholder synkroniseret til " + count + (count == 1 ? " enhed" : " enheder"), false);
         }
     }
 
     /** Text already on the other devices: came from them or was synced to them. */
-    private volatile String lastSharedClipboard = "";
+    private volatile String lastSharedClipboard;
 
     public boolean isClipboardShared(String text) {
+        if (lastSharedClipboard == null) {
+            lastSharedClipboard = identity.string("last_shared_clipboard", "");
+        }
         return text != null && text.trim().equals(lastSharedClipboard.trim());
     }
 
     public void markClipboardShared(String text) {
         lastSharedClipboard = text == null ? "" : text;
+        identity.setString("last_shared_clipboard",
+                lastSharedClipboard.length() > 4000 ? lastSharedClipboard.substring(0, 4000) : lastSharedClipboard);
     }
 
     public String currentClipboard() {

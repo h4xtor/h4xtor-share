@@ -343,7 +343,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             TextView line = ui.text(subtitle, 13.5f, ui.muted, false);
             line.setSingleLine(true);
             line.setEllipsize(TextUtils.TruncateAt.END);
-            status.addView(line, ui.margins(6, 0, 0, 0));
+            status.addView(line, ui.wrap(6, 0, 0, 0));
             texts.addView(status, ui.margins(0, 4, 0, 0));
         }
         row.addView(texts, ui.weight(1));
@@ -464,7 +464,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         status.addView(dot, new LinearLayout.LayoutParams(ui.dp(7), ui.dp(7)));
         List<String> addresses = service.localAddresses();
         String label = online ? (addresses.isEmpty() ? "Intet netværk" : "Online") : service.status();
-        status.addView(ui.text(label, 12.5f, online ? ui.success : ui.warning, true), ui.margins(6, 0, 0, 0));
+        status.addView(ui.text(label, 12.5f, online ? ui.success : ui.warning, true), ui.wrap(6, 0, 0, 0));
         status.setOnClickListener(v -> toast(statusLine(), false));
         bar.addView(status);
 
@@ -560,9 +560,9 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         chipsScroll.setHorizontalScrollBarEnabled(false);
         LinearLayout chips = ui.row();
         chips.addView(toolChip(R.drawable.ic_file, "Filer", v -> pickFiles(target)));
-        chips.addView(toolChip(R.drawable.ic_image, "Fotos", v -> pickPhotos(target)), ui.margins(6, 0, 0, 0));
-        chips.addView(toolChip(R.drawable.ic_folder, "Mappe", v -> pickTree(target)), ui.margins(6, 0, 0, 0));
-        chips.addView(toolChip(R.drawable.ic_clipboard, "Udklip", v -> sendClipboard(target)), ui.margins(6, 0, 0, 0));
+        chips.addView(toolChip(R.drawable.ic_image, "Fotos", v -> pickPhotos(target)), ui.wrap(6, 0, 0, 0));
+        chips.addView(toolChip(R.drawable.ic_folder, "Mappe", v -> pickTree(target)), ui.wrap(6, 0, 0, 0));
+        chips.addView(toolChip(R.drawable.ic_clipboard, null, v -> sendClipboard(target)), ui.wrap(6, 0, 0, 0));
         chipsScroll.addView(chips);
         bottom.addView(chipsScroll, ui.weight(1));
 
@@ -585,8 +585,12 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         chip.setBackground(ui.ripple(ui.rounded(Color.TRANSPARENT, ui.border, 999), 999));
         chip.setClickable(true);
         chip.setOnClickListener(click);
-        chip.setContentDescription(label);
+        chip.setContentDescription(label == null ? "Send udklipsholder" : label);
         chip.addView(ui.icon(icon, ui.muted, 15));
+        if (label == null) {
+            chip.setPadding(ui.dp(10), ui.dp(7), ui.dp(10), ui.dp(7));
+            return chip;
+        }
         LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         labelParams.setMargins(ui.dp(5), 0, 0, 0);
@@ -961,7 +965,8 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                 detail = direction + " · Annulleret";
                 break;
             case "failed":
-                detail = direction + " · Mislykkedes";
+                detail = direction + " · Mislykkedes"
+                        + (item.error == null || item.error.isEmpty() ? "" : ": " + item.error);
                 break;
             default:
                 detail = direction + " · " + Math.round(item.fraction() * 100) + "% · "

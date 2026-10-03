@@ -215,31 +215,26 @@ def main() -> None:
     desktop.wait_for(ClipboardReceived, match=lambda event: event.text == "markeret tekst")
     ok("'Send til PC' from the text selection menu")
 
-    # Phone -> PC file through the share sheet (content:// from MediaStore).
-    try:
-        sample = WORK / "rapport.pdf"
-        sample.write_bytes(b"%PDF-1.4\n" + os.urandom(200_000))
-        adb("push", str(sample), "/sdcard/Download/rapport.pdf")
-        shell("am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE "
-              "-d file:///sdcard/Download/rapport.pdf", check=False)
-        uri = ""
-        for _ in range(15):
-            out = shell("content query --uri content://media/external/file --projection _id "
-                        "--where \"_display_name='rapport.pdf'\"", check=False)
-            match = re.search(r"_id=(\d+)", out)
-            if match:
-                uri = f"content://media/external/file/{match.group(1)}"
-                break
-            time.sleep(1)
-        assert uri, "media scanner did not index the file"
-        shell("am start -W -a android.intent.action.SEND -t application/pdf "
-              f"--eu android.intent.extra.STREAM {uri} --grant-read-uri-permission "
-              f"-n {PKG}/.ShareTargetActivity")
-        received: FileReceived = desktop.wait_for(FileReceived, timeout=60)
-        assert received.path.read_bytes() == sample.read_bytes()
-        ok("share sheet file phone -> PC (byte-identical)")
-    except Exception as error:  # noqa: BLE001 - emulator media quirks must not hide the rest
-        print("WARN phone->PC file via share sheet:", error, flush=True)
+    # Phone -> PC file through the share sheet. The file the phone received above
+    # is owned by the app in MediaStore, so the app may read it like a file shared
+    # from the gallery or the Files app (which grant read access to the content:// uri).
+    uri = ""
+    for _ in range(15):
+        out = shell("content query --uri content://media/external/downloads --projection _id "
+                    "--where \"_display_name='ferie.jpg'\"", check=False)
+        match = re.search(r"_id=(\d+)", out)
+        if match:
+            uri = f"content://media/external/downloads/{match.group(1)}"
+            break
+        time.sleep(1)
+    assert uri, "received file is not in MediaStore"
+    desktop.events.clear()
+    shell("am start -W -a android.intent.action.SEND -t image/jpeg "
+          f"--eu android.intent.extra.STREAM {uri} -n {PKG}/.ShareTargetActivity")
+    received: FileReceived = desktop.wait_for(FileReceived, timeout=90)
+    assert received.path.name.startswith("ferie"), received.path
+    assert received.path.read_bytes() == payload.read_bytes(), "file changed on the way"
+    ok("share sheet file phone -> PC (3 MB, byte-identical)")
 
     # ---- Screens for design review ---------------------------------------------
     shell(f"am start -W -n {PKG}/.MainActivity")
@@ -279,8 +274,9 @@ if __name__ == "__main__":
     finally:
         try:
             shot("99-final")
+            pid = shell(f"pidof {PKG}", check=False).strip()
+            args = ["adb", "logcat", "-d", "-t", "3000"] + ([f"--pid={pid}"] if pid else ["*:E"])
             with open(SHOTS / "logcat.txt", "w", encoding="utf-8") as log:
-                subprocess.run(["adb", "logcat", "-d", "-t", "3000", "AndroidRuntime:E", "h4xtor:V",
-                                "ShareService:V", "*:S"], stdout=log, timeout=30, check=False)
+                subprocess.run(args, stdout=log, timeout=30, check=False)
         except Exception:  # noqa: BLE001
             pass
