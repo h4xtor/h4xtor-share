@@ -63,13 +63,26 @@ def shot(name: str) -> None:
     (SHOTS / f"{name}.png").write_bytes(data)
 
 
-def ui_nodes() -> list[ET.Element]:
+def _dump() -> list[ET.Element]:
     shell("uiautomator dump /sdcard/ui.xml", check=False)
     xml = adb("exec-out", "cat", "/sdcard/ui.xml", check=False)
     try:
         return list(ET.fromstring(xml).iter("node"))
     except ET.ParseError:
         return []
+
+
+def ui_nodes() -> list[ET.Element]:
+    """Current screen, after dismissing emulator 'X isn't responding' dialogs (not our app)."""
+    nodes = _dump()
+    if any("isn't responding" in (n.get("text") or "") for n in nodes):
+        for node in nodes:
+            if (node.get("text") or "") == "Wait":
+                x1, y1, x2, y2 = map(int, re.findall(r"\d+", node.get("bounds", "")))
+                shell(f"input tap {(x1 + x2) // 2} {(y1 + y2) // 2}")
+                time.sleep(1)
+                return _dump()
+    return nodes
 
 
 def tap_text(pattern: str, timeout: float = 15) -> None:
