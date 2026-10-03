@@ -63,6 +63,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private TextView toastView;
     private AlertDialog codeDialog;
     private AlertDialog qrDialog;
+    private EditText composerInput;
+    private android.widget.ImageView sendButton;
+    private String dismissedClip;
+    private boolean renderPending;
 
     // ---------------------------------------------------------------- lifecycle
     @Override
@@ -144,6 +148,9 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         if (hasFocus && service != null) {
             // Android only lets the focused app read the clipboard: sync on focus.
             service.readClipboardAndSync();
+            if (PAGE_DEVICES.equals(page)) {
+                render();
+            }
         }
     }
 
@@ -296,6 +303,12 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     // ------------------------------------------------------------------ render
     @Override
     public void onStateChanged() {
+        if (composerInput != null && composerInput.hasFocus() && PAGE_DEVICES.equals(page)) {
+            // Never rebuild the screen under the user's fingers while typing.
+            renderPending = true;
+            renderNav();
+            return;
+        }
         if (!PAGE_SETTINGS.equals(page)) {
             render();
         } else {
@@ -372,77 +385,299 @@ public final class MainActivity extends Activity implements ShareService.UiListe
 
     // ----------------------------------------------------------------- devices
     private void renderDevices() {
-        TextView scan = ui.button("Scan QR", "soft");
-        scan.setCompoundDrawablePadding(ui.dp(6));
-        scan.setOnClickListener(v -> scanQr());
-        content.addView(header("h4xtor share", statusLine(), scan));
-
+        content.addView(topBar(), ui.matchWrap());
         Peer target = selectedPeer();
+        content.addView(greeting(target), ui.margins(2, 22, 0, 18));
         if (target != null) {
-            content.addView(sendCard(target), ui.margins(0, 0, 0, 16));
+            content.addView(composer(target), ui.margins(0, 0, 0, 12));
+            View suggestion = clipboardSuggestion(target);
+            if (suggestion != null) {
+                content.addView(suggestion, ui.margins(0, 0, 0, 12));
+            }
         } else {
-            content.addView(welcomeCard(), ui.margins(0, 0, 0, 16));
+            content.addView(welcomeCard(), ui.margins(0, 0, 0, 12));
+        }
+
+        List<Peer> peers = service.peers();
+        List<Peer> paired = new ArrayList<>();
+        List<Peer> lan = new ArrayList<>();
+        for (Peer peer : peers) {
+            (service.identity().isOutboundTrusted(peer.deviceId) ? paired : lan).add(peer);
         }
 
         LinearLayout sectionRow = ui.row();
         sectionRow.addView(ui.label("Dine enheder"), ui.weight(1));
         TextView refresh = ui.text(service.isScanning()
                 ? "Scanner " + Math.round(service.scanProgress() * 100) + "%"
-                : "Scan netværk", 13.5f, ui.accent, true);
-        refresh.setPadding(ui.dp(8), ui.dp(6), ui.dp(4), ui.dp(6));
+                : "Opdatér", 13.5f, ui.accent, true);
+        refresh.setPadding(ui.dp(10), ui.dp(6), ui.dp(4), ui.dp(6));
         refresh.setOnClickListener(v -> {
             service.scanLan();
             service.restartDiscovery();
         });
         sectionRow.addView(refresh);
-        content.addView(sectionRow, ui.margins(4, 8, 0, 8));
+        content.addView(sectionRow, ui.margins(6, 14, 0, 6));
 
-        List<Peer> peers = service.peers();
-        if (peers.isEmpty()) {
+        if (paired.isEmpty()) {
             LinearLayout empty = ui.card();
-            empty.addView(ui.text("Leder efter enheder…", 15.5f, ui.text, true));
-            TextView hint = ui.text("Åbn h4xtor share på din PC eller en anden telefon på samme Wi-Fi. "
-                    + "Den dukker op her af sig selv.", 13.5f, ui.muted, false);
-            empty.addView(hint, ui.margins(0, 4, 0, 0));
-            ProgressBar spinner = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
-            spinner.setIndeterminate(true);
+            LinearLayout line = ui.row();
+            ProgressBar spinner = new ProgressBar(this);
             spinner.setIndeterminateTintList(android.content.res.ColorStateList.valueOf(ui.accent));
-            empty.addView(spinner, ui.margins(0, 12, 0, 0));
+            line.addView(spinner, new LinearLayout.LayoutParams(ui.dp(20), ui.dp(20)));
+            LinearLayout texts = ui.column();
+            texts.addView(ui.text(lan.isEmpty() ? "Leder efter enheder…" : "Ingen forbundne enheder endnu",
+                    15f, ui.text, true));
+            texts.addView(ui.text(lan.isEmpty()
+                    ? "Åbn h4xtor share på din PC på samme Wi-Fi."
+                    : "Tryk Forbind herunder – eller scan QR-koden på PC'en.", 13f, ui.muted, false));
+            LinearLayout.LayoutParams textParams = ui.weight(1);
+            textParams.setMargins(ui.dp(14), 0, 0, 0);
+            line.addView(texts, textParams);
+            empty.addView(line);
             content.addView(empty);
-        }
-        List<Peer> lan = new ArrayList<>();
-        for (Peer peer : peers) {
-            if (!service.identity().isOutboundTrusted(peer.deviceId)) {
-                lan.add(peer);
-                continue;
-            }
-            content.addView(deviceCard(peer, target != null && target.deviceId.equals(peer.deviceId)),
-                    ui.margins(0, 0, 0, 10));
-        }
-        if (!peers.isEmpty() && lan.size() == peers.size()) {
-            content.addView(ui.text("Ingen forbundne enheder endnu – tryk Forbind på en enhed herunder, "
-                    + "eller scan QR-koden på din PC.", 13.5f, ui.muted, false), ui.margins(4, 0, 0, 6));
-        }
-        if (!lan.isEmpty()) {
-            content.addView(ui.label("Fundet på netværket · " + lan.size()), ui.margins(4, 14, 0, 4));
-            content.addView(ui.text("Ikke forbundet. Tryk Forbind – eller ⋮ for at skjule.", 12.5f,
-                    ui.faint, false), ui.margins(4, 0, 0, 8));
-            for (Peer peer : lan) {
-                content.addView(deviceCard(peer, false), ui.margins(0, 0, 0, 10));
-            }
+        } else {
+            content.addView(deviceGroup(paired, target));
         }
 
-        content.addView(wifiDirectCard(), ui.margins(0, 14, 0, 0));
+        if (!lan.isEmpty()) {
+            content.addView(ui.label("Fundet på netværket · ikke forbundet"), ui.margins(6, 20, 0, 6));
+            content.addView(deviceGroup(lan, null));
+        }
+
+        content.addView(wifiDirectCard(), ui.margins(0, 20, 0, 0));
+    }
+
+    private View topBar() {
+        LinearLayout bar = ui.row();
+        TextView mark = ui.text("✻", 22f, ui.accent, true);
+        bar.addView(mark);
+        bar.addView(ui.text("h4xtor share", 16.5f, ui.text, true), ui.margins(8, 0, 0, 0));
+        bar.addView(new View(this), ui.weight(1));
+
+        boolean online = "Online".equals(service.status());
+        LinearLayout status = ui.row();
+        status.setPadding(ui.dp(10), ui.dp(5), ui.dp(12), ui.dp(5));
+        status.setBackground(ui.rounded(online ? ui.successSoft : ui.warningSoft, 0, 999));
+        View dot = new View(this);
+        dot.setBackground(ui.rounded(online ? ui.success : ui.warning, 0, 999));
+        status.addView(dot, new LinearLayout.LayoutParams(ui.dp(7), ui.dp(7)));
+        List<String> addresses = service.localAddresses();
+        String label = online ? (addresses.isEmpty() ? "Intet netværk" : "Online") : service.status();
+        status.addView(ui.text(label, 12.5f, online ? ui.success : ui.warning, true), ui.margins(6, 0, 0, 0));
+        status.setOnClickListener(v -> toast(statusLine(), false));
+        bar.addView(status);
+
+        android.widget.ImageView scan = ui.icon(R.drawable.ic_scan, ui.text, 20);
+        scan.setScaleType(android.widget.ImageView.ScaleType.CENTER);
+        scan.setBackground(ui.ripple(ui.rounded(ui.surface, ui.border, 999), 999));
+        scan.setContentDescription("Scan QR-kode");
+        scan.setOnClickListener(v -> scanQr());
+        LinearLayout.LayoutParams scanParams = new LinearLayout.LayoutParams(ui.dp(40), ui.dp(40));
+        scanParams.setMargins(ui.dp(10), 0, 0, 0);
+        bar.addView(scan, scanParams);
+        return bar;
+    }
+
+    private View greeting(Peer target) {
+        LinearLayout box = ui.column();
+        int hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY);
+        String hello = hour < 5 ? "God nat" : hour < 10 ? "Godmorgen" : hour < 17 ? "God dag" : "God aften";
+        box.addView(ui.title(hello + ",\nhvad skal deles?", 31));
+        if (target != null) {
+            boolean online = service.isOnline(target.deviceId);
+            box.addView(ui.text(online
+                    ? "Alt du sender, lander med det samme på " + target.name + "."
+                    : target.name + " er offline – åbn h4xtor share på den.", 14f, ui.muted, false),
+                    ui.margins(0, 8, 0, 0));
+        }
+        return box;
+    }
+
+    private EditText composerInput() {
+        if (composerInput == null) {
+            composerInput = new EditText(this);
+            composerInput.setHint("Skriv tekst eller indsæt et link…");
+            composerInput.setTextSize(16.5f);
+            composerInput.setTextColor(ui.text);
+            composerInput.setHintTextColor(ui.faint);
+            composerInput.setBackground(null);
+            composerInput.setPadding(ui.dp(2), ui.dp(4), ui.dp(2), ui.dp(4));
+            composerInput.setMinLines(2);
+            composerInput.setMaxLines(7);
+            composerInput.setGravity(Gravity.TOP | Gravity.START);
+            composerInput.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                    | InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
+            composerInput.addTextChangedListener(new android.text.TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+                @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
+                @Override public void afterTextChanged(android.text.Editable s) {
+                    styleSendButton();
+                }
+            });
+            composerInput.setOnFocusChangeListener((v, focused) -> {
+                if (!focused && renderPending) {
+                    renderPending = false;
+                    render();
+                }
+            });
+        }
+        ViewGroup parent = (ViewGroup) composerInput.getParent();
+        if (parent != null) {
+            parent.removeView(composerInput);
+        }
+        return composerInput;
+    }
+
+    private View composer(Peer target) {
+        LinearLayout card = ui.column();
+        card.setPadding(ui.dp(16), ui.dp(12), ui.dp(12), ui.dp(12));
+        GradientDrawable shape = ui.rounded(ui.surface, ui.border, 24);
+        card.setBackground(shape);
+        card.setElevation(ui.dp(1.5f));
+
+        LinearLayout to = ui.row();
+        to.addView(ui.text("Til", 13.5f, ui.muted, false));
+        LinearLayout chip = ui.row();
+        chip.setPadding(ui.dp(10), ui.dp(5), ui.dp(10), ui.dp(5));
+        chip.setBackground(ui.ripple(ui.rounded(ui.surfaceAlt, 0, 999), 999));
+        View dot = new View(this);
+        boolean online = service.isOnline(target.deviceId);
+        dot.setBackground(ui.rounded(online ? ui.success : ui.faint, 0, 999));
+        chip.addView(dot, new LinearLayout.LayoutParams(ui.dp(7), ui.dp(7)));
+        TextView name = ui.text(target.name + "  ▾", 14f, ui.text, true);
+        name.setSingleLine(true);
+        name.setEllipsize(TextUtils.TruncateAt.END);
+        chip.addView(name, ui.margins(7, 0, 0, 0));
+        chip.setOnClickListener(v -> choosePeer(this::select));
+        to.addView(chip, ui.margins(8, 0, 0, 0));
+        card.addView(to);
+
+        card.addView(composerInput(), ui.margins(0, 6, 0, 4));
+
+        LinearLayout bottom = ui.row();
+        android.widget.HorizontalScrollView chipsScroll = new android.widget.HorizontalScrollView(this);
+        chipsScroll.setHorizontalScrollBarEnabled(false);
+        LinearLayout chips = ui.row();
+        chips.addView(toolChip(R.drawable.ic_file, "Filer", v -> pickFiles(target)));
+        chips.addView(toolChip(R.drawable.ic_image, "Fotos", v -> pickPhotos(target)), ui.margins(6, 0, 0, 0));
+        chips.addView(toolChip(R.drawable.ic_folder, "Mappe", v -> pickTree(target)), ui.margins(6, 0, 0, 0));
+        chips.addView(toolChip(R.drawable.ic_clipboard, "Udklip", v -> sendClipboard(target)), ui.margins(6, 0, 0, 0));
+        chipsScroll.addView(chips);
+        bottom.addView(chipsScroll, ui.weight(1));
+
+        sendButton = new android.widget.ImageView(this);
+        sendButton.setImageResource(R.drawable.ic_send);
+        sendButton.setScaleType(android.widget.ImageView.ScaleType.CENTER);
+        sendButton.setContentDescription("Send");
+        sendButton.setOnClickListener(v -> sendComposer());
+        LinearLayout.LayoutParams sendParams = new LinearLayout.LayoutParams(ui.dp(40), ui.dp(40));
+        sendParams.setMargins(ui.dp(8), 0, 0, 0);
+        bottom.addView(sendButton, sendParams);
+        styleSendButton();
+        card.addView(bottom);
+        return card;
+    }
+
+    private View toolChip(int icon, String label, View.OnClickListener click) {
+        LinearLayout chip = ui.row();
+        chip.setPadding(ui.dp(10), ui.dp(7), ui.dp(12), ui.dp(7));
+        chip.setBackground(ui.ripple(ui.rounded(Color.TRANSPARENT, ui.border, 999), 999));
+        chip.setClickable(true);
+        chip.setOnClickListener(click);
+        chip.addView(ui.icon(icon, ui.muted, 16));
+        chip.addView(ui.text(label, 13.5f, ui.text, false), ui.margins(6, 0, 0, 0));
+        return chip;
+    }
+
+    private void styleSendButton() {
+        if (sendButton == null || composerInput == null) {
+            return;
+        }
+        boolean ready = composerInput.getText().toString().trim().length() > 0;
+        sendButton.setBackground(ui.ripple(ui.rounded(ready ? ui.accent : ui.surfaceAlt, 0, 999), 999));
+        sendButton.setColorFilter(ready ? ui.onAccent : ui.faint);
+        sendButton.setEnabled(ready);
+    }
+
+    private void sendComposer() {
+        Peer target = selectedPeer();
+        String text = composerInput == null ? "" : composerInput.getText().toString().trim();
+        if (target == null || text.isEmpty()) {
+            return;
+        }
+        service.sendText(target, text);
+        composerInput.setText("");
+        composerInput.clearFocus();
+        android.view.inputmethod.InputMethodManager keyboard =
+                (android.view.inputmethod.InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (keyboard != null) {
+            keyboard.hideSoftInputFromWindow(composerInput.getWindowToken(), 0);
+        }
+        toast((Ui.isLink(text) ? "Link sendt – åbner på " : "Sendt til ") + target.name, false);
+    }
+
+    private View clipboardSuggestion(Peer target) {
+        String clip = service.currentClipboard();
+        if (clip == null || clip.trim().isEmpty() || clip.equals(dismissedClip)) {
+            return null;
+        }
+        clip = clip.trim();
+        LinearLayout card = ui.row();
+        card.setPadding(ui.dp(14), ui.dp(12), ui.dp(10), ui.dp(12));
+        card.setBackground(ui.rounded(ui.accentSoft, 0, 18));
+        card.addView(ui.iconBadge(Ui.isLink(clip) ? R.drawable.ic_link : R.drawable.ic_clipboard, 34,
+                ui.surface, ui.accent));
+        LinearLayout texts = ui.column();
+        texts.addView(ui.text(Ui.isLink(clip) ? "Link i din udklipsholder" : "Fra din udklipsholder",
+                12f, ui.accent, true));
+        TextView preview = ui.text(clip.replace('\n', ' '), 14f, ui.text, false);
+        preview.setSingleLine(true);
+        preview.setEllipsize(TextUtils.TruncateAt.END);
+        texts.addView(preview, ui.margins(0, 1, 0, 0));
+        LinearLayout.LayoutParams textParams = ui.weight(1);
+        textParams.setMargins(ui.dp(12), 0, ui.dp(8), 0);
+        card.addView(texts, textParams);
+        TextView send = ui.button("Send", "primary");
+        send.setMinHeight(ui.dp(36));
+        send.setTextSize(13.5f);
+        String value = clip;
+        send.setOnClickListener(v -> {
+            service.sendText(target, value);
+            dismissedClip = value;
+            toast("Sendt til " + target.name, false);
+            render();
+        });
+        card.addView(send);
+        TextView close = ui.text("✕", 15f, ui.muted, false);
+        close.setGravity(Gravity.CENTER);
+        close.setContentDescription("Skjul");
+        close.setOnClickListener(v -> {
+            dismissedClip = value;
+            render();
+        });
+        card.addView(close, new LinearLayout.LayoutParams(ui.dp(32), ui.dp(36)));
+        return card;
     }
 
     private View welcomeCard() {
         LinearLayout card = ui.card();
-        card.setBackground(ui.rounded(ui.accentSoft, 0, 22));
+        card.setBackground(ui.rounded(ui.surface, ui.border, 24));
         card.setPadding(ui.dp(20), ui.dp(20), ui.dp(20), ui.dp(20));
-        card.addView(ui.title("Forbind din første enhed", 19));
-        TextView text = ui.text("Åbn h4xtor share på PC'en, klik “Forbind ny enhed” og scan QR-koden. "
-                + "Det tager fem sekunder – og kun første gang.", 14f, ui.muted, false);
-        card.addView(text, ui.margins(0, 6, 0, 16));
+        card.addView(ui.title("Forbind din PC", 21));
+        String[] steps = {
+                "Åbn h4xtor share på PC'en",
+                "Klik “+ Forbind ny enhed”",
+                "Scan QR-koden med knappen herunder",
+        };
+        for (int index = 0; index < steps.length; index++) {
+            LinearLayout line = ui.row();
+            TextView number = ui.text(String.valueOf(index + 1), 12.5f, ui.accent, true);
+            number.setGravity(Gravity.CENTER);
+            number.setBackground(ui.rounded(ui.accentSoft, 0, 999));
+            line.addView(number, new LinearLayout.LayoutParams(ui.dp(24), ui.dp(24)));
+            line.addView(ui.text(steps[index], 14.5f, ui.text, false), ui.margins(12, 0, 0, 0));
+            card.addView(line, ui.margins(0, index == 0 ? 14 : 10, 0, 0));
+        }
         LinearLayout buttons = ui.row();
         TextView scan = ui.button("Scan QR-kode", "primary");
         scan.setOnClickListener(v -> scanQr());
@@ -452,70 +687,41 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         LinearLayout.LayoutParams params = ui.weight(1);
         params.setMargins(ui.dp(10), 0, 0, 0);
         buttons.addView(mine, params);
-        card.addView(buttons);
+        card.addView(buttons, ui.margins(0, 18, 0, 0));
         return card;
     }
 
-    private View sendCard(Peer target) {
-        LinearLayout card = ui.card();
-        card.setPadding(ui.dp(18), ui.dp(18), ui.dp(18), ui.dp(18));
-        LinearLayout top = ui.row();
-        top.addView(ui.text("Send til", 13.5f, ui.muted, false));
-        TextView chip = ui.text(target.name + "  ▾", 14.5f, ui.text, true);
-        chip.setPadding(ui.dp(12), ui.dp(6), ui.dp(12), ui.dp(6));
-        chip.setBackground(ui.ripple(ui.rounded(ui.surfaceAlt, 0, 999), 999));
-        chip.setSingleLine(true);
-        chip.setEllipsize(TextUtils.TruncateAt.END);
-        chip.setOnClickListener(v -> choosePeer(this::select));
-        LinearLayout.LayoutParams chipParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0f);
-        chipParams.setMargins(ui.dp(8), 0, 0, 0);
-        top.addView(chip, chipParams);
-        View filler = new View(this);
-        top.addView(filler, ui.weight(1));
-        boolean online = service.isOnline(target.deviceId);
-        top.addView(ui.pill(online ? "Online" : "Offline", online ? "success" : "neutral"));
-        card.addView(top, ui.margins(0, 0, 0, 14));
-
-        LinearLayout row1 = ui.row();
-        row1.addView(actionTile(R.drawable.ic_file, "Filer", "Fotos, video, alt", v -> pickFiles(target)), ui.weight(1));
-        LinearLayout.LayoutParams gap = ui.weight(1);
-        gap.setMargins(ui.dp(10), 0, 0, 0);
-        row1.addView(actionTile(R.drawable.ic_folder, "Mappe", "Hele mapper", v -> pickTree(target)), gap);
-        card.addView(row1);
-        LinearLayout row2 = ui.row();
-        row2.addView(actionTile(R.drawable.ic_clipboard, "Udklipsholder", "Det du har kopieret",
-                v -> sendClipboard(target)), ui.weight(1));
-        LinearLayout.LayoutParams gap2 = ui.weight(1);
-        gap2.setMargins(ui.dp(10), 0, 0, 0);
-        row2.addView(actionTile(R.drawable.ic_link, "Tekst / link", "Åbner på PC'en",
-                v -> composeText(target)), gap2);
-        card.addView(row2, ui.margins(0, 10, 0, 0));
-        return card;
+    private View deviceGroup(List<Peer> peers, Peer selected) {
+        LinearLayout group = ui.column();
+        group.setBackground(ui.rounded(ui.surface, ui.border, 20));
+        for (int index = 0; index < peers.size(); index++) {
+            if (index > 0) {
+                View line = new View(this);
+                line.setBackgroundColor(ui.border);
+                LinearLayout.LayoutParams lineParams = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, ui.dp(0.7f)));
+                lineParams.setMargins(ui.dp(70), 0, 0, 0);
+                group.addView(line, lineParams);
+            }
+            Peer peer = peers.get(index);
+            group.addView(deviceRow(peer, selected != null && selected.deviceId.equals(peer.deviceId),
+                    index == 0, index == peers.size() - 1));
+        }
+        return group;
     }
 
-    private View actionTile(int icon, String title, String subtitle, View.OnClickListener click) {
-        LinearLayout tile = ui.column();
-        tile.setPadding(ui.dp(14), ui.dp(14), ui.dp(14), ui.dp(14));
-        tile.setBackground(ui.ripple(ui.rounded(ui.surfaceAlt, 0, 16), 16));
-        tile.setClickable(true);
-        tile.setOnClickListener(click);
-        tile.addView(ui.iconBadge(icon, 38, ui.accentSoft, ui.accent));
-        tile.addView(ui.text(title, 15f, ui.text, true), ui.margins(0, 10, 0, 0));
-        TextView sub = ui.text(subtitle, 12.5f, ui.muted, false);
-        sub.setSingleLine(true);
-        sub.setEllipsize(TextUtils.TruncateAt.END);
-        tile.addView(sub, ui.margins(0, 1, 0, 0));
-        return tile;
-    }
-
-    private View deviceCard(Peer peer, boolean selected) {
+    private View deviceRow(Peer peer, boolean selected, boolean first, boolean last) {
         boolean paired = service.identity().isOutboundTrusted(peer.deviceId);
         boolean online = service.isOnline(peer.deviceId);
-        LinearLayout card = ui.card();
-        card.setBackground(ui.ripple(ui.rounded(ui.surface, selected ? ui.accent : ui.border, 20), 20));
-        card.setClickable(true);
-        card.setOnClickListener(v -> {
+        LinearLayout row = ui.row();
+        row.setPadding(ui.dp(14), ui.dp(12), ui.dp(4), ui.dp(12));
+        GradientDrawable fill = ui.rounded(selected ? ui.accentSoft : Color.TRANSPARENT, 0, 20);
+        float r = ui.dp(20);
+        fill.setCornerRadii(new float[]{first ? r : 0, first ? r : 0, first ? r : 0, first ? r : 0,
+                last ? r : 0, last ? r : 0, last ? r : 0, last ? r : 0});
+        row.setBackground(ui.ripple(fill, 20));
+        row.setClickable(true);
+        row.setOnClickListener(v -> {
             if (paired) {
                 select(peer);
             } else {
@@ -523,39 +729,51 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                 toast("Beder " + peer.name + " om en kode…", false);
             }
         });
-        card.setOnLongClickListener(v -> {
+        row.setOnLongClickListener(v -> {
             peerMenu(peer);
             return true;
         });
-        LinearLayout row = ui.row();
-        row.addView(ui.avatar(peer.platform, 44));
+
+        FrameLayout avatarFrame = new FrameLayout(this);
+        avatarFrame.addView(ui.avatar(peer.platform, 42));
+        if (paired) {
+            View dot = new View(this);
+            dot.setBackground(ui.rounded(online ? ui.success : ui.faint, ui.surface, 999));
+            FrameLayout.LayoutParams dotParams = new FrameLayout.LayoutParams(ui.dp(13), ui.dp(13),
+                    Gravity.BOTTOM | Gravity.END);
+            avatarFrame.addView(dot, dotParams);
+        }
+        row.addView(avatarFrame);
+
         LinearLayout texts = ui.column();
-        TextView name = ui.text(peer.name, 16.5f, ui.text, true);
+        TextView name = ui.text(peer.name, 16f, ui.text, true);
         name.setSingleLine(true);
         name.setEllipsize(TextUtils.TruncateAt.END);
         texts.addView(name);
         String transport = "wifi-direct".equals(peer.transport) ? "Wi-Fi Direct" : "Wi-Fi";
-        String prefix = paired ? (online ? "Online · " : "Offline · ") : "Ikke forbundet · fundet på ";
-        TextView meta = ui.text(prefix + (paired ? Ui.platformLabel(peer.platform) + " · " + transport
-                : transport + " · " + Ui.platformLabel(peer.platform)) + " · " + peer.address,
-                12.5f, paired && online ? ui.success : ui.muted, false);
-        meta.setSingleLine(true);
-        meta.setEllipsize(TextUtils.TruncateAt.END);
-        texts.addView(meta, ui.margins(0, 2, 0, 0));
+        String meta = paired
+                ? (online ? "Online" : "Offline") + " · " + Ui.platformLabel(peer.platform) + " · " + transport
+                : "Fundet på " + transport + " · " + peer.address;
+        TextView metaView = ui.text(meta, 12.5f, paired && online ? ui.success : ui.muted, false);
+        metaView.setSingleLine(true);
+        metaView.setEllipsize(TextUtils.TruncateAt.END);
+        texts.addView(metaView, ui.margins(0, 2, 0, 0));
         LinearLayout.LayoutParams textParams = ui.weight(1);
         textParams.setMargins(ui.dp(14), 0, ui.dp(8), 0);
         row.addView(texts, textParams);
-        if (online) {
+
+        if (paired && online) {
             LinearLayout.LayoutParams barsParams = new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, ui.dp(16));
-            barsParams.setMargins(0, 0, ui.dp(10), 0);
+            barsParams.setMargins(0, 0, ui.dp(6), 0);
             row.addView(signalBars(service.rtt(peer.deviceId)), barsParams);
         }
-        if (paired) {
-            row.addView(ui.pill(online ? "Forbundet" : "Offline", online ? "success" : "neutral"));
-        } else {
-            TextView connect = ui.button("Forbind", "primary");
-            connect.setMinHeight(ui.dp(38));
+        if (selected) {
+            row.addView(ui.text("✓", 17f, ui.accent, true), ui.margins(2, 0, 2, 0));
+        }
+        if (!paired) {
+            TextView connect = ui.button("Forbind", "soft");
+            connect.setMinHeight(ui.dp(36));
             connect.setTextSize(13.5f);
             connect.setOnClickListener(v -> {
                 service.pair(peer);
@@ -563,16 +781,13 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             });
             row.addView(connect);
         }
-        TextView more = ui.text("⋮", 22f, ui.muted, true);
+        TextView more = ui.text("⋮", 21f, ui.muted, true);
         more.setGravity(Gravity.CENTER);
         more.setBackground(ui.ripple(ui.rounded(Color.TRANSPARENT, 0, 999), 999));
         more.setOnClickListener(v -> peerMenu(peer));
-        more.setContentDescription("Flere valg");
-        LinearLayout.LayoutParams moreParams = new LinearLayout.LayoutParams(ui.dp(36), ui.dp(40));
-        moreParams.setMargins(ui.dp(4), 0, -ui.dp(8), 0);
-        row.addView(more, moreParams);
-        card.addView(row);
-        return card;
+        more.setContentDescription("Flere valg for " + peer.name);
+        row.addView(more, new LinearLayout.LayoutParams(ui.dp(38), ui.dp(40)));
+        return row;
     }
 
     private View signalBars(long rttMs) {
@@ -1051,6 +1266,25 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         intent.setType("*/*");
         intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
         startActivityForResult(intent, REQUEST_FILES);
+    }
+
+    private void pickPhotos(Peer peer) {
+        pendingPeerId = peer.deviceId;
+        Intent intent;
+        if (Build.VERSION.SDK_INT >= 33) {
+            intent = new Intent(MediaStore.ACTION_PICK_IMAGES);
+            intent.putExtra(MediaStore.EXTRA_PICK_IMAGES_MAX, MediaStore.getPickImagesMaxLimit());
+        } else {
+            intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("image/*");
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[]{"image/*", "video/*"});
+            intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        }
+        try {
+            startActivityForResult(intent, REQUEST_FILES);
+        } catch (ActivityNotFoundException error) {
+            pickFiles(peer);
+        }
     }
 
     private void pickTree(Peer peer) {
