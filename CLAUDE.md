@@ -46,12 +46,15 @@ gradle -p android testDebugUnitTest lintDebug assembleDebug
 2. Push to `main` and wait until CI is green, including **android-e2e**.
 3. `git tag vX.Y.Z && git push origin vX.Y.Z`. The Release workflow then attaches the .exe, APK and other builds.
 
-The latest release is **v1.1.3** (once tagged).
+The latest release is **v1.1.4**. Without tag-push rights, start a release from Actions → Release → Run workflow (tag input).
 
 
 ## Known limits (be honest about these)
 
-- Android only lets apps read the clipboard while they are in the foreground. Phone → PC clipboard
-  sync therefore runs when the app is opened, from the notification, from the Quick Settings tile
-  or via "Send til PC" in the text menu. PC → phone always works.
+- Android only lets the focused app read the clipboard. Instant phone → PC sync uses the
+  `CopyWatchService` accessibility service: a tap on "Kopiér"/"Copy" in any app briefly opens the
+  invisible `ClipboardSendActivity`, which reads and sends. The user must switch it on once
+  (Indstillinger → "Send med det samme, når du kopierer"); sideloaded APKs on Android 13+ first need
+  App-info → ⋮ → "Tillad begrænsede indstillinger". Copies via keyboard shortcuts are not caught;
+  then the app/notification/tile/"Send til PC" paths still work. PC → phone always works.
 - The status dashboard (Claude artifact) only updates when Claude writes to it.

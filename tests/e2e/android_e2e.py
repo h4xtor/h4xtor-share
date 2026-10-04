@@ -243,6 +243,34 @@ def main() -> None:
     desktop.wait_for(ClipboardReceived, match=lambda event: event.text == "markeret tekst")
     ok("'Send til PC' from the text selection menu")
 
+    # ---- Phone -> PC instantly: tap "Copy" in another app ---------------------
+    service = f"{PKG}/{PKG}.CopyWatchService"
+    shell(f"settings put secure enabled_accessibility_services {service}")
+    shell("settings put secure accessibility_enabled 1")
+    time.sleep(3)
+    bound = shell("dumpsys accessibility", check=False)
+    assert "CopyWatchService" in bound, "copy watcher not bound"
+    word = "telefonkopi"
+    shell("am start -W -a android.intent.action.INSERT -t vnd.android.cursor.dir/contact "
+          f"-e name {word}")
+    time.sleep(4)
+    field = None
+    for _ in range(10):
+        field = next((n for n in ui_nodes() if (n.get("text") or "") == word), None)
+        if field is not None:
+            break
+        time.sleep(1)
+    shot("14-copy-other-app")
+    assert field is not None, "contact editor with the test text did not open"
+    x1, y1, x2, y2 = map(int, re.findall(r"\d+", field.get("bounds")))
+    desktop.events.clear()
+    shell(f"input swipe {(x1 + x2) // 2} {(y1 + y2) // 2} {(x1 + x2) // 2} {(y1 + y2) // 2} 900")
+    tap_text("^(Copy|Kopiér)$")
+    desktop.wait_for(ClipboardReceived, timeout=20, match=lambda event: event.text == word)
+    ok("tap 'Copy' in another app -> text on the PC instantly (app in background)")
+    shell("input keyevent BACK", check=False)
+    shell("input keyevent BACK", check=False)
+
     # Phone -> PC file through the share sheet. The file the phone received above
     # is owned by the app in MediaStore, so the app may read it like a file shared
     # from the gallery or the Files app (which grant read access to the content:// uri).

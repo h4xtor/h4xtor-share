@@ -1412,20 +1412,29 @@ public final class ShareService extends Service implements H4xtorServer.Listener
 
     /** Called when the clipboard may be readable (app in the foreground). */
     public void readClipboardAndSync() {
+        syncClipboard(false);
+    }
+
+    /** The user just tapped "Kopiér" somewhere ({@link CopyWatchService}): always send new text. */
+    public int syncCopiedText() {
+        return syncClipboard(true);
+    }
+
+    private int syncClipboard(boolean justCopied) {
         if (!identity.isClipboardSyncEnabled()) {
-            return;
+            return 0;
         }
         String text = currentClipboard();
         if (text == null || text.isEmpty() || text.equals(clipboardObserved)) {
-            return;
+            return 0;
         }
         boolean first = clipboardObserved.isEmpty();
         clipboardObserved = text;
         if (text.equals(clipboardSuppress) && SystemClock.elapsedRealtime() < clipboardSuppressUntil) {
-            return;
+            return 0;
         }
-        if (first && identity.flag("clipboard_seen", false)) {
-            return;
+        if (first && !justCopied && identity.flag("clipboard_seen", false)) {
+            return 0;
         }
         identity.setFlag("clipboard_seen", true);
         int count = 0;
@@ -1447,6 +1456,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
             markClipboardShared(text);
             message("Udklipsholder synkroniseret til " + count + (count == 1 ? " enhed" : " enheder"), false);
         }
+        return count;
     }
 
     /** Text already on the other devices: came from them or was synced to them. */

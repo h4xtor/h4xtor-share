@@ -1279,6 +1279,8 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                 "Det du kopierer, sendes til dine enheder, når h4xtor share er åben.",
                 identity.isClipboardSyncEnabled(), identity::setClipboardSyncEnabled));
         sync.addView(ui.divider());
+        sync.addView(copyWatchRow());
+        sync.addView(ui.divider());
         sync.addView(toggleRow("Indsæt modtaget tekst automatisk",
                 "Tekst fra PC'en er klar til at indsætte med det samme.",
                 identity.flag("apply_clipboard", true), value -> identity.setFlag("apply_clipboard", value)));
@@ -1500,6 +1502,29 @@ public final class MainActivity extends Activity implements ShareService.UiListe
 
     private interface Toggled {
         void set(boolean value);
+    }
+
+    /** Phone -> PC without opening the app: needs the accessibility service switched on. */
+    private View copyWatchRow() {
+        boolean on = CopyWatchService.isEnabled(this);
+        LinearLayout row = ui.row();
+        LinearLayout texts = ui.column();
+        texts.addView(ui.text("Send med det samme, når du kopierer", 15f, ui.text, true));
+        texts.addView(ui.text(on
+                ? "Slået til ✓ Tryk \"Kopiér\" i en hvilken som helst app, så er teksten på PC'en."
+                : "Tryk her og slå \"h4xtor share\" til under Hjælpefunktioner. Står der "
+                        + "\"Begrænset indstilling\", så åbn App-info for h4xtor share, tryk ⋮ og "
+                        + "\"Tillad begrænsede indstillinger\" først.",
+                12.5f, on ? ui.accent : ui.muted, false), ui.margins(0, 2, 0, 0));
+        row.addView(texts, ui.weight(1));
+        row.setOnClickListener(v -> {
+            try {
+                startActivity(new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS));
+            } catch (Exception error) {
+                toast("Åbn Indstillinger → Hjælpefunktioner på telefonen", true);
+            }
+        });
+        return row;
     }
 
     private View toggleRow(String title, String subtitle, boolean value, Toggled toggled) {
