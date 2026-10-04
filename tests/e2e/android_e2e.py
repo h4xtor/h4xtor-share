@@ -265,6 +265,9 @@ def main() -> None:
     x1, y1, x2, y2 = map(int, re.findall(r"\d+", field.get("bounds")))
     desktop.events.clear()
     shell(f"input swipe {(x1 + x2) // 2} {(y1 + y2) // 2} {(x1 + x2) // 2} {(y1 + y2) // 2} 900")
+    # A long-press may only place the cursor (Paste / Select all): select the text first.
+    if not any(re.search("^(Copy|Kopiér)$", n.get("text") or "") for n in ui_nodes()):
+        tap_text("^(Select all|Vælg alle)$")
     tap_text("^(Copy|Kopiér)$")
     desktop.wait_for(ClipboardReceived, timeout=20, match=lambda event: event.text == word)
     ok("tap 'Copy' in another app -> text on the PC instantly (app in background)")
