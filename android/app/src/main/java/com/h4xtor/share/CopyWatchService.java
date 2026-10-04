@@ -49,6 +49,11 @@ public final class CopyWatchService extends AccessibilityService {
     }
 
     @Override
+    protected void onServiceConnected() {
+        android.util.Log.i("h4xtor", "copy watcher connected");
+    }
+
+    @Override
     public void onInterrupt() {
     }
 

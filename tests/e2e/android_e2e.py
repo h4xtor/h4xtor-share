@@ -276,9 +276,14 @@ def main() -> None:
     time.sleep(3)
     shot("16-selected")
     x1, y1, _, _ = field_box()
+    # `uiautomator dump` suppresses accessibility services while it runs; give the
+    # system a moment to bind the copy watcher again before tapping Copy.
+    time.sleep(3)
     shell(f"input tap {x1 + 381} {y1 - 40}")  # "Copy" (Translate | Cut | Copy | Paste | ⋮)
     time.sleep(1.5)
     shot("17-copied")
+    (SHOTS / "accessibility.txt").write_text(shell("dumpsys accessibility", check=False),
+                                              encoding="utf-8")
     desktop.wait_for(ClipboardReceived, timeout=20, match=lambda event: event.text == word)
     ok("tap 'Copy' in another app -> text on the PC instantly (app in background)")
     shell("input keyevent BACK", check=False)
