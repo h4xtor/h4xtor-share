@@ -128,21 +128,12 @@ jobs:
         run: |
           set -o pipefail
           python -m PyInstaller --clean --noconfirm packaging/h4xtor-share.spec 2>&1 | tee ci-output.log
-      - name: Smoke test frozen executable imports
+      - name: Smoke test frozen executable
         if: runner.os == 'Windows'
         shell: bash
         run: |
           set -o pipefail
-          python - <<'PY' 2>&1 | tee -a ci-output.log
-          import subprocess, sys, time
-          proc = subprocess.Popen(["dist/h4xtor-share.exe", "--minimized"])
-          time.sleep(12)
-          code = proc.poll()
-          if code is not None:
-              sys.exit(f"executable exited early with code {code}")
-          proc.kill()
-          print("frozen executable stayed up")
-          PY
+          python packaging/smoke_test.py dist/h4xtor-share.exe 2>&1 | tee -a ci-output.log
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:

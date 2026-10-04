@@ -70,6 +70,10 @@ jobs:
         run: |
           python -m PyInstaller --clean --noconfirm packaging/h4xtor-share.spec
           mv "dist/${{ matrix.binary }}" "dist/${{ matrix.artifact }}"
+      - name: Smoke test frozen executable
+        if: runner.os == 'Windows'
+        shell: bash
+        run: python packaging/smoke_test.py "dist/${{ matrix.artifact }}"
       - uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.artifact }}

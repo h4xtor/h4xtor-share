@@ -49,17 +49,26 @@ class InstanceServer:
         self,
         config_directory: Path,
         port: int,
-        handler: Callable[[dict[str, Any]], None],
+        handler: Callable[[dict[str, Any]], None] | None = None,
     ) -> None:
         self.token_path = config_directory / "instance.token"
         self.port = port
-        self.handler = handler
+        self._handler = handler
+        self._held: list[dict[str, Any]] = []  # received before a handler was set
+        self._lock = threading.Lock()
         self._socket: socket.socket | None = None
         self._thread: threading.Thread | None = None
         self._stopping = threading.Event()
 
     def start(self) -> bool:
         listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if _SYSTEM == "Windows":
+            # Never share the port: on Windows SO_REUSEADDR would let a second app steal it.
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        else:
+            # Recent handoffs leave TIME_WAIT entries that would block a restart for a
+            # minute; this still allows only one listener.
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             listener.bind(("127.0.0.1", self.port))
         except OSError:
@@ -75,6 +84,14 @@ class InstanceServer:
         self._thread = threading.Thread(target=self._loop, name="h4xtor-instance", daemon=True)
         self._thread.start()
         return True
+
+    def set_handler(self, handler: Callable[[dict[str, Any]], None]) -> None:
+        """Start delivering messages to *handler*, first the ones held so far."""
+        with self._lock:
+            self._handler = handler
+            held, self._held = self._held, []
+        for message in held:
+            handler(message)
 
     def stop(self) -> None:
         self._stopping.set()
@@ -113,8 +130,13 @@ class InstanceServer:
                     continue
                 with contextlib.suppress(OSError):
                     connection.sendall(b'{"ok":true}\n')
+                with self._lock:
+                    handler = self._handler
+                    if handler is None:
+                        self._held.append(message)
                 with contextlib.suppress(Exception):
-                    self.handler(message)
+                    if handler is not None:
+                        handler(message)
 
 
 def send_to_running_instance(config_directory: Path, port: int, message: dict[str, Any]) -> bool:
@@ -426,6 +448,8 @@ def ensure_shell_integration(config: Any) -> list[str]:
                     remove_context_menu()
                     install_context_menu()
             config.set_flag("shell_menu_v2", True)
+        with contextlib.suppress(Exception):
+            _refresh_launch_paths()
         return added
     with contextlib.suppress(Exception):
         install_context_menu()
@@ -436,6 +460,24 @@ def ensure_shell_integration(config: Any) -> list[str]:
     config.set_flag("shell_integration_done", True)
     config.set_flag("shell_menu_v2", True)
     return added
+
+
+def _refresh_launch_paths() -> None:
+    """A newer download may live elsewhere: point existing entries at this executable."""
+    import winreg
+
+    line = subprocess.list2cmdline([*launch_command(), "--send"]) + ' "%1"'
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, _MENU_KEYS[0] + r"\command") as key:
+            current = winreg.QueryValueEx(key, "")[0]
+    except OSError:
+        current = None
+    if current is not None and current != line:
+        install_context_menu()
+        if is_send_to_installed():
+            install_send_to()
+    if is_autostart_enabled():
+        set_autostart(True)
 
 
 def _legacy_menu_installed() -> bool:

@@ -151,7 +151,7 @@ def test_reveal_on_windows_uses_explorer_never_shell_default(tmp_path: Path) -> 
         reveal_in_folder(target)
         reveal_in_folder(tmp_path)
     startfile.assert_not_called()
-    assert launch.call_args_list[0].args[0] == ["explorer.exe", f"/select,{target.resolve()}"]
+    assert launch.call_args_list[0].args[0] == f'explorer.exe /select,"{target.resolve()}"'
     assert launch.call_args_list[1].args[0] == ["explorer.exe", str(tmp_path.resolve())]
 
 
