@@ -17,13 +17,18 @@ public final class ClipboardSendActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (getIntent().getBooleanExtra(EXTRA_AUTO, false) && ShareService.get() == null
+                && new AppIdentity(this).flag("stopped_by_user", false)) {
+            finish();  // The user switched sharing off: a copy must not switch it back on.
+            return;
+        }
         ShareService.start(this);
     }
 
     @Override
     public void onWindowFocusChanged(boolean hasFocus) {
         super.onWindowFocusChanged(hasFocus);
-        if (!hasFocus || done) {
+        if (!hasFocus || done || isFinishing()) {
             return;
         }
         done = true;
