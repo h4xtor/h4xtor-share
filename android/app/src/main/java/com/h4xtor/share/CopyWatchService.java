@@ -17,7 +17,9 @@ import java.util.Locale;
  * focused app read the clipboard, so this accessibility service watches for a
  * tap on "Kopiér"/"Copy" in any app and then briefly opens the invisible
  * {@link ClipboardSendActivity}, which reads the clipboard and syncs it.
- * It reads no screen content; only the tapped button's label.
+ * It reads no screen content; only the tapped button's label. Window access is
+ * declared only because Android otherwise drops clicks from popups, and the
+ * text toolbar holding "Copy" is a popup window of its own.
  */
 public final class CopyWatchService extends AccessibilityService {
     private final Handler main = new Handler(Looper.getMainLooper());
