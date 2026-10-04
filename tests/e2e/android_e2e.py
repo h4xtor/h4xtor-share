@@ -254,24 +254,27 @@ def main() -> None:
     shell("am start -W -a android.intent.action.INSERT -t vnd.android.cursor.dir/contact "
           f"-e name {word}")
     time.sleep(4)
-    field = None
-    for _ in range(10):
-        field = next((n for n in ui_nodes() if (n.get("text") or "") == word), None)
-        if field is not None:
-            break
-        time.sleep(1)
+    def field_box() -> tuple[int, int, int, int]:
+        for _ in range(10):
+            node = next((n for n in ui_nodes() if (n.get("text") or "") == word), None)
+            if node is not None:
+                return tuple(map(int, re.findall(r"\d+", node.get("bounds"))))
+            time.sleep(1)
+        raise AssertionError("contact editor with the test text is not on screen")
+
     shot("14-copy-other-app")
-    assert field is not None, "contact editor with the test text did not open"
-    x1, y1, x2, y2 = map(int, re.findall(r"\d+", field.get("bounds")))
+    x1, y1, x2, y2 = field_box()
     desktop.events.clear()
     shell(f"input swipe {(x1 + x2) // 2} {(y1 + y2) // 2} {(x1 + x2) // 2} {(y1 + y2) // 2} 900")
-    time.sleep(1.5)
+    time.sleep(3)  # the keyboard may slide in and move the form
     shot("15-long-press")
     # The text toolbar is a popup that `uiautomator dump` cannot see, so tap it by position
-    # (pixel_7 profile): it floats 40 px above the field, centred on the cursor/selection.
+    # (pixel_7 profile): it floats 40 px above the field. Re-measure: the form can move.
+    x1, y1, _, _ = field_box()
     shell(f"input tap {x1 + 248} {y1 - 40}")  # "Select all"
-    time.sleep(1.5)
+    time.sleep(3)
     shot("16-selected")
+    x1, y1, _, _ = field_box()
     shell(f"input tap {x1 + 381} {y1 - 40}")  # "Copy" (Translate | Cut | Copy | Paste | ⋮)
     time.sleep(1.5)
     shot("17-copied")
