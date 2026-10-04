@@ -26,7 +26,7 @@ def make_executable(path: Path) -> None:
         path.chmod(path.stat().st_mode | 0o111)
 
 
-def _start_detached(command: list[str]) -> None:
+def _start_detached(command: list[str] | str) -> None:
     flags = 0
     if _IS_WINDOWS:
         flags = subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
@@ -82,7 +82,8 @@ def reveal_in_folder(path: str | Path) -> None:
         if resolved.is_dir():
             _start_detached(["explorer.exe", str(resolved)])
         else:
-            _start_detached(["explorer.exe", f"/select,{resolved}"])
+            # One string: Explorer misreads a quoted "/select,C:\a b\c" as a whole.
+            _start_detached(f'explorer.exe /select,"{resolved}"')
     elif _IS_MACOS:
         if resolved.is_dir():
             _start_detached(["open", str(resolved)])

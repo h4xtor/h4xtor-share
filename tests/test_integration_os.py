@@ -30,6 +30,27 @@ def test_second_launch_hands_files_to_running_instance(tmp_path: Path) -> None:
     assert not integration.send_to_running_instance(tmp_path, port, {"cmd": "show"})
 
 
+def test_launches_during_startup_are_held_until_the_app_is_ready(tmp_path: Path) -> None:
+    """Explorer starts one process per selected file; the first claims the port early."""
+    port = free_port()
+    server = integration.InstanceServer(tmp_path, port)
+    assert server.start()
+    try:
+        first = {"cmd": "send", "paths": ["a.txt"]}
+        assert integration.send_to_running_instance(tmp_path, port, first)
+        time.sleep(0.3)
+        received: list[dict] = []
+        server.set_handler(received.append)
+        second = {"cmd": "send", "paths": ["b.txt"]}
+        assert integration.send_to_running_instance(tmp_path, port, second)
+        deadline = time.monotonic() + 3
+        while len(received) < 2 and time.monotonic() < deadline:
+            time.sleep(0.05)
+        assert [m["paths"] for m in received] == [["a.txt"], ["b.txt"]]
+    finally:
+        server.stop()
+
+
 def test_wrong_token_is_ignored(tmp_path: Path) -> None:
     received: list[dict] = []
     port = free_port()

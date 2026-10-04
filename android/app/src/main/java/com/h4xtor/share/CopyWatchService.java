@@ -72,7 +72,8 @@ public final class CopyWatchService extends AccessibilityService {
     static boolean isEnabled(Context context) {
         String enabled = Settings.Secure.getString(context.getContentResolver(),
                 Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
-        String me = new ComponentName(context, CopyWatchService.class).flattenToString();
-        return enabled != null && enabled.contains(me);
+        ComponentName me = new ComponentName(context, CopyWatchService.class);
+        return enabled != null && (enabled.contains(me.flattenToString())
+                || enabled.contains(me.flattenToShortString()));
     }
 }

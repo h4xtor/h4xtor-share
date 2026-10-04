@@ -514,8 +514,12 @@ class H4xtorShareApp(TkinterDnD.Tk):
         start_minimized: bool = False,
         initial_send: list[Path] | None = None,
         enable_tray: bool = True,
+        instance: integration.InstanceServer | None = None,
     ) -> None:
         super().__init__()
+        if getattr(sys, "frozen", False) and platform.system() == "Windows":
+            with contextlib.suppress(tk.TclError):  # the exe's own icon, not Tk's feather
+                self.iconbitmap(default=sys.executable)
         self.config_store = Config()
         dark = self._wants_dark()
         self.theme = Theme(self, dark)
@@ -548,12 +552,15 @@ class H4xtorShareApp(TkinterDnD.Tk):
             status_callback=lambda text: self.event_queue.put(("status", text)),
         )
         self.udp_discovery.extra_targets = self._known_addresses
-        self.instance = integration.InstanceServer(
-            self.config_store.path.parent,
-            self.config_store.port + integration.INSTANCE_PORT_OFFSET,
-            lambda message: self.event_queue.put(("ipc", message)),
-        )
-        self.instance.start()
+        if instance is None:
+            instance = integration.InstanceServer(
+                self.config_store.path.parent,
+                self.config_store.port + integration.INSTANCE_PORT_OFFSET,
+            )
+            instance.start()
+        # main() may have started the listener early; launches held meanwhile replay now.
+        instance.set_handler(lambda message: self.event_queue.put(("ipc", message)))
+        self.instance = instance
         self.local_api = LocalApi(
             self.config_store,
             self.config_store.port + LOCAL_API_PORT_OFFSET,
@@ -3565,13 +3572,23 @@ def main(argv: list[str] | None = None) -> None:
         if send_paths
         else {"cmd": "show"}
     )
-    if integration.send_to_running_instance(
-        config.path.parent, config.port + integration.INSTANCE_PORT_OFFSET, message
-    ):
+    port = config.port + integration.INSTANCE_PORT_OFFSET
+    if integration.send_to_running_instance(config.path.parent, port, message):
         return
+    # Claim the single-instance port before building the window: Explorer starts one
+    # process per selected file, and only the first may become the app.
+    instance: integration.InstanceServer | None = integration.InstanceServer(
+        config.path.parent, port
+    )
+    if not instance.start():
+        for _ in range(30):  # another launch is starting up: hand our files to it
+            time.sleep(0.5)
+            if integration.send_to_running_instance(config.path.parent, port, message):
+                return
+        instance = None  # the port belongs to something else: run without the handoff
 
     _enable_high_dpi()
-    app = H4xtorShareApp(start_minimized=minimized, initial_send=send_paths)
+    app = H4xtorShareApp(start_minimized=minimized, initial_send=send_paths, instance=instance)
     app.mainloop()
 
 

@@ -165,6 +165,9 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     private PowerManager.WakeLock wakeLock;
     private WifiManager.WifiLock wifiLock;
     private String clipboardObserved = "";
+    /** Copied while no PC was online: sent as soon as one shows up (for a short while). */
+    private String pendingCopy;
+    private long pendingCopyUntil = 0L;
     private String clipboardSuppress = "";
     private long clipboardSuppressUntil = 0L;
     private boolean foregroundUi = false;
@@ -240,6 +243,9 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         startForegroundCompat();
+        if (intent != null) {
+            identity.setFlag("stopped_by_user", ACTION_STOP.equals(intent.getAction()));
+        }
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             for (UiListener listener : listeners) {
                 listener.onStopped();
@@ -473,6 +479,11 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     }
 
     private final Runnable notifyChanged = () -> {
+        if (pendingCopy != null) {
+            if (SystemClock.elapsedRealtime() > pendingCopyUntil || sendClipboardToOnline(pendingCopy) > 0) {
+                pendingCopy = null;
+            }
+        }
         for (UiListener listener : listeners) {
             listener.onStateChanged();
         }
@@ -1437,6 +1448,15 @@ public final class ShareService extends Service implements H4xtorServer.Listener
             return 0;
         }
         identity.setFlag("clipboard_seen", true);
+        int count = sendClipboardToOnline(text);
+        if (count == 0 && justCopied) {
+            pendingCopy = text;
+            pendingCopyUntil = SystemClock.elapsedRealtime() + 120_000;
+        }
+        return count;
+    }
+
+    private int sendClipboardToOnline(String text) {
         int count = 0;
         for (Peer peer : pairedPeers()) {
             if (isOnline(peer.deviceId)) {
