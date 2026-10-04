@@ -100,12 +100,14 @@ def tap_text(pattern: str, timeout: float = 15) -> None:
 
 
 def scroll_to(pattern: str, swipes: int = 10) -> bool:
+    """Scroll down to find *pattern*; if it is not below, scroll back up."""
     regex = re.compile(pattern)
-    for _ in range(swipes):
-        if any(regex.search(n.get("text") or "") for n in ui_nodes()):
-            return True
-        shell("input swipe 540 1700 540 700 400")
-        time.sleep(0.8)
+    for direction in ("540 1700 540 700", "540 700 540 1700"):
+        for _ in range(swipes):
+            if any(regex.search(n.get("text") or "") for n in ui_nodes()):
+                return True
+            shell(f"input swipe {direction} 400")
+            time.sleep(0.8)
     return False
 
 
