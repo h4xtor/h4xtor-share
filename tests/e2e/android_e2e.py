@@ -265,10 +265,16 @@ def main() -> None:
     x1, y1, x2, y2 = map(int, re.findall(r"\d+", field.get("bounds")))
     desktop.events.clear()
     shell(f"input swipe {(x1 + x2) // 2} {(y1 + y2) // 2} {(x1 + x2) // 2} {(y1 + y2) // 2} 900")
-    # A long-press may only place the cursor (Paste / Select all): select the text first.
-    if not any(re.search("^(Copy|Kopiér)$", n.get("text") or "") for n in ui_nodes()):
-        tap_text("^(Select all|Vælg alle)$")
-    tap_text("^(Copy|Kopiér)$")
+    time.sleep(1.5)
+    shot("15-long-press")
+    # The text toolbar is a popup that `uiautomator dump` cannot see, so tap it by position
+    # (pixel_7 profile): it floats 40 px above the field, centred on the cursor/selection.
+    shell(f"input tap {x1 + 248} {y1 - 40}")  # "Select all"
+    time.sleep(1.5)
+    shot("16-selected")
+    shell(f"input tap {x1 + 83} {y1 - 40}")  # "Copy" (Cut | Copy | Paste | ⋮)
+    time.sleep(1.5)
+    shot("17-copied")
     desktop.wait_for(ClipboardReceived, timeout=20, match=lambda event: event.text == word)
     ok("tap 'Copy' in another app -> text on the PC instantly (app in background)")
     shell("input keyevent BACK", check=False)
