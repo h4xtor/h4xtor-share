@@ -26,6 +26,7 @@ public final class ShareTargetActivity extends Activity {
     private final List<Uri> uris = new ArrayList<>();
     private String text;
     private LinearLayout list;
+    private View chooseLabel;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -129,7 +130,8 @@ public final class ShareTargetActivity extends Activity {
             preview.addView(value, valueParams);
             sheet.addView(preview, ui.margins(0, 0, 0, 16));
         }
-        sheet.addView(ui.label("Vælg enhed"), ui.margins(2, 0, 0, 8));
+        chooseLabel = ui.label("Vælg enhed");
+        sheet.addView(chooseLabel, ui.margins(2, 0, 0, 8));
 
         ScrollView scroll = new ScrollView(this);
         list = ui.column();
@@ -206,6 +208,9 @@ public final class ShareTargetActivity extends Activity {
     /** Stay open and show how far the upload has come (bar, %, speed, time left). */
     private void showProgress(ShareService service, Peer peer, List<String> ids) {
         list.removeAllViews();
+        if (chooseLabel != null) {
+            chooseLabel.setVisibility(View.GONE);
+        }
         LinearLayout box = ui.column();
         TextView title = ui.text("Sender til " + peer.name, 15f, ui.text, true);
         box.addView(title);
