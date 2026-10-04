@@ -272,7 +272,7 @@ def main() -> None:
     shell(f"input tap {x1 + 248} {y1 - 40}")  # "Select all"
     time.sleep(1.5)
     shot("16-selected")
-    shell(f"input tap {x1 + 83} {y1 - 40}")  # "Copy" (Cut | Copy | Paste | ⋮)
+    shell(f"input tap {x1 + 381} {y1 - 40}")  # "Copy" (Translate | Cut | Copy | Paste | ⋮)
     time.sleep(1.5)
     shot("17-copied")
     desktop.wait_for(ClipboardReceived, timeout=20, match=lambda event: event.text == word)
