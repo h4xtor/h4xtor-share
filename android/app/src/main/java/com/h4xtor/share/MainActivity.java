@@ -1014,7 +1014,8 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             retry.setOnClickListener(v -> service.retry(item.id));
             actions.addView(retry);
         }
-        if ("done".equals(item.status) && !item.outgoing) {
+        boolean canOpenSent = item.outgoing && !item.folder && !item.uri.isEmpty();
+        if ("done".equals(item.status) && (!item.outgoing || canOpenSent)) {
             TextView open = ui.button(item.folder ? "Vis i Filer" : "Åbn", "soft");
             open.setMinHeight(ui.dp(36));
             open.setOnClickListener(v -> {

@@ -301,6 +301,10 @@ def main() -> None:
     shot("03-home")
     tap_text("^Overførsler$")
     shot("04-transfers")
+    time.sleep(1)
+    opens = [n for n in ui_nodes() if (n.get("text") or "") == "Åbn"]
+    assert len(opens) >= 2, f"sent files need an Åbn button too (found {len(opens)})"
+    ok("Åbn on both received and sent files in Overførsler")
     tap_text("^Historik$")
     shot("05-history")
     tap_text("^Indstillinger$")

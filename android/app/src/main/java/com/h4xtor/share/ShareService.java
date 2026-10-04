@@ -961,9 +961,10 @@ public final class ShareService extends Service implements H4xtorServer.Listener
             H4xtorClient.SourceInfo info = client.describe(uri);
             TransferItem item = newTransfer(info.name, false, peer);
             item.total = Math.max(0, info.size);
+            item.uri = uri.toString(); // the phone's own copy: lets "Åbn" open what was sent
             runTransfer(item, current -> {
                 client.sendFile(peer, uri, (name, sent, total) -> progress(current, sent, total), current.cancel);
-                recordSent(peer, "file", info.name, info.size);
+                recordSent(peer, "file", info.name, info.size, uri.toString());
             });
         }
     }
@@ -1029,11 +1030,16 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     }
 
     private void recordSent(Peer peer, String kind, String text, long size) {
+        recordSent(peer, kind, text, size, "");
+    }
+
+    private void recordSent(Peer peer, String kind, String text, long size, String uri) {
         try {
             identity.appendHistory("sent", new JSONObject()
                     .put("kind", kind)
                     .put("text", text.length() > 1000 ? text.substring(0, 1000) : text)
                     .put("size", size)
+                    .put("uri", uri)
                     .put("peer", peer.name)
                     .put("ts", AppIdentity.timestamp()));
         } catch (Exception ignored) {

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "h4xtor-share"
-version = "1.1.1"
+version = "1.1.2"
 description = "Offline-first cross-platform clipboard and file sharing over local peer-to-peer links."
 readme = "README.md"
 requires-python = ">=3.11"
