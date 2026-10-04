@@ -119,7 +119,8 @@ async function sendText() {
   if (!value) return;
   const isLink = /^https?:\/\/\S+$/i.test(value);
   await sendValue(isLink ? "link" : "text", value, isLink ? "Linket" : "Teksten");
-  $("text").value = "";
+  // Only clear what was sent; the user may already have typed the next thing.
+  if ($("text").value.trim() === value) $("text").value = "";
 }
 $("send-text").addEventListener("click", sendText);
 $("text").addEventListener("keydown", (event) => {

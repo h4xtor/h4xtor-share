@@ -29,7 +29,9 @@ public final class ClipboardSendActivity extends Activity {
         done = true;
         ShareService.with(this, service -> {
             if (getIntent().getBooleanExtra(EXTRA_AUTO, false)) {
-                if (service.syncCopiedText() > 0) {
+                int sent = service.syncCopiedText();
+                android.util.Log.i("h4xtor", "copied text synced to " + sent + " device(s)");
+                if (sent > 0) {
                     Toast.makeText(this, "Kopieret til PC ✓", Toast.LENGTH_SHORT).show();
                 }
                 finish();

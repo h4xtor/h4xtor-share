@@ -33,11 +33,15 @@ public final class CopyWatchService extends AccessibilityService {
         if (label == null && !event.getText().isEmpty()) {
             label = event.getText().get(0);
         }
+        if (android.util.Log.isLoggable("h4xtor", android.util.Log.DEBUG)) {  // adb: setprop log.tag.h4xtor DEBUG
+            android.util.Log.d("h4xtor", "click in " + event.getPackageName() + ": " + label);
+        }
         long now = SystemClock.elapsedRealtime();
         if (!isCopyLabel(label) || now - lastTrigger < 1000) {
             return;
         }
         lastTrigger = now;
+        android.util.Log.i("h4xtor", "copy tapped in " + event.getPackageName());
         // Give the app a moment to actually put the text on the clipboard.
         main.postDelayed(() -> startActivity(new Intent(this, ClipboardSendActivity.class)
                 .putExtra(ClipboardSendActivity.EXTRA_AUTO, true)

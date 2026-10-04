@@ -247,6 +247,7 @@ def main() -> None:
     service = f"{PKG}/{PKG}.CopyWatchService"
     shell(f"settings put secure enabled_accessibility_services {service}")
     shell("settings put secure accessibility_enabled 1")
+    shell("setprop log.tag.h4xtor DEBUG", check=False)  # log every click the watcher sees
     time.sleep(3)
     bound = shell("dumpsys accessibility", check=False)
     assert "CopyWatchService" in bound, "copy watcher not bound"
@@ -426,5 +427,12 @@ if __name__ == "__main__":
             args = ["adb", "logcat", "-d", "-t", "3000"] + ([f"--pid={pid}"] if pid else ["*:E"])
             with open(SHOTS / "logcat.txt", "w", encoding="utf-8") as log:
                 subprocess.run(args, stdout=log, timeout=30, check=False)
+            # The watcher's own lines and the system's view of activity starts (background
+            # activity launch blocks, clipboard denials) live outside the app's pid.
+            with open(SHOTS / "logcat-system.txt", "w", encoding="utf-8") as log:
+                subprocess.run(["adb", "logcat", "-d", "-t", "5000", "-s", "h4xtor:V",
+                                "ActivityTaskManager:V", "ClipboardService:V",
+                                "BackgroundActivityStartController:V"],
+                               stdout=log, timeout=30, check=False)
         except Exception:  # noqa: BLE001
             pass
