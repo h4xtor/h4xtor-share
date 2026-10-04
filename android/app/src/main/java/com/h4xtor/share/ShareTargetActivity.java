@@ -199,6 +199,108 @@ public final class ShareTargetActivity extends Activity {
         }
     }
 
+    // ---------------------------------------------------------- live progress
+    private final android.os.Handler ticker = new android.os.Handler(android.os.Looper.getMainLooper());
+    private boolean closing;
+
+    /** Stay open and show how far the upload has come (bar, %, speed, time left). */
+    private void showProgress(ShareService service, Peer peer, List<String> ids) {
+        list.removeAllViews();
+        LinearLayout box = ui.column();
+        TextView title = ui.text("Sender til " + peer.name, 15f, ui.text, true);
+        box.addView(title);
+        LinearLayout numbers = ui.row();
+        TextView percent = ui.text("0%", 34f, ui.text, true);
+        percent.setFontFeatureSettings("tnum");
+        numbers.addView(percent, ui.weight(1));
+        TextView speed = ui.text("", 15f, ui.accent, true);
+        speed.setFontFeatureSettings("tnum");
+        numbers.addView(speed);
+        box.addView(numbers, ui.margins(0, 6, 0, 0));
+        android.widget.ProgressBar bar = ui.progress();
+        box.addView(bar, ui.margins(0, 6, 0, 0));
+        TextView detail = ui.text("", 12.5f, ui.muted, false);
+        detail.setFontFeatureSettings("tnum");
+        box.addView(detail, ui.margins(0, 6, 0, 0));
+        SpeedGraph graph = new SpeedGraph(this, ui.accent, ui.border);
+        box.addView(graph, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ui.dp(56)));
+        TextView background = ui.button("Fortsæt i baggrunden", "secondary");
+        background.setOnClickListener(v -> finish());
+        box.addView(background, ui.margins(0, 14, 0, 0));
+        list.addView(box);
+
+        Runnable tick = new Runnable() {
+            @Override
+            public void run() {
+                if (isFinishing()) {
+                    return;
+                }
+                long sent = 0;
+                long total = 0;
+                double rate = 0;
+                int done = 0;
+                int failed = 0;
+                double seconds = 0;
+                ShareService.TransferItem lead = null;
+                for (String id : ids) {
+                    ShareService.TransferItem item = service.transfer(id);
+                    if (item == null) {
+                        continue;
+                    }
+                    sent += Math.min(item.sent, item.total);
+                    total += item.total;
+                    if ("active".equals(item.status)) {
+                        rate += item.speed;
+                        if (lead == null) {
+                            lead = item;
+                        }
+                    }
+                    if ("done".equals(item.status)) {
+                        done++;
+                        seconds = Math.max(seconds, item.seconds());
+                    }
+                    if ("failed".equals(item.status) || "cancelled".equals(item.status)) {
+                        failed++;
+                        detail.setText(item.error == null || item.error.isEmpty() ? "Afbrudt" : item.error);
+                    }
+                }
+                double fraction = total <= 0 ? 0 : (double) sent / total;
+                percent.setText(Math.round(fraction * 100) + "%");
+                bar.setProgress((int) Math.round(fraction * 1000));
+                if (lead != null) {
+                    graph.setSamples(lead.samples());
+                }
+                if (failed > 0 && done + failed == ids.size()) {
+                    title.setText("Kunne ikke sende alt til " + peer.name);
+                    title.setTextColor(ui.danger);
+                    background.setText("Luk – prøv igen fra Overførsler");
+                    return;
+                }
+                if (done == ids.size() && !closing) {
+                    closing = true;
+                    title.setText("✓ Sendt til " + peer.name);
+                    speed.setText(Ui.formatSpeed(total / Math.max(0.001, seconds)) + " gns.");
+                    detail.setText(Ui.formatBytes(total) + " på " + Ui.formatDuration(seconds));
+                    ticker.postDelayed(ShareTargetActivity.this::finish, 1400);
+                    return;
+                }
+                speed.setText(rate > 0 ? Ui.formatSpeed(rate) : "");
+                String eta = rate > 0 ? Ui.formatEta((total - sent) / rate) : "";
+                detail.setText(Ui.formatBytes(sent) + " af " + Ui.formatBytes(total)
+                        + (ids.size() > 1 ? " · " + done + "/" + ids.size() + " filer" : "")
+                        + (eta.isEmpty() ? "" : " · " + eta));
+                ticker.postDelayed(this, 250);
+            }
+        };
+        ticker.post(tick);
+    }
+
+    @Override
+    protected void onDestroy() {
+        ticker.removeCallbacksAndMessages(null);
+        super.onDestroy();
+    }
+
     private void send(ShareService service, Peer peer) {
         if (!uris.isEmpty()) {
             // Hand the read grant to the service: it outlives this short-lived sheet.
@@ -214,8 +316,9 @@ public final class ShareTargetActivity extends Activity {
             } catch (Exception ignored) {
                 // Service already running in the foreground; grant attempt is best effort.
             }
-            service.sendUris(peer, uris);
-            Toast.makeText(this, "Sender til " + peer.name + " – følg med i notifikationen", Toast.LENGTH_SHORT).show();
+            List<String> ids = service.sendUris(peer, uris);
+            showProgress(service, peer, ids);
+            return;
         } else {
             service.sendText(peer, text);
             Toast.makeText(this, (Ui.isLink(text) ? "Link sendt – åbner på " : "Sendt til ") + peer.name,

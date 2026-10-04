@@ -230,6 +230,26 @@ class PeerClient:
             return
         await self._authed_post(peer, "/api/v1/link", {"url": url})
 
+    async def speed_test(self, peer: Peer, size: int = 16 * 1024 * 1024) -> float:
+        """Upload *size* throw-away bytes; returns the measured bytes per second."""
+        headers, ssl_value = self.auth(peer)
+        chunk = bytes(256 * 1024)
+
+        async def body():  # type: ignore[no-untyped-def]
+            left = size
+            while left > 0:
+                piece = chunk[: min(len(chunk), left)]
+                left -= len(piece)
+                yield piece
+
+        timeout = aiohttp.ClientTimeout(total=120)
+        async with aiohttp.ClientSession(timeout=timeout) as session, session.post(
+            f"{peer.endpoint}/api/v1/speedtest", data=body(), headers=headers, ssl=ssl_value
+        ) as response:
+            await _raise_for_status(response)
+            payload = await response.json()
+        return float(payload.get("bytes_per_second") or 0.0)
+
     async def send_wifi_direct_offer(
         self, peer: Peer, ssid: str, passphrase: str, owner_address: str, port: int
     ) -> None:

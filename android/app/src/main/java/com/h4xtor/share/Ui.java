@@ -373,6 +373,25 @@ public final class Ui {
                 : String.format(Locale.ROOT, "%.1f %s", size, units[unit]);
     }
 
+    public static String formatSpeed(double bytesPerSecond) {
+        return formatBytes((long) Math.max(0, bytesPerSecond)) + "/s";
+    }
+
+    /** Network-style speed, e.g. "146 Mbit/s". */
+    public static String formatMbit(double bytesPerSecond) {
+        double mbit = bytesPerSecond * 8 / 1_000_000.0;
+        return (mbit >= 100 ? String.format(Locale.ROOT, "%.0f", mbit)
+                : String.format(Locale.ROOT, "%.1f", mbit)).replace('.', ',') + " Mbit/s";
+    }
+
+    public static String formatDuration(double seconds) {
+        if (seconds < 10) {
+            return String.format(Locale.ROOT, "%.1f s", seconds).replace('.', ',');
+        }
+        long total = Math.round(seconds);
+        return total < 60 ? total + " s" : (total / 60) + " min " + (total % 60) + " s";
+    }
+
     public static String formatEta(double seconds) {
         if (seconds < 1 || seconds > 172_800) {
             return "";

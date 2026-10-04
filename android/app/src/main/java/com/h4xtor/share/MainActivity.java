@@ -42,6 +42,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private static final int REQUEST_FILES = 2002;
     private static final int REQUEST_TREE = 2003;
     private static final int REQUEST_WIFI_PERMISSION = 2004;
+    private static final int REQUEST_MEDIA_PERMISSION = 2005;
 
     private static final String PAGE_DEVICES = "devices";
     private static final String PAGE_TRANSFERS = "transfers";
@@ -202,6 +203,16 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                 toast("Wi-Fi Direct kræver tilladelse til enheder i nærheden", true);
             }
         }
+        if (requestCode == REQUEST_MEDIA_PERMISSION && service != null) {
+            boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            if (granted) {
+                service.setAutoScreenshots(true);
+                toast("Nye skærmbilleder sendes automatisk", false);
+            } else {
+                toast("Kræver adgang til billeder – kun for at finde nye skærmbilleder", true);
+            }
+            render();
+        }
     }
 
     // ------------------------------------------------------------------- shell
@@ -320,6 +331,11 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         if (service == null) {
             return;
         }
+        if (service.identity().flag("keep_screen_on", true) && service.activeTransfers() > 0) {
+            getWindow().addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        } else {
+            getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        }
         renderNav();
         content.removeAllViews();
         switch (page) {
@@ -388,6 +404,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         content.addView(topBar(), ui.matchWrap());
         Peer target = selectedPeer();
         content.addView(greeting(target), ui.margins(2, 22, 0, 18));
+        View live = liveTransfersCard();
+        if (live != null) {
+            content.addView(live, ui.margins(0, 0, 0, 12));
+        }
         if (target != null) {
             content.addView(composer(target), ui.margins(0, 0, 0, 12));
             View suggestion = clipboardSuggestion(target);
@@ -445,6 +465,61 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         }
 
         content.addView(wifiDirectCard(), ui.margins(0, 20, 0, 0));
+    }
+
+    /** "Overfører nu" with live progress, right on the home screen. */
+    private View liveTransfersCard() {
+        List<ShareService.TransferItem> active = new ArrayList<>();
+        for (ShareService.TransferItem item : service.transfers()) {
+            if ("active".equals(item.status)) {
+                active.add(item);
+            }
+        }
+        if (active.isEmpty()) {
+            return null;
+        }
+        LinearLayout card = ui.card();
+        card.setBackground(ui.ripple(ui.rounded(ui.surface, ui.accent, 20), 20));
+        card.setClickable(true);
+        card.setOnClickListener(v -> {
+            page = PAGE_TRANSFERS;
+            render();
+        });
+        LinearLayout head = ui.row();
+        head.addView(ui.label("Overfører nu · " + active.size()), ui.weight(1));
+        double total = 0;
+        for (ShareService.TransferItem item : active) {
+            total += item.speed;
+        }
+        TextView speed = ui.text(Ui.formatSpeed(total), 13f, ui.accent, true);
+        speed.setFontFeatureSettings("tnum");
+        head.addView(speed);
+        card.addView(head);
+        for (int index = 0; index < Math.min(3, active.size()); index++) {
+            ShareService.TransferItem item = active.get(index);
+            LinearLayout line = ui.row();
+            TextView name = ui.text((item.outgoing ? "↑ " : "↓ ") + item.name, 14f, ui.text, true);
+            name.setSingleLine(true);
+            name.setEllipsize(TextUtils.TruncateAt.MIDDLE);
+            line.addView(name, ui.weight(1));
+            TextView pct = ui.text(Math.round(item.fraction() * 100) + "%", 14f, ui.text, true);
+            pct.setFontFeatureSettings("tnum");
+            line.addView(pct, ui.wrap(8, 0, 0, 0));
+            card.addView(line, ui.margins(0, 10, 0, 0));
+            ProgressBar bar = ui.progress();
+            bar.setProgress((int) Math.round(item.fraction() * 1000));
+            card.addView(bar, ui.margins(0, 6, 0, 0));
+            String eta = item.speed > 0 ? Ui.formatEta((item.total - item.sent) / item.speed) : "";
+            TextView sub = ui.text(Ui.formatBytes(item.sent) + " af " + Ui.formatBytes(item.total)
+                    + (item.speed > 0 ? " · " + Ui.formatSpeed(item.speed) : "")
+                    + (eta.isEmpty() ? "" : " · " + eta), 12f, ui.muted, false);
+            sub.setFontFeatureSettings("tnum");
+            card.addView(sub, ui.margins(0, 4, 0, 0));
+        }
+        SpeedGraph graph = new SpeedGraph(this, ui.accent, ui.border);
+        graph.setSamples(active.get(0).samples());
+        card.addView(graph, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ui.dp(44)));
+        return card;
     }
 
     private View topBar() {
@@ -953,6 +1028,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
 
     private View transferCard(ShareService.TransferItem item) {
         LinearLayout card = ui.card();
+        boolean active = "active".equals(item.status);
         LinearLayout row = ui.row();
         row.addView(ui.iconBadge(item.folder ? R.drawable.ic_folder : R.drawable.ic_file, 40,
                 item.outgoing ? ui.accentSoft : ui.successSoft, item.outgoing ? ui.accent : ui.success));
@@ -965,7 +1041,9 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         String detail;
         switch (item.status) {
             case "done":
-                detail = direction + " · Færdig · " + Ui.formatBytes(item.total);
+                detail = direction + " · Færdig · " + Ui.formatBytes(item.total)
+                        + (item.total > 0 && item.finishedAt > 0
+                        ? " på " + Ui.formatDuration(item.seconds()) : "");
                 break;
             case "cancelled":
                 detail = direction + " · Annulleret";
@@ -975,30 +1053,52 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                         + (item.error == null || item.error.isEmpty() ? "" : ": " + item.error);
                 break;
             default:
-                detail = direction + " · " + Math.round(item.fraction() * 100) + "% · "
-                        + Ui.formatBytes(item.sent) + " af " + Ui.formatBytes(item.total);
-                if (item.speed > 0) {
-                    detail += " · " + Ui.formatBytes((long) item.speed) + "/s";
-                    String eta = Ui.formatEta((item.total - item.sent) / item.speed);
-                    if (!eta.isEmpty()) {
-                        detail += " · " + eta;
-                    }
-                }
+                detail = direction + " · " + Ui.formatBytes(item.sent) + " af " + Ui.formatBytes(item.total);
         }
         TextView meta = ui.text(detail, 12.5f, "failed".equals(item.status) ? ui.danger : ui.muted, false);
         texts.addView(meta, ui.margins(0, 2, 0, 0));
         LinearLayout.LayoutParams params = ui.weight(1);
-        params.setMargins(ui.dp(14), 0, 0, 0);
+        params.setMargins(ui.dp(14), 0, ui.dp(6), 0);
         row.addView(texts, params);
+        if (active) {
+            TextView percent = ui.text(Math.round(item.fraction() * 100) + "%", 22f, ui.text, true);
+            percent.setTypeface(android.graphics.Typeface.create("sans-serif-medium",
+                    android.graphics.Typeface.NORMAL));
+            percent.setFontFeatureSettings("tnum");
+            row.addView(percent);
+        }
         card.addView(row);
-        if ("active".equals(item.status) || "failed".equals(item.status) || "cancelled".equals(item.status)) {
+
+        if (active || "failed".equals(item.status) || "cancelled".equals(item.status)) {
             ProgressBar bar = ui.progress();
             bar.setProgress((int) Math.round(item.fraction() * 1000));
-            if (!"active".equals(item.status)) {
+            if (!active) {
                 bar.setProgressTintList(android.content.res.ColorStateList.valueOf(
                         "failed".equals(item.status) ? ui.danger : ui.faint));
             }
             card.addView(bar, ui.margins(0, 12, 0, 0));
+        }
+        if (active) {
+            LinearLayout stats = ui.row();
+            stats.addView(statChip("Hastighed", item.speed > 0 ? Ui.formatSpeed(item.speed) : "…"), ui.weight(1));
+            String eta = item.speed > 0 ? Ui.formatEta((item.total - item.sent) / item.speed) : "";
+            stats.addView(statChip("Tid tilbage", eta.isEmpty() ? "…" : eta.replace(" tilbage", "")), ui.weight(1));
+            stats.addView(statChip("Top", item.peakSpeed > 0 ? Ui.formatSpeed(item.peakSpeed) : "…"), ui.weight(1));
+            card.addView(stats, ui.margins(0, 10, 0, 0));
+        }
+        float[] samples = item.samples();
+        if (active || ("done".equals(item.status) && samples.length >= 3)) {
+            SpeedGraph graph = new SpeedGraph(this, item.outgoing ? ui.accent : ui.success, ui.border);
+            graph.setSamples(samples);
+            graph.setContentDescription("Hastighedsgraf");
+            card.addView(graph, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                    ui.dp(active ? 54 : 30)));
+            if ("done".equals(item.status)) {
+                TextView summary = ui.text("Gennemsnit " + Ui.formatSpeed(item.averageSpeed()) + " · top "
+                        + Ui.formatSpeed(Math.max(item.peakSpeed, item.averageSpeed())), 11.5f, ui.faint, false);
+                summary.setFontFeatureSettings("tnum");
+                card.addView(summary, ui.margins(0, 4, 0, 0));
+            }
         }
         LinearLayout actions = ui.row();
         actions.setGravity(Gravity.END);
@@ -1031,6 +1131,16 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             card.addView(actions, ui.margins(0, 8, 0, 0));
         }
         return card;
+    }
+
+    private View statChip(String label, String value) {
+        LinearLayout box = ui.column();
+        box.addView(ui.text(label, 11f, ui.faint, false));
+        TextView text = ui.text(value, 14f, ui.text, true);
+        text.setSingleLine(true);
+        text.setFontFeatureSettings("tnum");
+        box.addView(text);
+        return box;
     }
 
     // ----------------------------------------------------------------- history
@@ -1198,6 +1308,31 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         background.addView(tileHint);
         content.addView(background, ui.margins(0, 0, 0, 18));
 
+        content.addView(ui.label("Smarte tricks"), ui.margins(4, 0, 0, 8));
+        LinearLayout tricks = ui.card();
+        tricks.addView(toggleRow("Send nye skærmbilleder til PC'en",
+                "Tag et skærmbillede – så ligger det på PC'en et øjeblik efter.",
+                identity.flag("auto_screenshots", false), value -> {
+                    if (value && !hasMediaPermission()) {
+                        requestPermissions(ShareService.mediaPermissions(), REQUEST_MEDIA_PERMISSION);
+                        return;
+                    }
+                    service.setAutoScreenshots(value);
+                    toast(value ? "Nye skærmbilleder sendes automatisk" : "Slået fra", false);
+                }));
+        tricks.addView(ui.divider());
+        tricks.addView(toggleRow("Hold skærmen tændt under overførsler",
+                "Store filer bliver ikke afbrudt af, at telefonen går i dvale.",
+                identity.flag("keep_screen_on", true), value -> identity.setFlag("keep_screen_on", value)));
+        tricks.addView(ui.divider());
+        tricks.addView(toggleRow("Vibrér når noget er sendt eller modtaget",
+                "En kort dobbelt-summen, så du ved det er landet.",
+                identity.flag("vibrate_done", true), value -> identity.setFlag("vibrate_done", value)));
+        content.addView(tricks, ui.margins(0, 0, 0, 18));
+
+        content.addView(ui.label("Nørd-panel"), ui.margins(4, 0, 0, 8));
+        content.addView(nerdPanel(), ui.margins(0, 0, 0, 18));
+
         content.addView(ui.label("Forbundne enheder"), ui.margins(4, 0, 0, 8));
         LinearLayout paired = ui.card();
         List<Peer> peers = service.pairedPeers();
@@ -1238,6 +1373,129 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         manual.setOnClickListener(v -> addByIp());
         about.addView(manual, ui.margins(0, 10, 0, 0));
         content.addView(about);
+    }
+
+    private boolean hasMediaPermission() {
+        for (String permission : ShareService.mediaPermissions()) {
+            if (checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private View nerdPanel() {
+        LinearLayout card = ui.card();
+        // Totals
+        LinearLayout grid1 = ui.row();
+        grid1.addView(statChip("Sendt", Ui.formatBytes(service.stat("stat_sent_bytes"))
+                + " · " + service.stat("stat_sent_count")), ui.weight(1));
+        grid1.addView(statChip("Modtaget", Ui.formatBytes(service.stat("stat_received_bytes"))
+                + " · " + service.stat("stat_received_count")), ui.weight(1));
+        card.addView(grid1);
+        long bytes = service.stat("stat_sent_bytes") + service.stat("stat_received_bytes");
+        double seconds = service.stat("stat_seconds_ms") / 1000.0;
+        LinearLayout grid2 = ui.row();
+        grid2.addView(statChip("Gennemsnit", seconds > 0 ? Ui.formatSpeed(bytes / seconds) : "–"), ui.weight(1));
+        long top = service.stat("stat_top_speed");
+        grid2.addView(statChip("Rekord", top > 0 ? Ui.formatSpeed(top) : "–"), ui.weight(1));
+        card.addView(grid2, ui.margins(0, 12, 0, 0));
+
+        // Speed test
+        card.addView(ui.divider(), ui.margins(0, 14, 0, 14));
+        card.addView(ui.text("Hastighedstest", 15f, ui.text, true));
+        TextView result = ui.text("Måler ping og sender 32 MB testdata til PC'en (gemmes ikke).",
+                12.5f, ui.muted, false);
+        result.setFontFeatureSettings("tnum");
+        card.addView(result, ui.margins(0, 2, 0, 8));
+        ProgressBar bar = ui.progress();
+        bar.setVisibility(View.GONE);
+        card.addView(bar, ui.margins(0, 0, 0, 8));
+        SpeedGraph graph = new SpeedGraph(this, ui.accent, ui.border);
+        graph.setVisibility(View.GONE);
+        card.addView(graph, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ui.dp(54)));
+        TextView start = ui.button("Test hastighed til PC", "soft");
+        card.addView(start, ui.margins(0, 8, 0, 0));
+        start.setOnClickListener(v -> {
+            Peer target = service.preferredOnlinePeer();
+            if (target == null) {
+                toast("Ingen PC online lige nu", true);
+                return;
+            }
+            if (!target.supports("speedtest")) {
+                toast(target.name + " skal opdateres til v1.1.2 for at kunne teste", true);
+                return;
+            }
+            start.setEnabled(false);
+            start.setText("Tester mod " + target.name + "…");
+            bar.setVisibility(View.VISIBLE);
+            graph.setVisibility(View.VISIBLE);
+            List<Float> samples = new ArrayList<>();
+            service.speedTest(target, new ShareService.SpeedTestListener() {
+                long lastSample;
+
+                @Override
+                public void onProgress(long sent, long total, double bytesPerSecond) {
+                    bar.setProgress((int) (sent * 1000 / Math.max(1, total)));
+                    result.setText(Ui.formatBytes(sent) + " af " + Ui.formatBytes(total) + " · "
+                            + Ui.formatSpeed(bytesPerSecond));
+                    long now = android.os.SystemClock.elapsedRealtime();
+                    if (now - lastSample > 150) {
+                        lastSample = now;
+                        samples.add((float) bytesPerSecond);
+                        float[] values = new float[samples.size()];
+                        for (int index = 0; index < values.length; index++) {
+                            values[index] = samples.get(index);
+                        }
+                        graph.setSamples(values);
+                    }
+                }
+
+                @Override
+                public void onDone(double upload, long pingMs) {
+                    result.setText("Upload " + Ui.formatSpeed(upload) + " (" + Ui.formatMbit(upload) + ") · ping "
+                            + pingMs + " ms");
+                    result.setTextColor(ui.text);
+                    start.setEnabled(true);
+                    start.setText("Test igen");
+                    bar.setProgress(1000);
+                }
+
+                @Override
+                public void onFailed(String reason) {
+                    result.setText("Testen fejlede: " + reason);
+                    result.setTextColor(ui.danger);
+                    start.setEnabled(true);
+                    start.setText("Prøv igen");
+                }
+            });
+        });
+
+        // Connection details
+        card.addView(ui.divider(), ui.margins(0, 14, 0, 14));
+        card.addView(ui.text("Forbindelse", 15f, ui.text, true));
+        StringBuilder info = new StringBuilder();
+        List<String> addresses = service.localAddresses();
+        info.append("Telefonens IP: ").append(addresses.isEmpty() ? "–" : TextUtils.join(", ", addresses));
+        info.append("\nPort: ").append(AppIdentity.PORT).append(" · TLS 1.3 · certifikat-låst");
+        for (Peer peer : service.pairedPeers()) {
+            long rtt = service.rtt(peer.deviceId);
+            info.append("\n").append(peer.name).append(": ").append(peer.address).append(":").append(peer.port)
+                    .append(" · ").append(service.isOnline(peer.deviceId)
+                            ? (rtt >= 0 ? "ping " + rtt + " ms" : "online") : "offline")
+                    .append("wifi-direct".equals(peer.transport) ? " · Wi-Fi Direct" : "");
+        }
+        TextView infoText = ui.text(info.toString(), 12.5f, ui.muted, false);
+        infoText.setTypeface(android.graphics.Typeface.MONOSPACE);
+        infoText.setTextIsSelectable(true);
+        card.addView(infoText, ui.margins(0, 4, 0, 0));
+        TextView reset = ui.button("Nulstil statistik", "ghost");
+        reset.setOnClickListener(v -> {
+            service.resetStats();
+            render();
+        });
+        card.addView(reset, ui.margins(0, 10, 0, 0));
+        return card;
     }
 
     private interface Toggled {

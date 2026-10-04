@@ -115,6 +115,9 @@ def is_safe_url(url: str) -> bool:
     return lowered.startswith("http://") or lowered.startswith("https://")
 
 
+SPEEDTEST_LIMIT = 256 * 1024 * 1024
+
+
 class ShareServer:
     def __init__(
         self,
@@ -146,6 +149,7 @@ class ShareServer:
                 web.post("/api/v1/pair/qr", self.pair_qr),
                 web.post("/api/v1/unpair", self.unpair),
                 web.post("/api/v1/link", self.link),
+                web.post("/api/v1/speedtest", self.speedtest),
                 web.post("/api/v1/wifi-direct/offer", self.wifi_direct_offer),
                 web.post("/api/v1/clipboard", self.clipboard),
                 web.post("/api/v1/files/init", self.file_init),
@@ -402,6 +406,20 @@ class ShareServer:
             ClipboardReceived(peer_id=peer_id, peer_name=peer_name, text=text)
         )
         return web.json_response({"accepted": True, "characters": len(text)})
+
+    async def speedtest(self, request: web.Request) -> web.Response:
+        """Swallow up to 256 MB and report how fast it arrived (nothing is stored)."""
+        self.authenticate(request)
+        started = time.monotonic()
+        received = 0
+        async for chunk in request.content.iter_chunked(256 * 1024):
+            received += len(chunk)
+            if received > SPEEDTEST_LIMIT:
+                raise web.HTTPRequestEntityTooLarge(max_size=SPEEDTEST_LIMIT, actual_size=received)
+        elapsed = max(time.monotonic() - started, 1e-6)
+        return web.json_response(
+            {"bytes": received, "seconds": elapsed, "bytes_per_second": received / elapsed}
+        )
 
     async def unpair(self, request: web.Request) -> web.Response:
         peer_id, peer_name = self.authenticate(request)

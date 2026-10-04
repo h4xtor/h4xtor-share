@@ -17,6 +17,7 @@ DESKTOP_CAPABILITIES: tuple[str, ...] = (
     "qr-pair",
     "wifi-direct-join",
     "unpair",
+    "speedtest",
 )
 
 

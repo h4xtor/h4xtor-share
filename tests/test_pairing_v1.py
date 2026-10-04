@@ -193,3 +193,14 @@ async def test_ping_rejects_a_different_device_on_the_same_address(nodes) -> Non
     impostor = replace(peer, device_id="ff" * 16)
     with pytest.raises(RuntimeError):
         await alpha.client.ping(impostor)
+
+
+async def test_speedtest_measures_and_stores_nothing(nodes) -> None:
+    alpha, beta = nodes
+    peer = await alpha.client.pair_with_qr(parse_invite(beta.invite().to_uri()))
+    inbox = beta.config.incoming_directory
+    before = set(inbox.rglob("*")) if inbox.exists() else set()
+    speed = await alpha.client.speed_test(peer, 4 * 1024 * 1024)
+    assert speed > 0
+    after = set(inbox.rglob("*")) if inbox.exists() else set()
+    assert after == before

@@ -239,6 +239,53 @@ public final class H4xtorClient {
         authedPost(peer, "/api/v1/link", new JSONObject().put("url", url), 15_000);
     }
 
+    /**
+     * Upload {@code bytes} of throw-away data to the peer's speed-test endpoint (nothing is
+     * stored there). Returns the measured upload speed in bytes per second.
+     */
+    public double speedTest(Peer peer, long bytes, ByteProgressListener listener, CancelToken cancel)
+            throws Exception {
+        String fingerprint = identity.outboundFingerprint(peer.deviceId);
+        String token = identity.outboundToken(peer.deviceId);
+        HttpsURLConnection connection = open(new URL(peer.endpoint() + "/api/v1/speedtest"), "POST",
+                pinnedFactory(fingerprint), 15_000);
+        cancel.attach(connection);
+        connection.setReadTimeout(60_000);
+        connection.setRequestProperty("Authorization", "Bearer " + token);
+        connection.setRequestProperty("X-H4xtor-Device", identity.deviceId());
+        connection.setRequestProperty("Content-Type", "application/octet-stream");
+        connection.setDoOutput(true);
+        connection.setFixedLengthStreamingMode(bytes);
+        long started = android.os.SystemClock.elapsedRealtimeNanos();
+        try (OutputStream output = new BufferedOutputStream(connection.getOutputStream(), CHUNK_SIZE)) {
+            byte[] buffer = new byte[CHUNK_SIZE];
+            new java.util.Random().nextBytes(buffer);
+            long sent = 0;
+            while (sent < bytes) {
+                cancel.check();
+                int size = (int) Math.min(buffer.length, bytes - sent);
+                output.write(buffer, 0, size);
+                sent += size;
+                listener.onProgress(sent, bytes);
+            }
+            output.flush();
+            readJson(connection);
+            double seconds = (android.os.SystemClock.elapsedRealtimeNanos() - started) / 1e9;
+            return bytes / Math.max(seconds, 1e-6);
+        } catch (Exception error) {
+            if (cancel.isCancelled()) {
+                throw new CancelledException();
+            }
+            throw error;
+        } finally {
+            connection.disconnect();
+        }
+    }
+
+    public interface ByteProgressListener {
+        void onProgress(long sent, long total);
+    }
+
     public void sendWifiDirectOffer(Peer peer, String ssid, String passphrase) throws Exception {
         authedPost(peer, "/api/v1/wifi-direct/offer", new JSONObject()
                 .put("ssid", ssid)

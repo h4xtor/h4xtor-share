@@ -94,6 +94,38 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         long lastSent;
         H4xtorClient.CancelToken cancel;
         Runnable retry;
+        public volatile long startedAt = SystemClock.elapsedRealtime();
+        public volatile long finishedAt;
+        public volatile double peakSpeed;
+        private final float[] ring = new float[48];
+        private int ringCount;
+        private int ringPos;
+
+        synchronized void addSample(float value) {
+            ring[ringPos] = value;
+            ringPos = (ringPos + 1) % ring.length;
+            ringCount = Math.min(ring.length, ringCount + 1);
+        }
+
+        /** Speed samples, oldest first (bytes per second). */
+        public synchronized float[] samples() {
+            float[] out = new float[ringCount];
+            int start = ringCount < ring.length ? 0 : ringPos;
+            for (int index = 0; index < ringCount; index++) {
+                out[index] = ring[(start + index) % ring.length];
+            }
+            return out;
+        }
+
+        /** Seconds the transfer took (or has taken so far). */
+        public double seconds() {
+            long end = finishedAt > 0 ? finishedAt : SystemClock.elapsedRealtime();
+            return Math.max(0.001, (end - startedAt) / 1000.0);
+        }
+
+        public double averageSpeed() {
+            return total <= 0 ? 0 : (double) Math.min(sent, total) / seconds();
+        }
 
         TransferItem(String id, String name, boolean outgoing, boolean folder, String peerName) {
             this.id = id;
@@ -193,6 +225,11 @@ public final class ShareService extends Service implements H4xtorServer.Listener
             });
         });
         registerClipboard();
+        try {
+            startScreenshotWatcher();
+        } catch (Exception ignored) {
+            // Missing media permission: the setting shows how to fix it.
+        }
         main.postDelayed(healthTick, 800);
         for (ServiceAction action : pending) {
             pending.remove(action);
@@ -224,6 +261,9 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     public void onDestroy() {
         instance = null;
         main.removeCallbacksAndMessages(null);
+        if (screenshotObserver != null) {
+            getContentResolver().unregisterContentObserver(screenshotObserver);
+        }
         if (clipListener != null) {
             try {
                 clipboard.removePrimaryClipChangedListener(clipListener);
@@ -901,6 +941,185 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         changed();
     }
 
+    // ------------------------------------------------------------ nerd stats
+    private void finished(TransferItem item) {
+        item.finishedAt = SystemClock.elapsedRealtime();
+        if (item.total > 0) {
+            addStat(item.outgoing ? "stat_sent_bytes" : "stat_received_bytes", item.total);
+            addStat(item.outgoing ? "stat_sent_count" : "stat_received_count", 1);
+            double average = item.averageSpeed();
+            double best = Math.max(item.peakSpeed, average);
+            if (best > stat("stat_top_speed")) {
+                identity.setString("stat_top_speed", Long.toString((long) best));
+            }
+            addStat("stat_seconds_ms", (long) (item.seconds() * 1000));
+        }
+        if (identity.flag("vibrate_done", true)) {
+            main.post(this::buzz);
+        }
+    }
+
+    private void addStat(String key, long delta) {
+        identity.setString(key, Long.toString(stat(key) + delta));
+    }
+
+    public long stat(String key) {
+        try {
+            return Long.parseLong(identity.string(key, "0"));
+        } catch (NumberFormatException error) {
+            return 0;
+        }
+    }
+
+    public void resetStats() {
+        for (String key : new String[]{"stat_sent_bytes", "stat_received_bytes", "stat_sent_count",
+                "stat_received_count", "stat_top_speed", "stat_seconds_ms"}) {
+            identity.setString(key, "0");
+        }
+        changed();
+    }
+
+    private void buzz() {
+        try {
+            android.os.Vibrator vibrator = getSystemService(android.os.Vibrator.class);
+            if (vibrator != null && vibrator.hasVibrator()) {
+                vibrator.vibrate(android.os.VibrationEffect.createWaveform(new long[]{0, 35, 70, 35}, -1));
+            }
+        } catch (Exception ignored) {
+            // Vibration is a nicety only.
+        }
+    }
+
+    public interface SpeedTestListener {
+        void onProgress(long sent, long total, double bytesPerSecond);
+
+        void onDone(double uploadBytesPerSecond, long pingMs);
+
+        void onFailed(String reason);
+    }
+
+    /** Ping + upload 32 MB of throw-away data to the PC; nothing is saved there. */
+    public H4xtorClient.CancelToken speedTest(Peer peer, SpeedTestListener listener) {
+        H4xtorClient.CancelToken cancel = new H4xtorClient.CancelToken();
+        network.execute(() -> {
+            try {
+                long best = Long.MAX_VALUE;
+                for (int round = 0; round < 3; round++) {
+                    best = Math.min(best, client.ping(peer, 3000));
+                }
+                final long ping = best;
+                long started = SystemClock.elapsedRealtime();
+                double speed = client.speedTest(peer, 32L * 1024 * 1024, (sent, total) -> {
+                    double seconds = Math.max(0.001, (SystemClock.elapsedRealtime() - started) / 1000.0);
+                    main.post(() -> listener.onProgress(sent, total, sent / seconds));
+                }, cancel);
+                if (speed > stat("stat_top_speed")) {
+                    identity.setString("stat_top_speed", Long.toString((long) speed));
+                }
+                main.post(() -> listener.onDone(speed, ping));
+            } catch (H4xtorClient.CancelledException error) {
+                main.post(() -> listener.onFailed("Annulleret"));
+            } catch (Exception error) {
+                String reason = H4xtorClient.safeMessage(error);
+                main.post(() -> listener.onFailed(reason));
+            }
+        });
+        return cancel;
+    }
+
+    // ------------------------------------------------------ auto screenshots
+    private android.database.ContentObserver screenshotObserver;
+    private long lastScreenshotId = -1;
+
+    public static String[] mediaPermissions() {
+        return Build.VERSION.SDK_INT >= 33
+                ? new String[]{"android.permission.READ_MEDIA_IMAGES"}
+                : new String[]{"android.permission.READ_EXTERNAL_STORAGE"};
+    }
+
+    public void setAutoScreenshots(boolean enabled) {
+        identity.setFlag("auto_screenshots", enabled);
+        if (enabled) {
+            startScreenshotWatcher();
+        } else if (screenshotObserver != null) {
+            getContentResolver().unregisterContentObserver(screenshotObserver);
+            screenshotObserver = null;
+        }
+    }
+
+    private void startScreenshotWatcher() {
+        if (screenshotObserver != null || !identity.flag("auto_screenshots", false)) {
+            return;
+        }
+        lastScreenshotId = latestScreenshotId();
+        screenshotObserver = new android.database.ContentObserver(main) {
+            @Override
+            public void onChange(boolean selfChange) {
+                main.removeCallbacks(checkScreenshots);
+                main.postDelayed(checkScreenshots, 1200); // let the file finish writing
+            }
+        };
+        getContentResolver().registerContentObserver(
+                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, true, screenshotObserver);
+    }
+
+    private final Runnable checkScreenshots = () -> network.execute(this::sendNewScreenshots);
+
+    private long latestScreenshotId() {
+        try (android.database.Cursor cursor = queryScreenshots(-1)) {
+            return cursor != null && cursor.moveToFirst() ? cursor.getLong(0) : -1;
+        } catch (Exception error) {
+            return -1;
+        }
+    }
+
+    private android.database.Cursor queryScreenshots(long afterId) {
+        String where = android.provider.MediaStore.Images.Media.RELATIVE_PATH + " LIKE ?"
+                + (afterId >= 0 ? " AND " + android.provider.MediaStore.Images.Media._ID + " > " + afterId : "");
+        return getContentResolver().query(
+                android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                new String[]{android.provider.MediaStore.Images.Media._ID},
+                where, new String[]{"%Screenshots%"},
+                android.provider.MediaStore.Images.Media._ID + " DESC");
+    }
+
+    private void sendNewScreenshots() {
+        Peer target = preferredOnlinePeer();
+        List<Uri> uris = new ArrayList<>();
+        long newest = lastScreenshotId;
+        try (android.database.Cursor cursor = queryScreenshots(lastScreenshotId)) {
+            while (cursor != null && cursor.moveToNext() && uris.size() < 5) {
+                long id = cursor.getLong(0);
+                newest = Math.max(newest, id);
+                uris.add(android.content.ContentUris.withAppendedId(
+                        android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id));
+            }
+        } catch (Exception error) {
+            return; // permission revoked or provider busy
+        }
+        lastScreenshotId = newest;
+        if (target != null && !uris.isEmpty()) {
+            main.post(() -> {
+                sendUris(target, uris);
+                message("Skærmbillede sendt til " + target.name, false);
+            });
+        }
+    }
+
+    /** The device the user picked in the app, else the first paired device that is online. */
+    public Peer preferredOnlinePeer() {
+        Peer chosen = peer(identity.string("selected_peer", ""));
+        if (chosen != null && isOnline(chosen.deviceId) && identity.isOutboundTrusted(chosen.deviceId)) {
+            return chosen;
+        }
+        for (Peer candidate : pairedPeers()) {
+            if (isOnline(candidate.deviceId)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
     // ---------------------------------------------------------------- sending
     private TransferItem newTransfer(String name, boolean folder, Peer peer) {
         TransferItem item = new TransferItem(
@@ -917,6 +1136,8 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         if (elapsed >= 300) {
             double instant = (sent - item.lastSent) * 1000.0 / elapsed;
             item.speed = item.speed <= 0 ? instant : item.speed * 0.7 + instant * 0.3;
+            item.peakSpeed = Math.max(item.peakSpeed, item.speed);
+            item.addSample((float) item.speed);
             item.lastTime = now;
             item.lastSent = sent;
         }
@@ -927,6 +1148,8 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     }
 
     private void runTransfer(TransferItem item, TransferJob job) {
+        item.startedAt = SystemClock.elapsedRealtime();
+        item.finishedAt = 0;
         item.status = "active";
         item.error = "";
         item.cancel = new H4xtorClient.CancelToken();
@@ -937,6 +1160,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
                 job.run(item);
                 item.status = "done";
                 item.sent = item.total;
+                finished(item);
             } catch (H4xtorClient.CancelledException error) {
                 item.status = "cancelled";
             } catch (Exception error) {
@@ -956,7 +1180,8 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         void run(TransferItem item) throws Exception;
     }
 
-    public void sendUris(Peer peer, List<Uri> uris) {
+    public List<String> sendUris(Peer peer, List<Uri> uris) {
+        List<String> ids = new ArrayList<>();
         for (Uri uri : uris) {
             H4xtorClient.SourceInfo info = client.describe(uri);
             TransferItem item = newTransfer(info.name, false, peer);
@@ -966,7 +1191,13 @@ public final class ShareService extends Service implements H4xtorServer.Listener
                 client.sendFile(peer, uri, (name, sent, total) -> progress(current, sent, total), current.cancel);
                 recordSent(peer, "file", info.name, info.size, uri.toString());
             });
+            ids.add(item.id);
         }
+        return ids;
+    }
+
+    public TransferItem transfer(String id) {
+        return id == null ? null : transfers.get(id);
     }
 
     public void sendTree(Peer peer, Uri tree) {
@@ -1087,6 +1318,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         item.sent = size;
         item.total = size;
         item.uri = uri;
+        finished(item);
         recordReceived("file", fileName, size, uri, peerName);
         changed();
         main.post(() -> updateTransferNotification(true));
@@ -1111,6 +1343,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         item.sent = size;
         item.total = size;
         item.uri = "folder:" + folderName;
+        finished(item);
         recordReceived("folder", folderName, size, "", peerName);
         changed();
         main.post(() -> updateTransferNotification(true));

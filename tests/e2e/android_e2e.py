@@ -99,6 +99,16 @@ def tap_text(pattern: str, timeout: float = 15) -> None:
     raise AssertionError(f"no element matching {pattern!r} on screen")
 
 
+def scroll_to(pattern: str, swipes: int = 10) -> bool:
+    regex = re.compile(pattern)
+    for _ in range(swipes):
+        if any(regex.search(n.get("text") or "") for n in ui_nodes()):
+            return True
+        shell("input swipe 540 1700 540 700 400")
+        time.sleep(0.8)
+    return False
+
+
 def screen_has(pattern: str, timeout: float = 15) -> bool:
     deadline = time.time() + timeout
     regex = re.compile(pattern)
@@ -247,6 +257,7 @@ def main() -> None:
     desktop.events.clear()
     shell("am start -W -a android.intent.action.SEND -t image/jpeg "
           f"--eu android.intent.extra.STREAM {uri} -n {PKG}/.ShareTargetActivity")
+    shot("11-share-progress")
     received: FileReceived = desktop.wait_for(FileReceived, timeout=90)
     assert received.path.name.startswith("ferie"), received.path
     assert received.path.read_bytes() == payload.read_bytes(), "file changed on the way"
@@ -294,6 +305,38 @@ def main() -> None:
     assert (got / "a.txt").read_text() == "a", list(got.rglob("*"))
     assert (got / "sub" / "b.txt").read_text() == "b" * 5000
     ok("folder phone -> PC via the system picker (subfolders intact)")
+
+    # ---- Nerd panel: speed test against the PC ------------------------------
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(2)
+    tap_text("^Indstillinger$")
+    assert scroll_to("^Test hastighed til PC$"), "speed test button missing"
+    shot("12-nerd-panel")
+    tap_text("^Test hastighed til PC$")
+    assert screen_has(r"^Upload .* ping \d+ ms$", 60), "speed test gave no result"
+    shot("13-speedtest-result")
+    ok("speed test phone -> PC (upload + ping shown)")
+
+    # ---- Trick: new screenshots are sent to the PC automatically ------------
+    assert scroll_to("^Send nye skærmbilleder til PC'en$"), "screenshot trick missing"
+    tap_text("^Send nye skærmbilleder til PC'en$")
+    time.sleep(2)
+    for node in (desktop, laptop):
+        node.events.clear()
+    shell("mkdir -p /sdcard/Pictures/Screenshots")
+    shell("screencap -p /sdcard/Pictures/Screenshots/Screenshot_e2e.png")
+    shell("am broadcast -a android.intent.action.MEDIA_SCANNER_SCAN_FILE "
+          "-d file:///sdcard/Pictures/Screenshots/Screenshot_e2e.png", check=False)
+    deadline = time.time() + 60
+    got_shot = None
+    while time.time() < deadline and got_shot is None:
+        for node in (desktop, laptop):
+            for event in list(node.events):
+                if isinstance(event, FileReceived) and event.path.name.startswith("Screenshot_e2e"):
+                    got_shot = event
+        time.sleep(0.5)
+    assert got_shot is not None, "new screenshot was not sent to the PC"
+    ok("new screenshot sent to the PC automatically")
 
     # ---- Screens for design review ---------------------------------------------
     shell(f"am start -W -n {PKG}/.MainActivity")
