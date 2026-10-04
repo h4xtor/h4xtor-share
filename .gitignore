@@ -13,3 +13,4 @@ release/
 !packaging/h4xtor-share.spec
 .DS_Store
 Thumbs.db
+android/.gradle/

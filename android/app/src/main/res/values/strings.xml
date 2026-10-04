@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="copy_watch_description">Når du trykker på \"Kopiér\" i en app, sender h4xtor share teksten til din PC med det samme. Appen læser kun navnet på knappen du trykker på, ikke indholdet på skærmen.</string>
+</resources>

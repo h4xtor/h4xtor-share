@@ -243,6 +243,52 @@ def main() -> None:
     desktop.wait_for(ClipboardReceived, match=lambda event: event.text == "markeret tekst")
     ok("'Send til PC' from the text selection menu")
 
+    # ---- Phone -> PC instantly: tap "Copy" in another app ---------------------
+    service = f"{PKG}/{PKG}.CopyWatchService"
+    shell(f"settings put secure enabled_accessibility_services {service}")
+    shell("settings put secure accessibility_enabled 1")
+    shell("setprop log.tag.h4xtor DEBUG", check=False)  # log every click the watcher sees
+    time.sleep(3)
+    bound = shell("dumpsys accessibility", check=False)
+    assert "CopyWatchService" in bound, "copy watcher not bound"
+    word = "telefonkopi"
+    shell("am start -W -a android.intent.action.INSERT -t vnd.android.cursor.dir/contact "
+          f"-e name {word}")
+    time.sleep(4)
+    def field_box() -> tuple[int, int, int, int]:
+        for _ in range(10):
+            node = next((n for n in ui_nodes() if (n.get("text") or "") == word), None)
+            if node is not None:
+                return tuple(map(int, re.findall(r"\d+", node.get("bounds"))))
+            time.sleep(1)
+        raise AssertionError("contact editor with the test text is not on screen")
+
+    shot("14-copy-other-app")
+    x1, y1, x2, y2 = field_box()
+    desktop.events.clear()
+    shell(f"input swipe {(x1 + x2) // 2} {(y1 + y2) // 2} {(x1 + x2) // 2} {(y1 + y2) // 2} 900")
+    time.sleep(3)  # the keyboard may slide in and move the form
+    shot("15-long-press")
+    # The text toolbar is a popup that `uiautomator dump` cannot see, so tap it by position
+    # (pixel_7 profile): it floats 40 px above the field. Re-measure: the form can move.
+    x1, y1, _, _ = field_box()
+    shell(f"input tap {x1 + 248} {y1 - 40}")  # "Select all"
+    time.sleep(3)
+    shot("16-selected")
+    x1, y1, _, _ = field_box()
+    # `uiautomator dump` suppresses accessibility services while it runs; give the
+    # system a moment to bind the copy watcher again before tapping Copy.
+    time.sleep(3)
+    shell(f"input tap {x1 + 381} {y1 - 40}")  # "Copy" (Translate | Cut | Copy | Paste | ⋮)
+    time.sleep(1.5)
+    shot("17-copied")
+    (SHOTS / "accessibility.txt").write_text(shell("dumpsys accessibility", check=False),
+                                              encoding="utf-8")
+    desktop.wait_for(ClipboardReceived, timeout=20, match=lambda event: event.text == word)
+    ok("tap 'Copy' in another app -> text on the PC instantly (app in background)")
+    shell("input keyevent BACK", check=False)
+    shell("input keyevent BACK", check=False)
+
     # Phone -> PC file through the share sheet. The file the phone received above
     # is owned by the app in MediaStore, so the app may read it like a file shared
     # from the gallery or the Files app (which grant read access to the content:// uri).
@@ -386,5 +432,12 @@ if __name__ == "__main__":
             args = ["adb", "logcat", "-d", "-t", "3000"] + ([f"--pid={pid}"] if pid else ["*:E"])
             with open(SHOTS / "logcat.txt", "w", encoding="utf-8") as log:
                 subprocess.run(args, stdout=log, timeout=30, check=False)
+            # The watcher's own lines and the system's view of activity starts (background
+            # activity launch blocks, clipboard denials) live outside the app's pid.
+            with open(SHOTS / "logcat-system.txt", "w", encoding="utf-8") as log:
+                subprocess.run(["adb", "logcat", "-d", "-t", "5000", "-s", "h4xtor:V",
+                                "ActivityTaskManager:V", "ClipboardService:V",
+                                "BackgroundActivityStartController:V"],
+                               stdout=log, timeout=30, check=False)
         except Exception:  # noqa: BLE001
             pass
