@@ -3,6 +3,15 @@ name: Release
 on:
   push:
     tags: ["v*"]
+  # Manual start (e.g. when a tag cannot be pushed): creates the tag on this commit.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release, e.g. v1.1.3"
+        required: true
+
+env:
+  RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
 
 permissions:
   contents: write
@@ -21,7 +30,7 @@ jobs:
         shell: bash
         run: |
           package_version="$(python -c 'import h4xtor_share; print(h4xtor_share.__version__)')"
-          test "v${package_version}" = "${GITHUB_REF_NAME}"
+          test "v${package_version}" = "${RELEASE_TAG}"
       - name: Build wheel and sdist
         run: python -m build
       - uses: actions/upload-artifact@v4
@@ -102,5 +111,7 @@ jobs:
           merge-multiple: true
       - uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
+          target_commitish: ${{ github.sha }}
           files: release-dist/*
           fail_on_unmatched_files: true
