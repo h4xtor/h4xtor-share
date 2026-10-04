@@ -557,7 +557,13 @@ class ScrollFrame(tk.Frame):
         background = bg or theme.c["bg"]
         super().__init__(parent, bg=background)
         self.theme = theme
-        self.canvas = tk.Canvas(self, bg=background, highlightthickness=0, bd=0)
+        self.canvas = tk.Canvas(
+            self,
+            bg=background,
+            highlightthickness=0,
+            bd=0,
+            yscrollincrement=theme.px(40),
+        )
         self.inner = tk.Frame(self.canvas, bg=background)
         self._window = self.canvas.create_window(0, 0, window=self.inner, anchor="nw")
         self.canvas.pack(side="left", fill="both", expand=True)
@@ -568,29 +574,35 @@ class ScrollFrame(tk.Frame):
         self.canvas.bind(
             "<Configure>", lambda e: self.canvas.itemconfigure(self._window, width=e.width)
         )
-        self.bind_all_wheel(self.canvas)
-        self.bind_all_wheel(self.inner)
+        # One global binding; the handler scrolls whichever ScrollFrame is under the
+        # pointer, so the wheel also works over child widgets (not only empty gaps).
+        self.bind_all("<MouseWheel>", ScrollFrame._on_wheel)
+        self.bind_all("<Button-4>", ScrollFrame._on_wheel)
+        self.bind_all("<Button-5>", ScrollFrame._on_wheel)
 
-    def bind_all_wheel(self, widget: tk.Misc) -> None:
-        widget.bind("<Enter>", lambda _e: self._activate(True), add="+")
-        widget.bind("<Leave>", lambda _e: self._activate(False), add="+")
+    @staticmethod
+    def _under_pointer(event: tk.Event) -> ScrollFrame | None:
+        try:
+            widget = event.widget.winfo_containing(event.x_root, event.y_root)
+        except (KeyError, tk.TclError, AttributeError):
+            return None
+        while widget is not None and not isinstance(widget, ScrollFrame):
+            widget = widget.master
+        return widget
 
-    def _activate(self, active: bool) -> None:
-        if active:
-            self.canvas.bind_all("<MouseWheel>", self._on_wheel)
-            self.canvas.bind_all("<Button-4>", lambda _e: self._scroll(-1))
-            self.canvas.bind_all("<Button-5>", lambda _e: self._scroll(1))
+    @staticmethod
+    def _on_wheel(event: tk.Event) -> None:
+        frame = ScrollFrame._under_pointer(event)
+        if frame is None:
+            return
+        if event.num == 4:
+            frame._scroll(-1)
+        elif event.num == 5:
+            frame._scroll(1)
+        elif platform.system() == "Darwin":
+            frame._scroll(-event.delta)
         else:
-            self.canvas.unbind_all("<MouseWheel>")
-            self.canvas.unbind_all("<Button-4>")
-            self.canvas.unbind_all("<Button-5>")
-
-    def _on_wheel(self, event: tk.Event) -> None:
-        delta = event.delta
-        if platform.system() == "Darwin":
-            self._scroll(-delta)
-        else:
-            self._scroll(-int(delta / 120) or (-1 if delta > 0 else 1))
+            frame._scroll(-int(event.delta / 120) or (-1 if event.delta > 0 else 1))
 
     def _scroll(self, units: int) -> None:
         top, bottom = self.canvas.yview()

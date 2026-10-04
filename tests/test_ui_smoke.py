@@ -110,3 +110,37 @@ def test_stale_duplicates_and_removal() -> None:
         app.update()
     finally:
         app.close()
+
+
+def test_scrollframe_wheel_works_over_child_widgets() -> None:
+    import tkinter as tk
+    from types import SimpleNamespace
+
+    from h4xtor_share.ui_kit import ScrollFrame, Theme
+
+    try:
+        root = tk.Tk()
+    except tk.TclError as error:
+        pytest.skip(f"Tk unavailable: {error}".splitlines()[0])
+    try:
+        root.geometry("300x200")
+        scroll = ScrollFrame(root, Theme(root, dark=False))
+        scroll.pack(fill="both", expand=True)
+        labels = [tk.Label(scroll.inner, text=f"row {i}") for i in range(80)]
+        for label in labels:
+            label.pack()
+        root.update()
+        child = labels[2]
+        event = SimpleNamespace(
+            widget=child,
+            x_root=child.winfo_rootx() + 2,
+            y_root=child.winfo_rooty() + 2,
+            num=5,
+            delta=0,
+        )
+        assert ScrollFrame._under_pointer(event) is scroll
+        before = scroll.canvas.yview()[0]
+        ScrollFrame._on_wheel(event)  # the old code ignored wheel over children
+        assert scroll.canvas.yview()[0] > before
+    finally:
+        root.destroy()

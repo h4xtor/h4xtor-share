@@ -46,21 +46,8 @@ gradle -p android testDebugUnitTest lintDebug assembleDebug
 2. Push to `main` and wait until CI is green, including **android-e2e**.
 3. `git tag vX.Y.Z && git push origin vX.Y.Z`. The Release workflow then attaches the .exe, APK and other builds.
 
-The latest release is **v1.1.2**.
+The latest release is **v1.1.3** (once tagged).
 
-## Open issue (reported by Lennart, not yet fixed)
-
-**Settings page in the .exe barely scrolls with the mouse wheel.** Root cause is in
-`ui_kit.ScrollFrame`. It binds the wheel on `<Enter>` and unbinds it on `<Leave>` of the canvas
-and of the inner frame. When the pointer moves onto any child widget, the inner frame receives
-`<Leave>` and the wheel is unbound, so scrolling only works over empty gaps.
-
-Fix:
-- Bind the wheel once with `bind_all`.
-- In the handler, scroll the ScrollFrame that contains the widget under the pointer
-  (`winfo_containing(event.x_root, event.y_root)`, then walk up the parents).
-- Use a sensible step: set `yscrollincrement` to about 40 px, or scroll in pixels.
-- Add a test, then release v1.1.3.
 
 ## Known limits (be honest about these)
 
