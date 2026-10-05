@@ -204,3 +204,38 @@ async def test_speedtest_measures_and_stores_nothing(nodes) -> None:
     assert speed > 0
     after = set(inbox.rglob("*")) if inbox.exists() else set()
     assert after == before
+
+
+async def test_wrong_codes_lock_code_pairing(nodes) -> None:
+    alpha, beta = nodes
+    peer_beta = await alpha.client.get_info("127.0.0.1", beta.config.port)
+    for _ in range(5):
+        response = await alpha.client.request_pairing(peer_beta)
+        with pytest.raises(RuntimeError, match="Incorrect pairing code"):
+            await alpha.client.confirm_pairing(peer_beta, str(response["pairing_id"]), "000000x")
+    # Guessing is now locked, even with the right code.
+    with pytest.raises(RuntimeError, match="Too many"):
+        await alpha.client.request_pairing(peer_beta)
+    assert not beta.config.trusted_peer_ids()
+    # QR pairing still works while code pairing is locked.
+    peer = await alpha.client.pair_with_qr(beta.invite())
+    assert peer.device_id == beta.config.device_id
+
+
+async def test_open_pairing_requests_are_capped(nodes) -> None:
+    alpha, beta = nodes
+    peer_beta = await alpha.client.get_info("127.0.0.1", beta.config.port)
+    for _ in range(10):
+        await alpha.client.request_pairing(peer_beta)
+    with pytest.raises(RuntimeError, match="Too many"):
+        await alpha.client.request_pairing(peer_beta)
+
+
+async def test_failed_pairing_leaves_no_hidden_token(nodes) -> None:
+    alpha, beta = nodes
+    peer_beta = await alpha.client.get_info("127.0.0.1", beta.config.port)
+    response = await alpha.client.request_pairing(peer_beta)
+    with pytest.raises(RuntimeError):
+        await alpha.client.confirm_pairing(peer_beta, str(response["pairing_id"]), "000000x")
+    # The responder got a token in the request body; it must not be valid here.
+    assert beta.config.device_id not in alpha.config.data.get("trusted_peers", {})
