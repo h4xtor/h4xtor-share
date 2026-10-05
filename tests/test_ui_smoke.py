@@ -144,3 +144,30 @@ def test_scrollframe_wheel_works_over_child_widgets() -> None:
         assert scroll.canvas.yview()[0] > before
     finally:
         root.destroy()
+
+
+@pytest.mark.skipif(
+    not _can_build_ui(),
+    reason="Tk/tkdnd display server unavailable",
+)
+def test_history_empty_state_and_forget_needs_confirmation() -> None:
+    from h4xtor_share.history import HistoryStore
+    from h4xtor_share.models import Peer
+
+    app = _new_app()
+    try:
+        app.history = HistoryStore()  # in-memory, isolated from earlier tests
+        app.show_page("history")
+        assert app.history_empty.place_info()  # empty table explains itself
+        peer = Peer("55" * 16, "Pixel", "192.168.0.70", 47474, "ee" * 32, "android")
+        app.history.record_received_text(peer, "hello")
+        app._refresh_history()
+        assert not app.history_empty.place_info()
+
+        forgotten: list[Peer] = []
+        app.forget_peer = forgotten.append  # type: ignore[method-assign]
+        app.confirm_forget(peer)
+        app.update()
+        assert not forgotten  # nothing happens until the user confirms
+    finally:
+        app.close()
