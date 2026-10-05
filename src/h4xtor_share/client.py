@@ -57,11 +57,15 @@ class PeerClient:
                 return False
         return False
 
-    def _reverse_credentials(self, peer_id: str, peer_name: str) -> dict[str, Any] | None:
+    def _reverse_credentials(self) -> dict[str, Any] | None:
+        """Credentials that let the peer send back to us.
+
+        Only stored (by ``_store_pairing``) once the peer has answered and its
+        certificate checked out, so a failed pairing leaves no valid token.
+        """
         if not self.fingerprint:
             return None
         token = secrets.token_urlsafe(48)
-        self.config.trust_inbound_peer(peer_id, token, peer_name)
         return {
             "token": token,
             "fingerprint": self.fingerprint,
@@ -150,7 +154,7 @@ class PeerClient:
     ) -> None:
         timeout = aiohttp.ClientTimeout(total=10)
         body: dict[str, Any] = {"pairing_id": pairing_id, "code": code}
-        reverse = self._reverse_credentials(peer.device_id, peer.name)
+        reverse = self._reverse_credentials()
         if reverse is not None:
             body["reverse"] = reverse
         async with aiohttp.ClientSession(timeout=timeout) as session, session.post(
@@ -160,12 +164,16 @@ class PeerClient:
         ) as response:
             await _raise_for_status(response)
             payload = await response.json()
-        self._store_pairing(peer, payload)
+        self._store_pairing(peer, payload, reverse)
 
-    def _store_pairing(self, peer: Peer, payload: dict[str, Any]) -> None:
+    def _store_pairing(
+        self, peer: Peer, payload: dict[str, Any], reverse: dict[str, Any] | None
+    ) -> None:
         returned_fingerprint = str(payload["fingerprint"])
         if returned_fingerprint != peer.fingerprint:
             raise RuntimeError("Peer certificate changed during pairing.")
+        if reverse:
+            self.config.trust_inbound_peer(peer.device_id, reverse["token"], peer.name)
         self.config.trust_outbound_peer(
             peer.device_id,
             str(payload["token"]),
@@ -191,11 +199,12 @@ class PeerClient:
             if peer.device_id != invite.device_id:
                 last_error = RuntimeError("QR code belongs to a different device.")
                 continue
+            reverse = self._reverse_credentials()
             body: dict[str, Any] = {
                 "secret": invite.secret,
                 "device_id": self.config.device_id,
                 "name": self.config.device_name,
-                "reverse": self._reverse_credentials(peer.device_id, peer.name) or {},
+                "reverse": reverse or {},
             }
             timeout = aiohttp.ClientTimeout(total=10)
             async with aiohttp.ClientSession(timeout=timeout) as session, session.post(
@@ -205,7 +214,7 @@ class PeerClient:
             ) as response:
                 await _raise_for_status(response)
                 payload = await response.json()
-            self._store_pairing(peer, payload)
+            self._store_pairing(peer, payload, reverse)
             return peer
         raise RuntimeError(f"Could not reach the device from the QR code: {last_error}")
 

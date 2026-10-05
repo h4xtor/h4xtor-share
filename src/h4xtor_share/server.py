@@ -31,6 +31,12 @@ from h4xtor_share.models import (
 
 PAIRING_TTL_SECONDS = 120
 QR_SECRET_TTL_SECONDS = 300
+# The six-digit code is the only secret in code pairing, so guessing must be
+# slow: after this many wrong codes, code pairing pauses for the lockout window.
+# QR pairing is unaffected (its secret is long and single-use).
+PAIRING_MAX_FAILURES = 5
+PAIRING_LOCKOUT_SECONDS = 600
+MAX_PENDING_PAIRINGS = 10
 FINGERPRINT_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 DEVICE_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
 MAX_URL_LENGTH = 8192
@@ -133,6 +139,7 @@ class ShareServer:
         self.fingerprint = fingerprint
         self.event_callback = event_callback
         self.pending_pairings: dict[str, dict[str, Any]] = {}
+        self.pairing_failures: list[float] = []
         self.transfers: dict[str, dict[str, Any]] = {}
         self.folders: dict[str, dict[str, Any]] = {}
         self.qr_secrets: dict[str, float] = {}
@@ -226,7 +233,28 @@ class ShareServer:
             {"pong": True, "device_id": self.config.device_id}
         )
 
+    def _check_pairing_allowed(self) -> None:
+        now = time.time()
+        self.pairing_failures = [
+            at for at in self.pairing_failures if at > now - PAIRING_LOCKOUT_SECONDS
+        ]
+        if len(self.pairing_failures) >= PAIRING_MAX_FAILURES:
+            raise web.HTTPTooManyRequests(
+                text="Too many wrong pairing codes. Try again in 10 minutes or use the QR code."
+            )
+
     async def pair_request(self, request: web.Request) -> web.Response:
+        self._check_pairing_allowed()
+        now = time.time()
+        self.pending_pairings = {
+            key: value
+            for key, value in self.pending_pairings.items()
+            if value["expires_at"] > now
+        }
+        if len(self.pending_pairings) >= MAX_PENDING_PAIRINGS:
+            raise web.HTTPTooManyRequests(
+                text="Too many pairing requests at once. Try again in a few minutes."
+            )
         payload = await request.json()
         peer_id = str(payload.get("device_id") or "").strip()
         peer_name = str(payload.get("name") or "Unknown device").strip()[:80]
@@ -262,10 +290,12 @@ class ShareServer:
         payload = await request.json()
         pairing_id = str(payload.get("pairing_id") or "")
         code = str(payload.get("code") or "")
+        self._check_pairing_allowed()
         pending = self.pending_pairings.pop(pairing_id, None)
         if not pending or pending["expires_at"] < time.time():
             raise web.HTTPUnauthorized(text="Pairing request expired.")
         if not secrets.compare_digest(pending["code"], code):
+            self.pairing_failures.append(time.time())
             raise web.HTTPUnauthorized(text="Incorrect pairing code.")
         return self._complete_pairing(
             request,
