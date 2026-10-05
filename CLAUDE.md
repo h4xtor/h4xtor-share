@@ -12,6 +12,11 @@ desktop app, an Android app and a Chrome extension. Everything is local; nothing
 - When waiting on CI or builds, check back after **at most 10 minutes**, and always report the status.
 - GitHub (`h4xtor/h4xtor-share`, branch `main`) is the source of truth. You may commit, push and tag.
 
+## Design
+
+`DESIGN.md` (Claude design language, from VoltAgent/awesome-design-md, MIT) is the design reference for
+all UI work. The live colour tokens stay in `ui_kit.py` (`Theme`); keep them in line with `DESIGN.md`.
+
 ## Layout
 
 | Path | What it is |
