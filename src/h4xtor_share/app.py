@@ -19,6 +19,7 @@ import threading
 import time
 import tkinter as tk
 import webbrowser
+from collections.abc import Callable
 from concurrent.futures import Future
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -878,6 +879,9 @@ class H4xtorShareApp(TkinterDnD.Tk):
         self.pages[name] = page
         header = tk.Frame(page, bg=c["bg"])
         header.pack(fill="x", padx=px(36), pady=(px(30), px(18)))
+        # Pack actions first so a narrow window clips the subtitle, never a button.
+        actions = tk.Frame(header, bg=c["bg"])
+        actions.pack(side="right", anchor="s")
         texts = tk.Frame(header, bg=c["bg"])
         texts.pack(side="left", fill="x", expand=True)
         tk.Label(
@@ -896,8 +900,6 @@ class H4xtorShareApp(TkinterDnD.Tk):
             font=self.theme.font(10),
             anchor="w",
         ).pack(fill="x", pady=(px(3), 0))
-        actions = tk.Frame(header, bg=c["bg"])
-        actions.pack(side="right", anchor="s")
         return page, actions
 
     # ------------------------------------------------------------- share page
@@ -1228,9 +1230,9 @@ class H4xtorShareApp(TkinterDnD.Tk):
             "transfers", "Overførsler", "Alt der sendes og modtages – live, og kan genoptages."
         )
         Button(actions, self.theme, "Ryd færdige", self.clear_finished_transfers).pack(side="left")
-        Button(
-            actions, self.theme, "Åbn modtaget-mappe", self.open_incoming_folder, kind="ghost"
-        ).pack(side="left", padx=(px(8), 0))
+        Button(actions, self.theme, "Åbn mappe", self.open_incoming_folder, kind="ghost").pack(
+            side="left", padx=(px(8), 0)
+        )
         self.transfer_scroll = ScrollFrame(page, self.theme)
         self.transfer_scroll.pack(fill="both", expand=True, padx=(px(36), px(24)), pady=(0, px(16)))
         self.transfer_empty = tk.Label(
@@ -1481,6 +1483,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
         scrollbar.pack(side="right", fill="y")
         self.history_tree.pack(fill="both", expand=True)
         self.history_tree.bind("<Double-1>", lambda _e: self.open_received_file())
+        self.history_empty = tk.Frame(card.body, bg=c["card"])
         card.bind(
             "<Configure>",
             lambda e: card.body.configure(height=max(px(120), e.height - 2 * card.padding)),
@@ -1495,26 +1498,73 @@ class H4xtorShareApp(TkinterDnD.Tk):
             button._draw()
         self._refresh_history()
 
+    HISTORY_EMPTY = {
+        "received": (
+            "Intet modtaget endnu",
+            "Filer, mapper, tekst og links fra dine andre enheder dukker op her.",
+            "Forbind en enhed",
+        ),
+        "sent": (
+            "Intet sendt endnu",
+            "Alt du deler herfra bliver gemt her, så du nemt kan finde det igen.",
+            "Send noget",
+        ),
+        "devices": (
+            "Ingen enheder endnu",
+            "Enheder du forbinder til, vises her med IP-adresse og hvornår de sidst var online.",
+            "Forbind en enhed",
+        ),
+    }
+
     def _refresh_history(self) -> None:
         if not hasattr(self, "history_tree"):
             return
+        self._fill_history()
+        self._show_history_empty(not self.history_tree.get_children())
+
+    def _show_history_empty(self, empty: bool) -> None:
+        frame = self.history_empty
+        for child in frame.winfo_children():
+            child.destroy()
+        if not empty:
+            frame.place_forget()
+            return
+        c = self.theme.c
+        px = self.theme.px
+        title, text, action = self.HISTORY_EMPTY[self.history_mode]
+        command = (
+            (lambda: self.show_page("share"))
+            if self.history_mode == "sent"
+            else self.show_qr_pairing
+        )
+        tk.Label(
+            frame, text=title, bg=c["card"], fg=c["text"], font=self.theme.font(12, "bold")
+        ).pack()
+        tk.Label(frame, text=text, bg=c["card"], fg=c["muted"], font=self.theme.font(10)).pack(
+            pady=(px(4), px(14))
+        )
+        Button(frame, self.theme, action, command, kind="primary").pack()
+        frame.place(relx=0.5, rely=0.42, anchor="center")
+
+    def _fill_history(self) -> None:
         tree = self.history_tree
         tree.delete(*tree.get_children())
         if self.history_mode == "devices":
             columns = (
-                ("name", "Enhed", 200),
-                ("ip", "IP", 140),
-                ("os", "System", 100),
-                ("last_seen", "Sidst set", 170),
+                ("name", "Enhed", 120),
+                ("ip", "IP", 115),
+                ("os", "System", 85),
+                ("last_seen", "Sidst set", 165),
                 ("connections", "Forbindelser", 110),
             )
         else:
             columns = (
-                ("kind", "Type", 90),
-                ("name", "Hvad", 340),
-                ("peer", "Enhed", 160),
-                ("size", "Størrelse", 100),
-                ("ts", "Tidspunkt", 190),
+                # Sum fits the minimum window; "name" stretches to fill wider ones.
+                ("kind", "Type", 70),
+                ("name", "Hvad", 140),
+                ("peer", "Enhed", 120),
+                ("size", "Størrelse", 90),
+                ("ts", "Tidspunkt", 175),
             )
         tree.configure(columns=tuple(name for name, _title, _width in columns))
         for name, title, width in columns:
@@ -1843,7 +1893,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
                 row,
                 self.theme,
                 "Glem",
-                lambda value=target: self.forget_peer(value),
+                lambda value=target: self.confirm_forget(value),
                 size="sm",
                 kind="danger",
             ).pack(side="right")
@@ -2272,24 +2322,41 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self.toast.show(f"{peer.name} er fjernet fra listen")
 
     def confirm_remove(self, peer: Peer) -> None:
-        c = self.theme.c
-        px = self.theme.px
         paired = self.config_store.is_trusted(peer.device_id)
-        modal = Modal(self, self.theme, "Fjern enhed")
-        modal.heading(
+        self._confirm_danger(
+            "Fjern enhed",
             f"Fjern {peer.name}?",
             "I skal forbinde igen for at dele. Den anden enhed glemmer også denne PC."
             if paired
             else "Enheden skjules. Den dukker op igen, hvis du scanner netværket eller parrer.",
+            "Fjern",
+            lambda: self.remove_device(peer),
         )
+
+    def confirm_forget(self, peer: Peer) -> None:
+        self._confirm_danger(
+            "Glem enhed",
+            f"Glem {peer.name}?",
+            "I skal forbinde igen for at dele. Den anden enhed glemmer også denne PC.",
+            "Glem",
+            lambda: self.forget_peer(peer),
+        )
+
+    def _confirm_danger(
+        self, title: str, heading: str, text: str, verb: str, action: Callable[[], None]
+    ) -> None:
+        c = self.theme.c
+        px = self.theme.px
+        modal = Modal(self, self.theme, title)
+        modal.heading(heading, text)
         buttons = tk.Frame(modal.body, bg=c["bg"])
         buttons.pack(fill="x", pady=(px(20), 0))
 
-        def remove() -> None:
+        def confirm() -> None:
             modal.close()
-            self.remove_device(peer)
+            action()
 
-        Button(buttons, self.theme, "Fjern", remove, kind="danger").pack(side="right")
+        Button(buttons, self.theme, verb, confirm, kind="danger").pack(side="right")
         Button(buttons, self.theme, "Annullér", modal.close, kind="ghost").pack(
             side="right", padx=(0, px(8))
         )
@@ -2527,7 +2594,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
 
         buttons = tk.Frame(modal.body, bg=c["bg"])
         buttons.pack(fill="x", pady=(px(18), 0))
-        Button(buttons, self.theme, "OK", modal.close, kind="primary").pack(side="right")
+        Button(buttons, self.theme, "Luk", modal.close, kind="primary").pack(side="right")
         Button(buttons, self.theme, "Afvis", reject, kind="ghost").pack(
             side="right", padx=(0, px(8))
         )
