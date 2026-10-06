@@ -1,9 +1,0 @@
-{
-  "name": "oh-my-claude",
-  "version": "0.2.0",
-  "description": "Publish homepages to Vercel, test them in Chrome DevTools, and watch site changes live in a side pane.",
-  "author": {
-    "name": "Lennart"
-  },
-  "types": "./types/index.d.ts"
-}
