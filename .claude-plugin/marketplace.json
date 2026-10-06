@@ -1,0 +1,12 @@
+{
+  "name": "h4xtor",
+  "owner": { "name": "Lennart" },
+  "description": "h4xtor tools for Claude Code.",
+  "plugins": [
+    {
+      "name": "oh-my-claude",
+      "source": "./plugins/oh-my-claude",
+      "description": "Publish homepages to Vercel and test them in Chrome DevTools."
+    }
+  ]
+}
