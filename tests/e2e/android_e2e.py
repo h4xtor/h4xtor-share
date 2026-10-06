@@ -357,8 +357,15 @@ def main() -> None:
     # ---- Nerd panel: speed test against the PC ------------------------------
     shell(f"am start -W -n {PKG}/.MainActivity")
     time.sleep(2)
-    tap_text("^Indstillinger$")
-    assert scroll_to("^Test hastighed til PC$"), "speed test button missing"
+    # The folder send just switched the app to Overførsler; a tap during that
+    # re-render can be lost, so tap the tab again until the button shows up.
+    for _ in range(3):
+        tap_text("^Indstillinger$")
+        time.sleep(1)
+        if scroll_to("^Test hastighed til PC$"):
+            break
+    else:
+        raise AssertionError("speed test button missing")
     shot("12-nerd-panel")
     tap_text("^Test hastighed til PC$")
     assert screen_has(r"^Upload .* ping \d+ ms$", 60), "speed test gave no result"
