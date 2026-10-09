@@ -251,40 +251,55 @@ def main() -> None:
     time.sleep(3)
     bound = shell("dumpsys accessibility", check=False)
     assert "CopyWatchService" in bound, "copy watcher not bound"
-    word = "telefonkopi"
-    shell("am start -W -a android.intent.action.INSERT -t vnd.android.cursor.dir/contact "
-          f"-e name {word}")
-    time.sleep(4)
-    def field_box() -> tuple[int, int, int, int]:
-        for _ in range(10):
-            node = next((n for n in ui_nodes() if (n.get("text") or "") == word), None)
-            if node is not None:
-                return tuple(map(int, re.findall(r"\d+", node.get("bounds"))))
-            time.sleep(1)
-        raise AssertionError("contact editor with the test text is not on screen")
+    def copy_in_contacts(word: str) -> bool:
+        """Copy *word* in the Contacts app; True once the PC has it."""
+        shell("am start -W -a android.intent.action.INSERT -t vnd.android.cursor.dir/contact "
+              f"-e name {word}")
+        time.sleep(4)
+        def field_box() -> tuple[int, int, int, int]:
+            for _ in range(10):
+                node = next((n for n in ui_nodes() if (n.get("text") or "") == word), None)
+                if node is not None:
+                    return tuple(map(int, re.findall(r"\d+", node.get("bounds"))))
+                time.sleep(1)
+            raise AssertionError("contact editor with the test text is not on screen")
 
-    shot("14-copy-other-app")
-    x1, y1, x2, y2 = field_box()
-    desktop.events.clear()
-    shell(f"input swipe {(x1 + x2) // 2} {(y1 + y2) // 2} {(x1 + x2) // 2} {(y1 + y2) // 2} 900")
-    time.sleep(3)  # the keyboard may slide in and move the form
-    shot("15-long-press")
-    # The text toolbar is a popup that `uiautomator dump` cannot see, so tap it by position
-    # (pixel_7 profile): it floats 40 px above the field. Re-measure: the form can move.
-    x1, y1, _, _ = field_box()
-    shell(f"input tap {x1 + 248} {y1 - 40}")  # "Select all"
-    time.sleep(3)
-    shot("16-selected")
-    x1, y1, _, _ = field_box()
-    # `uiautomator dump` suppresses accessibility services while it runs; give the
-    # system a moment to bind the copy watcher again before tapping Copy.
-    time.sleep(3)
-    shell(f"input tap {x1 + 381} {y1 - 40}")  # "Copy" (Translate | Cut | Copy | Paste | ⋮)
-    time.sleep(1.5)
-    shot("17-copied")
-    (SHOTS / "accessibility.txt").write_text(shell("dumpsys accessibility", check=False),
-                                              encoding="utf-8")
-    desktop.wait_for(ClipboardReceived, timeout=20, match=lambda event: event.text == word)
+        shot("14-copy-other-app")
+        x1, y1, x2, y2 = field_box()
+        desktop.events.clear()
+        cx, cy = (x1 + x2) // 2, (y1 + y2) // 2
+        shell(f"input swipe {cx} {cy} {cx} {cy} 900")  # long-press
+        time.sleep(3)  # the keyboard may slide in and move the form
+        shot("15-long-press")
+        # The text toolbar is a popup that `uiautomator dump` cannot see, so tap it by position
+        # (pixel_7 profile): it floats 40 px above the field. Re-measure: the form can move.
+        x1, y1, _, _ = field_box()
+        shell(f"input tap {x1 + 248} {y1 - 40}")  # "Select all"
+        time.sleep(3)
+        shot("16-selected")
+        x1, y1, _, _ = field_box()
+        # `uiautomator dump` suppresses accessibility services while it runs; give the
+        # system a moment to bind the copy watcher again before tapping Copy.
+        time.sleep(3)
+        shell(f"input tap {x1 + 381} {y1 - 40}")  # "Copy" (Translate | Cut | Copy | Paste | ⋮)
+        time.sleep(1.5)
+        shot("17-copied")
+        (SHOTS / "accessibility.txt").write_text(shell("dumpsys accessibility", check=False),
+                                                  encoding="utf-8")
+        try:
+            # 45 s: a copy made while the PC briefly looked offline is resent when it is back.
+            desktop.wait_for(ClipboardReceived, timeout=45, match=lambda e: e.text == word)
+        except AssertionError:
+            return False
+        return True
+
+    # The emulator's Contacts app sometimes hangs ("isn't responding") and swallows the
+    # position-based taps; then try once more with a fresh word.
+    if not copy_in_contacts("telefonkopi"):
+        print("WARN copy in Contacts not delivered, retrying once")
+        shell("input keyevent BACK", check=False)
+        shell("input keyevent BACK", check=False)
+        assert copy_in_contacts("telefonkopito"), "copy in another app never reached the PC"
     ok("tap 'Copy' in another app -> text on the PC instantly (app in background)")
     shell("input keyevent BACK", check=False)
     shell("input keyevent BACK", check=False)
