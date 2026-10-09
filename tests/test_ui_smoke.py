@@ -135,7 +135,10 @@ def test_scrollframe_wheel_works_over_child_widgets() -> None:
     except tk.TclError as error:
         pytest.skip(f"Tk unavailable: {error}".splitlines()[0])
     try:
-        root.geometry("300x200")
+        root.geometry("300x200+120+120")
+        # winfo_containing asks the OS which window is on top at that point.
+        root.attributes("-topmost", True)
+        root.lift()
         scroll = ScrollFrame(root, Theme(root, dark=False))
         scroll.pack(fill="both", expand=True)
         labels = [tk.Label(scroll.inner, text=f"row {i}") for i in range(80)]
