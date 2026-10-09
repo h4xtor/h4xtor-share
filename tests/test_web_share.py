@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import socket
 from pathlib import Path
 
@@ -115,10 +116,32 @@ async def test_outbox_download(web, tmp_path: Path) -> None:
     async with session.get(preview) as r:
         assert await r.read() == b"jpeg-data"
     assert item.downloads == 0  # thumbnails are not deliveries
+    async with session.head(f"{base}/api/files/{item.item_id}?k={share.token}") as r:
+        assert r.status == 200
+    assert item.downloads == 0  # neither is a HEAD request
     async with session.get(f"{base}/api/files/{item.item_id}?k={share.token}") as r:
         assert await r.read() == b"jpeg-data"
         assert "attachment" in r.headers["Content-Disposition"]
+        assert r.headers["Content-Type"] == "image/jpeg"
+    for _ in range(50):  # the server counts right after its last write
+        if item.downloads:
+            break
+        await asyncio.sleep(0.02)
     assert item.downloads == 1
+
+    url = f"{base}/api/files/{item.item_id}?k={share.token}"
+    async with session.get(url, headers={"Range": "bytes=0-3"}) as r:
+        assert r.status == 206 and await r.read() == b"jpeg"
+        assert r.headers["Content-Range"] == "bytes 0-3/9"
+    async with session.get(url, headers={"Range": "bytes=5-"}) as r:  # resume
+        assert r.status == 206 and await r.read() == b"data"
+    for _ in range(50):
+        if item.downloads == 2:
+            break
+        await asyncio.sleep(0.02)
+    assert item.downloads == 2  # only the part that reached the end counts
+    async with session.get(url, headers={"Range": "bytes=99-"}) as r:
+        assert r.status == 416
     assert any(isinstance(e, TransferProgress) and e.direction == "send" for e in events)
 
     share.remove(item.item_id)

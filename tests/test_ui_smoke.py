@@ -215,6 +215,14 @@ def test_transfers_filter_remove_and_delete(tmp_path) -> None:
         app.remove_transfer("s" * 32)  # active rows stay until cancelled
         assert "s" * 32 in app.transfer_rows
 
+        app.set_transfer_filter("active")
+        app.update()
+        assert app.transfer_rows["s" * 32].card.winfo_ismapped()
+        app._update_transfer(TransferProgress("s" * 32, "big.iso", 100, 100, "send", "Pixel"))
+        app.update()
+        assert not app.transfer_rows["s" * 32].card.winfo_ismapped()  # done leaves "I gang"
+        app.set_transfer_filter("receive")
+
         state = app.transfers["r" * 32]
         assert app.can_delete_transfer(state)
         app.confirm_delete_transfer(state)
@@ -226,4 +234,31 @@ def test_transfers_filter_remove_and_delete(tmp_path) -> None:
         app.update()
         assert app.transfer_empty.winfo_ismapped()  # "Intet modtaget endnu."
     finally:
+        app.close()
+
+
+@pytest.mark.skipif(
+    not _can_build_ui(),
+    reason="Tk/tkdnd display server unavailable",
+)
+def test_iphone_access_turns_itself_off_when_port_is_taken() -> None:
+    import socket
+    import time
+
+    app = _new_app()
+    blocker = socket.socket()
+    try:
+        blocker.bind(("0.0.0.0", 0))
+        blocker.listen()
+        app.web_share.port = blocker.getsockname()[1]
+        app.show_page("iphone")
+        app.set_web_enabled(True)
+        deadline = time.time() + 10
+        while app.web_share.enabled and time.time() < deadline:
+            app.update()
+            time.sleep(0.05)
+        assert not app.web_share.enabled  # no QR code for a dead link
+        assert not app.web_toggle.value
+    finally:
+        blocker.close()
         app.close()
