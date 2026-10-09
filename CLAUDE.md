@@ -48,7 +48,7 @@ gradle -p android testDebugUnitTest lintDebug assembleDebug
 2. Push to `main` and wait until CI is green, including **android-e2e**.
 3. `git tag vX.Y.Z && git push origin vX.Y.Z`. The Release workflow then attaches the .exe, APK and other builds.
 
-The latest release is **v1.1.8**. Without tag-push rights, start a release from Actions → Release → Run workflow (tag input).
+The latest release is **v1.1.9**. Without tag-push rights, start a release from Actions → Release → Run workflow (tag input).
 
 
 ## Known limits (be honest about these)
