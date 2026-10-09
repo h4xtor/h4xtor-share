@@ -336,8 +336,8 @@ def main() -> None:
     tap_text("^AdminPC$")  # remembered choice (the work PC)
     time.sleep(1)
     desktop.run(desktop.server.stop())  # left work: AdminPC is gone
-    shell(f"am force-stop {PKG}")  # next morning: fresh start at home
-    shell(f"am start -W -n {PKG}/.MainActivity")
+    # Next morning at home: a fresh screen (the service and its transfer list keep running).
+    shell(f"am start -W -f 0x10008000 -n {PKG}/.MainActivity")  # NEW_TASK | CLEAR_TASK
     time.sleep(12)  # health pings: AdminPC offline, Bærbar online
     shot("18-home-other-pc")
     laptop.events.clear()
