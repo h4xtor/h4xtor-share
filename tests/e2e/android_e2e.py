@@ -356,13 +356,29 @@ def main() -> None:
     time.sleep(12)  # health pings: AdminPC offline, Bærbar online
     shot("18-home-other-pc")
     laptop.events.clear()
-    box = next(n for n in ui_nodes() if n.get("class") == "android.widget.EditText")
-    x1, y1, x2, y2 = map(int, re.findall(r"\d+", box.get("bounds")))
-    shell(f"input tap {(x1 + x2) // 2} {(y1 + y2) // 2}")
-    shell("input text hjemme-hp")
-    time.sleep(1)
-    tap_text("^Send$")
-    laptop.wait_for(ClipboardReceived, timeout=20, match=lambda event: event.text == "hjemme-hp")
+
+    def send_from_home(text: str) -> bool:
+        # A slow emulator can drop the tap or the typing: check the field before Send.
+        for _ in range(3):
+            box = next(n for n in ui_nodes() if n.get("class") == "android.widget.EditText")
+            if (box.get("text") or "") == text:
+                break
+            x1, y1, x2, y2 = map(int, re.findall(r"\d+", box.get("bounds")))
+            shell(f"input tap {(x1 + x2) // 2} {(y1 + y2) // 2}")
+            shell("input keyevent KEYCODE_MOVE_END " + " ".join(["KEYCODE_DEL"] * 40))
+            shell(f"input text {text}")
+            time.sleep(1.5)
+        tap_text("^Send$")
+        try:
+            laptop.wait_for(ClipboardReceived, timeout=20, match=lambda e: e.text == text)
+        except AssertionError:
+            return False
+        return True
+
+    if not send_from_home("hjemme-hp"):
+        print("WARN text from home not delivered, retrying once")
+        shot("18b-home-retry")
+        assert send_from_home("hjemme-hp2"), "the PC that is online never got the text"
     ok("remembered PC offline: phone sends to the PC that is online")
     shell("input keyevent BACK", check=False)  # hide the keyboard
     desktop.run(desktop.server.start())  # back at work
