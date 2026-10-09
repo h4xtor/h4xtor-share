@@ -464,6 +464,7 @@ class TransferRow:
             widget.bind("<Button-3>", self._open_menu)
             widget.bind("<Double-Button-1>", lambda _e: self._open())
         self._button_state = ""
+        self.shown = False
         self.refresh()
 
     def _open(self) -> None:
@@ -1902,9 +1903,27 @@ class H4xtorShareApp(TkinterDnD.Tk):
     def set_web_enabled(self, value: bool) -> None:
         self.config_store.data["web_enabled"] = value
         self.config_store.save()
-        action = self.web_share.start() if value else self.web_share.stop()
+        action = self._start_web_share() if value else self.web_share.stop()
         self.runtime.submit(action, "web_share_toggled")
         self._refresh_web_page()
+
+    async def _start_web_share(self) -> None:
+        try:
+            await self.web_share.start()
+        except OSError as error:
+            self.event_queue.put(("web_failed", error))
+
+    def _web_failed(self, error: OSError) -> None:
+        # Never advertise a QR code that leads nowhere.
+        self.config_store.data["web_enabled"] = False
+        self.config_store.save()
+        self._refresh_web_page()
+        self._show_error(
+            RuntimeError(
+                f"iPhone-adgang kunne ikke starte: port {self.web_share.port} er optaget "
+                f"af et andet program. ({error})"
+            )
+        )
 
     def copy_web_link(self) -> None:
         if not self.web_share.enabled:
@@ -2377,10 +2396,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
                 ("status", f"Chrome-udvidelsens forbindelse er utilgængelig: {error}")
             )
         if self.web_share.enabled:
-            try:
-                await self.web_share.start()
-            except OSError as error:
-                self.event_queue.put(("status", f"iPhone-adgang er utilgængelig: {error}"))
+            await self._start_web_share()
 
     async def _check_for_update(self) -> tuple[str, str] | None:
         """Ask GitHub (best effort, internet optional) whether a newer release exists."""
@@ -2459,6 +2475,8 @@ class H4xtorShareApp(TkinterDnD.Tk):
                 self.toast.show(f"Fandt {value.name}", "success")
         elif tag == "core_event":
             self._handle_core_event(value)
+        elif tag == "web_failed":
+            self._web_failed(value)
         elif tag == "web_clipboard":
             try:
                 text = self.clipboard_get()
@@ -3602,10 +3620,10 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self._trim_transfers()
             self._layout_transfers()
         else:
-            was_visible = row.state.matches(self.transfer_filter)
+            # Callers mutate the state in place, so compare with what is on screen.
             row.state = state
             row.refresh()
-            if state.matches(self.transfer_filter) != was_visible:
+            if state.matches(self.transfer_filter) != row.shown:
                 self._layout_transfers()
         self._update_transfer_badge()
 
@@ -3615,7 +3633,8 @@ class H4xtorShareApp(TkinterDnD.Tk):
         for row in self.transfer_rows.values():
             row.card.pack_forget()
         for row in reversed(list(self.transfer_rows.values())):
-            if row.state.matches(self.transfer_filter):
+            row.shown = row.state.matches(self.transfer_filter)
+            if row.shown:
                 row.card.pack(fill="x", pady=(0, self.theme.px(10)))
                 visible += 1
         if visible:

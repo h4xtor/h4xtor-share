@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import socket
 from pathlib import Path
 
@@ -115,9 +116,17 @@ async def test_outbox_download(web, tmp_path: Path) -> None:
     async with session.get(preview) as r:
         assert await r.read() == b"jpeg-data"
     assert item.downloads == 0  # thumbnails are not deliveries
+    async with session.head(f"{base}/api/files/{item.item_id}?k={share.token}") as r:
+        assert r.status == 200
+    assert item.downloads == 0  # neither is a HEAD request
     async with session.get(f"{base}/api/files/{item.item_id}?k={share.token}") as r:
         assert await r.read() == b"jpeg-data"
         assert "attachment" in r.headers["Content-Disposition"]
+        assert r.headers["Content-Type"] == "image/jpeg"
+    for _ in range(50):  # the server counts right after its last write
+        if item.downloads:
+            break
+        await asyncio.sleep(0.02)
     assert item.downloads == 1
     assert any(isinstance(e, TransferProgress) and e.direction == "send" for e in events)
 

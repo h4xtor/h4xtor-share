@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import mimetypes
 import secrets
 import time
 import uuid
@@ -275,15 +276,21 @@ class WebShare:
         if item is None or item.kind != "file" or not Path(item.path).is_file():
             raise web.HTTPNotFound(text="Filen findes ikke længere på PC'en.")
         disposition = "inline" if request.query.get("inline") else "attachment"
-        response = web.FileResponse(
-            item.path,
-            headers={
-                "Content-Disposition": f"{disposition}; filename*=UTF-8''{quote(item.name)}",
-                "Cache-Control": "no-store",
-            },
-        )
-        if request.query.get("preview"):
-            return response  # the page's own thumbnail, not a delivery
+        headers = {
+            "Content-Disposition": f"{disposition}; filename*=UTF-8''{quote(item.name)}",
+            "Cache-Control": "no-store",
+        }
+        if request.query.get("preview") or request.method == "HEAD":
+            return web.FileResponse(item.path, headers=headers)  # not a delivery
+        # Stream it ourselves so "Hentet ✓" only shows once the last byte went out.
+        headers["Content-Type"] = mimetypes.guess_type(item.name)[0] or "application/octet-stream"
+        headers["Content-Length"] = str(Path(item.path).stat().st_size)
+        response = web.StreamResponse(headers=headers)
+        await response.prepare(request)
+        async with aiofiles.open(item.path, "rb") as source:
+            while chunk := await source.read(CHUNK_SIZE):
+                await response.write(chunk)
+        await response.write_eof()
         item.downloads += 1
         self.event_callback(
             TransferProgress(
