@@ -1,12 +1,22 @@
 from __future__ import annotations
 
 import contextlib
+import gc
 import os
 
 import pytest
 
 # Force an isolated config directory so the UI never touches the user's data.
 os.environ.setdefault("XDG_CONFIG_HOME", "/tmp/h4xtor-ui-test-smoke")
+
+
+@pytest.fixture(autouse=True)
+def _free_tk_on_main_thread():
+    # Closed apps leave Tk variables in reference cycles. Left to the garbage
+    # collector they may be freed on the asyncio thread, which aborts Tcl
+    # ("Tcl_AsyncDelete: async handler deleted by the wrong thread").
+    yield
+    gc.collect()
 
 
 def _can_build_ui() -> bool:
@@ -19,6 +29,8 @@ def _can_build_ui() -> bool:
         return False
     with contextlib.suppress(Exception):
         app.close()
+    del app
+    gc.collect()
     return True
 
 
