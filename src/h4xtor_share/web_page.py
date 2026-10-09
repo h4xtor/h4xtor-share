@@ -346,7 +346,8 @@ $("send").onclick = async () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ text }),
     });
-    $("text").value = "";
+    // Only clear what was sent: the user may already be typing the next message.
+    if ($("text").value.trim() === text) $("text").value = "";
     toast(result.kind === "link" ? "Linket åbner på PC'en ✓" : "I PC'ens udklipsholder ✓");
   } catch (error) {
     if (error.message !== "locked") toast("Kunne ikke sende");
