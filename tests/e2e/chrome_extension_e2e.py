@@ -97,6 +97,14 @@ def snap(app: H4xtorShareApp, name: str) -> None:
         print("WARN screenshot", name, error)
 
 
+def page_shot(page, name: str) -> None:
+    """Screenshot for design review; a capture hiccup must never fail the test."""
+    try:
+        page.screenshot(path=str(SHOTS / f"{name}.png"))
+    except Exception as error:  # noqa: BLE001
+        print("WARN screenshot", name, error)
+
+
 def pump(app: H4xtorShareApp, seconds: float) -> None:
     end = time.time() + seconds
     while time.time() < end:
@@ -161,7 +169,7 @@ def main() -> None:
         popup.set_viewport_size({"width": 340, "height": 520})
         popup.goto(f"chrome-extension://{ext_id}/popup.html")
         popup.wait_for_selector("#state-connect:not(.hidden)", timeout=10000)
-        popup.screenshot(path=str(SHOTS / "ext-connect.png"))
+        page_shot(popup, "ext-connect")
 
         approvals: list[str] = []
         original = app._ask_extension_approval
@@ -186,7 +194,7 @@ def main() -> None:
         popup.wait_for_selector("#state-ready:not(.hidden)", timeout=5000)
         assert "Testtelefon" in popup.inner_text("#devices")
         pump(app, 0.5)
-        popup.screenshot(path=str(SHOTS / "ext-ready.png"))
+        page_shot(popup, "ext-ready")
         print("OK extension connected after approval")
 
         # Send text and a link from the popup composer.

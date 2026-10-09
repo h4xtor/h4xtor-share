@@ -26,6 +26,14 @@ SHOTS = Path(os.environ.get("E2E_SHOTS", WORK / "shots"))
 SHOTS.mkdir(parents=True, exist_ok=True)
 
 
+def page_shot(page, name: str) -> None:
+    """Screenshot for design review; a capture hiccup must never fail the test."""
+    try:
+        page.screenshot(path=str(SHOTS / f"{name}.png"))
+    except Exception as error:  # noqa: BLE001
+        print("WARN screenshot", name, error)
+
+
 def pump(app: H4xtorShareApp, seconds: float) -> None:
     end = time.time() + seconds
     while time.time() < end:
@@ -94,7 +102,7 @@ def main() -> None:
         page.goto(url)
         wait_until(app, "page connects", lambda: page.locator("#main").is_visible())
         assert text_of(page, "#pc") == app.config_store.device_name
-        page.screenshot(path=str(SHOTS / "iphone-home.png"))
+        page_shot(page, "iphone-home")
 
         # iPhone → PC: photos and files.
         page.set_input_files("#files", [str(photo), str(note)])
@@ -112,7 +120,7 @@ def main() -> None:
         assert (incoming / "IMG_0042.jpg").read_bytes() == photo.read_bytes()
         rows = [state for state in app.transfers.values() if state.peer_name == "iPhone"]
         assert len(rows) == 2 and all(state.status == "done" for state in rows), rows
-        page.screenshot(path=str(SHOTS / "iphone-uploaded.png"))
+        page_shot(page, "iphone-uploaded")
 
         # iPhone → PC: text and a link land on the PC clipboard.
         page.fill("#text", "hej fra iphone")
@@ -131,7 +139,7 @@ def main() -> None:
         app.web_share.add_text("Wi-Fi kode: 4711")
         app._refresh_web_page()
         wait_until(app, "outbox on iPhone", lambda: page.locator("#outbox .item").count() == 2)
-        page.screenshot(path=str(SHOTS / "iphone-from-pc.png"))
+        page_shot(page, "iphone-from-pc")
         with page.expect_download() as info:
             page.locator("#outbox a", has_text="Hent").first.click()
         downloaded = Path(info.value.path())
@@ -151,7 +159,7 @@ def main() -> None:
         stranger = context.new_page()
         stranger.goto(url.split("?")[0] + "?k=gaet")
         wait_until(app, "wrong key is refused", lambda: stranger.locator("#lock").is_visible())
-        stranger.screenshot(path=str(SHOTS / "iphone-locked.png"))
+        page_shot(stranger, "iphone-locked")
         app.new_web_link()
         page.reload()
         wait_until(app, "old link is refused", lambda: page.locator("#lock").is_visible())
