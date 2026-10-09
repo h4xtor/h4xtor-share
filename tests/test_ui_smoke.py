@@ -171,3 +171,44 @@ def test_history_empty_state_and_forget_needs_confirmation() -> None:
         assert not forgotten  # nothing happens until the user confirms
     finally:
         app.close()
+
+
+@pytest.mark.skipif(
+    not _can_build_ui(),
+    reason="Tk/tkdnd display server unavailable",
+)
+def test_transfers_filter_remove_and_delete(tmp_path) -> None:
+    from h4xtor_share.models import FileReceived, Peer, TransferProgress
+
+    app = _new_app()
+    try:
+        peer = Peer("66" * 16, "Pixel", "192.168.0.80", 47474, "ff" * 32, "android")
+        app.peers[peer.device_id] = peer
+        received = tmp_path / "shot.png"
+        received.write_bytes(b"x" * 10)
+        app._handle_core_event(FileReceived(peer.device_id, "Pixel", received, 10, "r" * 32))
+        app._update_transfer(TransferProgress("s" * 32, "big.iso", 5, 100, "send", "Pixel"))
+        app.update()
+        assert app.transfer_chips["receive"]._text == "Modtaget  1"
+        assert "1 modtaget" in app.transfer_summary.cget("text")
+
+        app.set_transfer_filter("receive")
+        app.update()
+        assert app.transfer_rows["r" * 32].card.winfo_ismapped()
+        assert not app.transfer_rows["s" * 32].card.winfo_ismapped()
+
+        app.remove_transfer("s" * 32)  # active rows stay until cancelled
+        assert "s" * 32 in app.transfer_rows
+
+        state = app.transfers["r" * 32]
+        assert app.can_delete_transfer(state)
+        app.confirm_delete_transfer(state)
+        app.update()
+        assert received.exists()  # nothing happens until the user confirms
+        app.delete_transfer_file(state)
+        assert not received.exists()
+        assert "r" * 32 not in app.transfer_rows
+        app.update()
+        assert app.transfer_empty.winfo_ismapped()  # "Intet modtaget endnu."
+    finally:
+        app.close()

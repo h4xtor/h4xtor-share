@@ -235,6 +235,33 @@ class TransferState:
     status: str = "active"  # active | done | failed | cancelled
     path: str = ""
     batch: str = ""
+    created: float = field(default_factory=time.time)
+
+    def matches(self, view: str) -> bool:
+        """Whether this transfer shows under a filter on the Overførsler page."""
+        if view == "active":
+            return self.status == "active"
+        if view == "failed":
+            return self.status in {"failed", "cancelled"}
+        if view in {"send", "receive"}:
+            return self.direction == view
+        return True
+
+
+TRANSFER_FILTERS = (
+    ("all", "Alle"),
+    ("active", "I gang"),
+    ("receive", "Modtaget"),
+    ("send", "Sendt"),
+    ("failed", "Fejlet"),
+)
+EMPTY_TRANSFERS = {
+    "all": "Ingen overførsler endnu. Træk en fil ind på Del-siden for at komme i gang.",
+    "active": "Intet er i gang lige nu.",
+    "receive": "Intet modtaget endnu.",
+    "send": "Intet sendt endnu.",
+    "failed": "Ingen fejl – alt er gået igennem.",
+}
 
 
 class DeviceCard:
@@ -399,23 +426,20 @@ class TransferRow:
         self.card = Card(parent, theme, padding=14, radius=12)
         body = self.card.body
         body.grid_columnconfigure(1, weight=1)
-        arrow = "↑" if state.direction == "send" else "↓"
+        sending = state.direction == "send"
+        # Sent = orange ↑, received = green ↓: direction is readable at a glance.
+        soft, strong = ("accent_soft", "accent") if sending else ("success_soft", "success")
         size = theme.px(38)
         self.icon = tk.Canvas(
             body, width=size, height=size, bg=c["card"], highlightthickness=0, bd=0
         )
-        round_rect(
-            self.icon,
-            0,
-            0,
-            size,
-            size,
-            theme.px(10),
-            fill=c["accent_soft"],
-            outline=c["accent_soft"],
-        )
+        round_rect(self.icon, 0, 0, size, size, theme.px(10), fill=c[soft], outline=c[soft])
         self.icon.create_text(
-            size / 2, size / 2, text=arrow, fill=c["accent"], font=theme.font(13, "bold")
+            size / 2,
+            size / 2,
+            text="↑" if sending else "↓",
+            fill=c[strong],
+            font=theme.font(13, "bold"),
         )
         self.icon.grid(row=0, column=0, rowspan=3, sticky="w", padx=(0, theme.px(14)))
         self.name = tk.Label(
@@ -435,15 +459,53 @@ class TransferRow:
             body, text="", bg=c["card"], fg=c["muted"], font=theme.font(9), anchor="w"
         )
         self.detail.grid(row=2, column=1, sticky="ew")
+        for widget in (self.card, body, self.icon, self.name, self.detail):
+            widget.bind("<Button-3>", self._open_menu)
+            widget.bind("<Double-Button-1>", lambda _e: self._open())
         self._button_state = ""
         self.refresh()
+
+    def _open(self) -> None:
+        if self.state.status == "done" and self.state.path:
+            self.app.open_path_safely(self.state.path)
+
+    def _open_menu(self, event: tk.Event) -> None:
+        state = self.state
+        app = self.app
+        menu = tk.Menu(app, tearoff=0)
+        if state.status == "done" and state.path:
+            menu.add_command(label="Åbn", command=lambda: app.open_path_safely(state.path))
+            menu.add_command(
+                label="Vis i mappe", command=lambda: app.reveal_path_safely(state.path)
+            )
+            menu.add_separator()
+        if state.status == "active":
+            if state.direction == "send" and state.batch:
+                menu.add_command(label="Annullér", command=lambda: app.cancel_batch(state.batch))
+        else:
+            menu.add_command(
+                label="Fjern fra listen", command=lambda: app.remove_transfer(state.transfer_id)
+            )
+            if app.can_delete_transfer(state):
+                menu.add_command(
+                    label="Slet fra PC'en…", command=lambda: app.confirm_delete_transfer(state)
+                )
+        if menu.index("end") is None:
+            return
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
 
     def refresh(self) -> None:
         state = self.state
         c = self.app.theme.c
         fraction = state.sent / state.total if state.total > 0 else 1.0
         direction = "Til" if state.direction == "send" else "Fra"
-        parts = [f"{direction} {state.peer_name}"]
+        parts = [
+            time.strftime("%H:%M", time.localtime(state.created)),
+            f"{direction} {state.peer_name}",
+        ]
         if state.status == "active":
             parts.append(f"{fraction * 100:.0f}%")
             parts.append(f"{_format_bytes(state.sent)} af {_format_bytes(state.total)}")
@@ -473,6 +535,27 @@ class TransferRow:
         for child in self.buttons.winfo_children():
             child.destroy()
         theme = self.app.theme
+        if state.status != "active":
+            # Packed first with side="right": always the outermost button.
+            Button(
+                self.buttons,
+                theme,
+                "",
+                lambda: self.app.remove_transfer(state.transfer_id),
+                size="sm",
+                kind="ghost",
+                icon="✕",
+                width=30,
+            ).pack(side="right", padx=(theme.px(4), 0))
+            if self.app.can_delete_transfer(state):
+                Button(
+                    self.buttons,
+                    theme,
+                    "Slet",
+                    lambda: self.app.confirm_delete_transfer(state),
+                    size="sm",
+                    kind="danger",
+                ).pack(side="right", padx=(theme.px(6), 0))
         if state.status == "active" and state.direction == "send" and state.batch:
             Button(
                 self.buttons,
@@ -1233,11 +1316,31 @@ class H4xtorShareApp(TkinterDnD.Tk):
         Button(actions, self.theme, "Åbn mappe", self.open_incoming_folder, kind="ghost").pack(
             side="left", padx=(px(8), 0)
         )
+        c = self.theme.c
+        toolbar = tk.Frame(page, bg=c["bg"])
+        toolbar.pack(fill="x", padx=(px(36), px(36)), pady=(0, px(12)))
+        self.transfer_filter = "all"
+        self.transfer_chips: dict[str, Button] = {}
+        for key, label in TRANSFER_FILTERS:
+            chip = Button(
+                toolbar,
+                self.theme,
+                label,
+                lambda key=key: self.set_transfer_filter(key),
+                size="sm",
+                kind="soft" if key == "all" else "ghost",
+            )
+            chip.pack(side="left", padx=(0, px(4)))
+            self.transfer_chips[key] = chip
+        self.transfer_summary = tk.Label(
+            toolbar, text="", bg=c["bg"], fg=c["muted"], font=self.theme.font(9), anchor="e"
+        )
+        self.transfer_summary.pack(side="right")
         self.transfer_scroll = ScrollFrame(page, self.theme)
         self.transfer_scroll.pack(fill="both", expand=True, padx=(px(36), px(24)), pady=(0, px(16)))
         self.transfer_empty = tk.Label(
             self.transfer_scroll.inner,
-            text="Ingen overførsler endnu. Træk en fil ind på Del-siden for at komme i gang.",
+            text=EMPTY_TRANSFERS["all"],
             bg=self.theme.c["bg"],
             fg=self.theme.c["muted"],
             font=self.theme.font(10),
@@ -3164,19 +3267,85 @@ class H4xtorShareApp(TkinterDnD.Tk):
     def _render_transfer(self, state: TransferState) -> None:
         row = self.transfer_rows.get(state.transfer_id)
         if row is None:
-            self.transfer_empty.pack_forget()
             row = TransferRow(self, self.transfer_scroll.inner, state)
-            existing = [r.card for r in self.transfer_rows.values()]
-            if existing:
-                row.card.pack(fill="x", pady=(0, self.theme.px(10)), before=existing[-1])
-            else:
-                row.card.pack(fill="x", pady=(0, self.theme.px(10)))
             self.transfer_rows[state.transfer_id] = row
             self._trim_transfers()
+            self._layout_transfers()
         else:
+            was_visible = row.state.matches(self.transfer_filter)
             row.state = state
             row.refresh()
+            if state.matches(self.transfer_filter) != was_visible:
+                self._layout_transfers()
         self._update_transfer_badge()
+
+    def _layout_transfers(self) -> None:
+        """Show the rows that match the filter, newest first."""
+        visible = 0
+        for row in self.transfer_rows.values():
+            row.card.pack_forget()
+        for row in reversed(list(self.transfer_rows.values())):
+            if row.state.matches(self.transfer_filter):
+                row.card.pack(fill="x", pady=(0, self.theme.px(10)))
+                visible += 1
+        if visible:
+            self.transfer_empty.pack_forget()
+        else:
+            self.transfer_empty.configure(text=EMPTY_TRANSFERS[self.transfer_filter])
+            self.transfer_empty.pack(fill="x", pady=self.theme.px(8))
+
+    def set_transfer_filter(self, view: str) -> None:
+        self.transfer_filter = view
+        for key, chip in self.transfer_chips.items():
+            chip.kind = "soft" if key == view else "ghost"
+            chip._draw()
+        self._layout_transfers()
+
+    def remove_transfer(self, transfer_id: str) -> None:
+        state = self.transfers.get(transfer_id)
+        if state is not None and state.status == "active":
+            return  # cancel first; a live row must not vanish under the user
+        row = self.transfer_rows.pop(transfer_id, None)
+        self.transfers.pop(transfer_id, None)
+        if row is not None:
+            row.card.destroy()
+        self._layout_transfers()
+        self._update_transfer_badge()
+
+    def can_delete_transfer(self, state: TransferState) -> bool:
+        # Only what this PC received: a sent file is the user's own original.
+        return (
+            state.direction == "receive"
+            and state.status == "done"
+            and bool(state.path)
+            and Path(state.path).exists()
+        )
+
+    def confirm_delete_transfer(self, state: TransferState) -> None:
+        folder = Path(state.path).is_dir()
+        self._confirm_danger(
+            "Slet",
+            f"Slet {state.name}?",
+            ("Mappen og alt i den" if folder else "Filen")
+            + " slettes fra PC'en. Det kan ikke fortrydes.",
+            "Slet",
+            lambda: self.delete_transfer_file(state),
+        )
+
+    def delete_transfer_file(self, state: TransferState) -> None:
+        path = Path(state.path)
+        try:
+            if path.resolve() == self.config_store.incoming_directory.resolve():
+                raise ValueError("Modtagemappen selv kan ikke slettes herfra.")
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink(missing_ok=True)
+        except Exception as error:  # noqa: BLE001
+            self._show_error(error)
+            return
+        self.remove_transfer(state.transfer_id)
+        self.toast.show(f"{state.name} er slettet")
 
     def _trim_transfers(self) -> None:
         while len(self.transfer_rows) > MAX_TRANSFER_ROWS:
@@ -3190,8 +3359,23 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self.transfers.pop(oldest, None)
 
     def _update_transfer_badge(self) -> None:
-        active = sum(1 for state in self.transfers.values() if state.status == "active")
+        states = list(self.transfers.values())
+        active = sum(1 for state in states if state.status == "active")
         self.transfer_badge.configure(text=str(active) if active else "")
+        for key, label in TRANSFER_FILTERS:
+            count = sum(1 for state in states if state.matches(key))
+            text = f"{label}  {count}" if count else label
+            chip = self.transfer_chips[key]
+            if chip._text != text:
+                chip.set_text(text)
+        done = [state for state in states if state.status == "done"]
+        summary = []
+        for direction, arrow, verb in (("receive", "↓", "modtaget"), ("send", "↑", "sendt")):
+            group = [state for state in done if state.direction == direction]
+            if group:
+                total = _format_bytes(sum(state.total for state in group))
+                summary.append(f"{arrow} {len(group)} {verb} · {total}")
+        self.transfer_summary.configure(text="     ".join(summary))
 
     @property
     def transfer_bars(self) -> dict[str, ProgressBar]:
@@ -3201,8 +3385,8 @@ class H4xtorShareApp(TkinterDnD.Tk):
         for key in [k for k, row in self.transfer_rows.items() if row.state.status != "active"]:
             self.transfer_rows.pop(key).card.destroy()
             self.transfers.pop(key, None)
-        if not self.transfer_rows:
-            self.transfer_empty.pack(fill="x", pady=self.theme.px(8))
+        self._layout_transfers()
+        self._update_transfer_badge()
 
     # -------------------------------------------------------------- clipboard
     def _schedule_clipboard_watch(self) -> None:

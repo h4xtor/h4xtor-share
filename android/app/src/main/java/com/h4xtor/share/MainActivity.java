@@ -53,6 +53,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private ShareService service;
     private String page = PAGE_DEVICES;
     private String historyMode = "received";
+    private String transferFilter = "all";
     private String selectedId;
     /** Tapped in this session: stick to it. A remembered choice yields to whoever is online. */
     private boolean pickedThisSession;
@@ -1030,9 +1031,88 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             content.addView(empty);
             return;
         }
-        for (ShareService.TransferItem item : items) {
-            content.addView(transferCard(item), ui.margins(0, 0, 0, 10));
+        String summary = transferSummary(items);
+        if (!summary.isEmpty()) {
+            TextView totals = ui.text(summary, 13f, ui.muted, false);
+            totals.setFontFeatureSettings("tnum");
+            content.addView(totals, ui.margins(4, 0, 0, 10));
         }
+        LinearLayout segments = ui.row();
+        segments.setPadding(ui.dp(4), ui.dp(4), ui.dp(4), ui.dp(4));
+        segments.setBackground(ui.rounded(ui.surfaceAlt, 0, 14));
+        for (String[] option : new String[][]{{"all", "Alle"}, {"active", "I gang"},
+                {"received", "Modtaget"}, {"sent", "Sendt"}}) {
+            boolean selected = option[0].equals(transferFilter);
+            TextView tab = ui.text(option[1], 13.5f, selected ? ui.text : ui.muted, selected);
+            tab.setGravity(Gravity.CENTER);
+            tab.setSingleLine(true);
+            tab.setPadding(0, ui.dp(9), 0, ui.dp(9));
+            tab.setBackground(selected ? ui.rounded(ui.surface, ui.border, 11) : null);
+            tab.setOnClickListener(v -> {
+                transferFilter = option[0];
+                render();
+            });
+            segments.addView(tab, ui.weight(1));
+        }
+        content.addView(segments, ui.margins(0, 0, 0, 14));
+        int shown = 0;
+        for (ShareService.TransferItem item : items) {
+            if (matchesFilter(item)) {
+                content.addView(transferCard(item), ui.margins(0, 0, 0, 10));
+                shown++;
+            }
+        }
+        if (shown == 0) {
+            TextView none = ui.text("Intet at vise her.", 14f, ui.muted, false);
+            content.addView(none, ui.margins(4, 4, 0, 0));
+        }
+    }
+
+    private boolean matchesFilter(ShareService.TransferItem item) {
+        switch (transferFilter) {
+            case "active": return "active".equals(item.status);
+            case "received": return !item.outgoing;
+            case "sent": return item.outgoing;
+            default: return true;
+        }
+    }
+
+    /** "↓ 3 modtaget · 586 KB   ↑ 1 sendt · 3,8 MB" over the finished rows. */
+    static String transferSummary(List<ShareService.TransferItem> items) {
+        int[] count = new int[2];
+        long[] bytes = new long[2];
+        for (ShareService.TransferItem item : items) {
+            if ("done".equals(item.status)) {
+                int side = item.outgoing ? 1 : 0;
+                count[side]++;
+                bytes[side] += item.total;
+            }
+        }
+        StringBuilder out = new StringBuilder();
+        if (count[0] > 0) {
+            out.append("↓ ").append(count[0]).append(" modtaget · ").append(Ui.formatBytes(bytes[0]));
+        }
+        if (count[1] > 0) {
+            out.append(out.length() > 0 ? "     " : "")
+                    .append("↑ ").append(count[1]).append(" sendt · ").append(Ui.formatBytes(bytes[1]));
+        }
+        return out.toString();
+    }
+
+    private LinearLayout.LayoutParams gap(int left) {
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        params.setMargins(ui.dp(left), 0, 0, 0);
+        return params;
+    }
+
+    private void confirmDeleteTransfer(ShareService.TransferItem item) {
+        new AlertDialog.Builder(this)
+                .setTitle("Slet " + item.name + "?")
+                .setMessage("Filen slettes fra telefonen. Det kan ikke fortrydes.")
+                .setNegativeButton("Annullér", null)
+                .setPositiveButton("Slet", (dialog, which) -> service.deleteReceived(item.id))
+                .show();
     }
 
     private View transferCard(ShareService.TransferItem item) {
@@ -1046,7 +1126,8 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         name.setSingleLine(true);
         name.setEllipsize(TextUtils.TruncateAt.MIDDLE);
         texts.addView(name);
-        String direction = (item.outgoing ? "Til " : "Fra ") + item.peerName;
+        String direction = android.text.format.DateFormat.getTimeFormat(this).format(new java.util.Date(item.created))
+                + " · " + (item.outgoing ? "Til " : "Fra ") + item.peerName;
         String detail;
         switch (item.status) {
             case "done":
@@ -1135,6 +1216,19 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                 }
             });
             actions.addView(open);
+        }
+        if (ShareService.canDelete(item)) {
+            TextView delete = ui.button("Slet", "danger");
+            delete.setMinHeight(ui.dp(36));
+            delete.setOnClickListener(v -> confirmDeleteTransfer(item));
+            actions.addView(delete, gap(8));
+        }
+        if (!active) {
+            TextView remove = ui.button("Fjern", "ghost");
+            remove.setMinHeight(ui.dp(36));
+            remove.setContentDescription("Fjern fra listen");
+            remove.setOnClickListener(v -> service.removeTransfer(item.id));
+            actions.addView(remove, gap(4));
         }
         if (actions.getChildCount() > 0) {
             card.addView(actions, ui.margins(0, 8, 0, 0));
