@@ -69,6 +69,10 @@ jobs:
         run: |
           set -o pipefail
           xvfb-run -a -s "-screen 0 1400x1000x24" python tests/e2e/chrome_extension_e2e.py 2>&1 | tee ci-output.log
+      - name: Desktop app + iPhone web page end-to-end
+        run: |
+          set -o pipefail
+          xvfb-run -a -s "-screen 0 1400x1000x24" python tests/e2e/iphone_web_e2e.py 2>&1 | tee ci-output.log
       - name: Report failure on the commit
         if: failure()
         env:
