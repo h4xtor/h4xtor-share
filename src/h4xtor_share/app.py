@@ -72,6 +72,7 @@ from h4xtor_share.ui_kit import (
     round_rect,
     set_dark_titlebar,
 )
+from h4xtor_share.web_share import WEB_PORT_OFFSET, WebShare
 
 APP_TITLE = "h4xtor share"
 VERSION = __version__
@@ -235,6 +236,33 @@ class TransferState:
     status: str = "active"  # active | done | failed | cancelled
     path: str = ""
     batch: str = ""
+    created: float = field(default_factory=time.time)
+
+    def matches(self, view: str) -> bool:
+        """Whether this transfer shows under a filter on the Overførsler page."""
+        if view == "active":
+            return self.status == "active"
+        if view == "failed":
+            return self.status in {"failed", "cancelled"}
+        if view in {"send", "receive"}:
+            return self.direction == view
+        return True
+
+
+TRANSFER_FILTERS = (
+    ("all", "Alle"),
+    ("active", "I gang"),
+    ("receive", "Modtaget"),
+    ("send", "Sendt"),
+    ("failed", "Fejlet"),
+)
+EMPTY_TRANSFERS = {
+    "all": "Ingen overførsler endnu. Træk en fil ind på Del-siden for at komme i gang.",
+    "active": "Intet er i gang lige nu.",
+    "receive": "Intet modtaget endnu.",
+    "send": "Intet sendt endnu.",
+    "failed": "Ingen fejl – alt er gået igennem.",
+}
 
 
 class DeviceCard:
@@ -399,23 +427,20 @@ class TransferRow:
         self.card = Card(parent, theme, padding=14, radius=12)
         body = self.card.body
         body.grid_columnconfigure(1, weight=1)
-        arrow = "↑" if state.direction == "send" else "↓"
+        sending = state.direction == "send"
+        # Sent = orange ↑, received = green ↓: direction is readable at a glance.
+        soft, strong = ("accent_soft", "accent") if sending else ("success_soft", "success")
         size = theme.px(38)
         self.icon = tk.Canvas(
             body, width=size, height=size, bg=c["card"], highlightthickness=0, bd=0
         )
-        round_rect(
-            self.icon,
-            0,
-            0,
-            size,
-            size,
-            theme.px(10),
-            fill=c["accent_soft"],
-            outline=c["accent_soft"],
-        )
+        round_rect(self.icon, 0, 0, size, size, theme.px(10), fill=c[soft], outline=c[soft])
         self.icon.create_text(
-            size / 2, size / 2, text=arrow, fill=c["accent"], font=theme.font(13, "bold")
+            size / 2,
+            size / 2,
+            text="↑" if sending else "↓",
+            fill=c[strong],
+            font=theme.font(13, "bold"),
         )
         self.icon.grid(row=0, column=0, rowspan=3, sticky="w", padx=(0, theme.px(14)))
         self.name = tk.Label(
@@ -435,15 +460,53 @@ class TransferRow:
             body, text="", bg=c["card"], fg=c["muted"], font=theme.font(9), anchor="w"
         )
         self.detail.grid(row=2, column=1, sticky="ew")
+        for widget in (self.card, body, self.icon, self.name, self.detail):
+            widget.bind("<Button-3>", self._open_menu)
+            widget.bind("<Double-Button-1>", lambda _e: self._open())
         self._button_state = ""
         self.refresh()
+
+    def _open(self) -> None:
+        if self.state.status == "done" and self.state.path:
+            self.app.open_path_safely(self.state.path)
+
+    def _open_menu(self, event: tk.Event) -> None:
+        state = self.state
+        app = self.app
+        menu = tk.Menu(app, tearoff=0)
+        if state.status == "done" and state.path:
+            menu.add_command(label="Åbn", command=lambda: app.open_path_safely(state.path))
+            menu.add_command(
+                label="Vis i mappe", command=lambda: app.reveal_path_safely(state.path)
+            )
+            menu.add_separator()
+        if state.status == "active":
+            if state.direction == "send" and state.batch:
+                menu.add_command(label="Annullér", command=lambda: app.cancel_batch(state.batch))
+        else:
+            menu.add_command(
+                label="Fjern fra listen", command=lambda: app.remove_transfer(state.transfer_id)
+            )
+            if app.can_delete_transfer(state):
+                menu.add_command(
+                    label="Slet fra PC'en…", command=lambda: app.confirm_delete_transfer(state)
+                )
+        if menu.index("end") is None:
+            return
+        try:
+            menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            menu.grab_release()
 
     def refresh(self) -> None:
         state = self.state
         c = self.app.theme.c
         fraction = state.sent / state.total if state.total > 0 else 1.0
         direction = "Til" if state.direction == "send" else "Fra"
-        parts = [f"{direction} {state.peer_name}"]
+        parts = [
+            time.strftime("%H:%M", time.localtime(state.created)),
+            f"{direction} {state.peer_name}",
+        ]
         if state.status == "active":
             parts.append(f"{fraction * 100:.0f}%")
             parts.append(f"{_format_bytes(state.sent)} af {_format_bytes(state.total)}")
@@ -473,6 +536,27 @@ class TransferRow:
         for child in self.buttons.winfo_children():
             child.destroy()
         theme = self.app.theme
+        if state.status != "active":
+            # Packed first with side="right": always the outermost button.
+            Button(
+                self.buttons,
+                theme,
+                "",
+                lambda: self.app.remove_transfer(state.transfer_id),
+                size="sm",
+                kind="ghost",
+                icon="✕",
+                width=30,
+            ).pack(side="right", padx=(theme.px(4), 0))
+            if self.app.can_delete_transfer(state):
+                Button(
+                    self.buttons,
+                    theme,
+                    "Slet",
+                    lambda: self.app.confirm_delete_transfer(state),
+                    size="sm",
+                    kind="danger",
+                ).pack(side="right", padx=(theme.px(6), 0))
         if state.status == "active" and state.direction == "send" and state.batch:
             Button(
                 self.buttons,
@@ -506,6 +590,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
         ("transfers", "↕", "Overførsler"),
         ("clipboard", "⧉", "Udklipsholder"),
         ("history", "◷", "Historik"),
+        ("iphone", "▯", "iPhone"),
         ("settings", "⚙", "Indstillinger"),
     )
 
@@ -568,6 +653,12 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self._api_devices,
             self._api_send,
             self._api_approve,
+        )
+        self.web_share = WebShare(
+            self.config_store,
+            self.config_store.port + WEB_PORT_OFFSET,
+            self._receive_core_event,
+            self._read_clipboard_for_web,
         )
         self._ipc_paths: list[Path] = []
 
@@ -709,6 +800,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
         self._build_transfers_page()
         self._build_clipboard_page()
         self._build_history_page()
+        self._build_iphone_page()
         self._build_settings_page()
         for frame in self.pages.values():
             frame.grid(row=0, column=0, sticky="nsew")
@@ -1233,11 +1325,31 @@ class H4xtorShareApp(TkinterDnD.Tk):
         Button(actions, self.theme, "Åbn mappe", self.open_incoming_folder, kind="ghost").pack(
             side="left", padx=(px(8), 0)
         )
+        c = self.theme.c
+        toolbar = tk.Frame(page, bg=c["bg"])
+        toolbar.pack(fill="x", padx=(px(36), px(36)), pady=(0, px(12)))
+        self.transfer_filter = "all"
+        self.transfer_chips: dict[str, Button] = {}
+        for key, label in TRANSFER_FILTERS:
+            chip = Button(
+                toolbar,
+                self.theme,
+                label,
+                lambda key=key: self.set_transfer_filter(key),
+                size="sm",
+                kind="soft" if key == "all" else "ghost",
+            )
+            chip.pack(side="left", padx=(0, px(4)))
+            self.transfer_chips[key] = chip
+        self.transfer_summary = tk.Label(
+            toolbar, text="", bg=c["bg"], fg=c["muted"], font=self.theme.font(9), anchor="e"
+        )
+        self.transfer_summary.pack(side="right")
         self.transfer_scroll = ScrollFrame(page, self.theme)
         self.transfer_scroll.pack(fill="both", expand=True, padx=(px(36), px(24)), pady=(0, px(16)))
         self.transfer_empty = tk.Label(
             self.transfer_scroll.inner,
-            text="Ingen overførsler endnu. Træk en fil ind på Del-siden for at komme i gang.",
+            text=EMPTY_TRANSFERS["all"],
             bg=self.theme.c["bg"],
             fg=self.theme.c["muted"],
             font=self.theme.font(10),
@@ -1606,6 +1718,306 @@ class H4xtorShareApp(TkinterDnD.Tk):
             )
 
     # ----------------------------------------------------------- settings page
+    # ------------------------------------------------------------- iPhone page
+    def _build_iphone_page(self) -> None:
+        c = self.theme.c
+        px = self.theme.px
+        page, _actions = self._page(
+            "iphone", "iPhone", "Del med iPhone – direkte i Safari, uden at installere noget."
+        )
+        scroll = ScrollFrame(page, self.theme)
+        scroll.pack(fill="both", expand=True, padx=(px(36), px(24)), pady=(0, px(16)))
+        inner = scroll.inner
+
+        connect = Card(inner, self.theme)
+        connect.pack(fill="x", pady=(0, px(14)))
+        layout = tk.Frame(connect.body, bg=c["card"])
+        layout.pack(fill="x")
+        qr_card = Card(layout, self.theme, padding=10, fill="#FFFFFF", outline=c["border"])
+        qr_card.configure(width=px(200) + 2 * px(10))
+        qr_card.pack(side="left", anchor="n")
+        self.web_qr = QrCanvas(qr_card.body, self.theme, size=200)
+        self.web_qr.pack()
+        info = tk.Frame(layout, bg=c["card"])
+        info.pack(side="left", fill="both", expand=True, padx=(px(24), 0))
+        self.web_toggle = self._toggle_row(
+            info,
+            "Tillad iPhone-adgang",
+            "Telefoner med QR-koden kan sende og hente via browseren på dit netværk.",
+            self.web_share.enabled,
+            self.set_web_enabled,
+        )
+        self._divider(info)
+        for number, text in (
+            ("1", "Åbn Kamera på iPhone og peg på koden"),
+            ("2", "Tryk på linket – h4xtor share åbner i Safari"),
+            ("3", "Tryk Del → “Føj til hjemmeskærm” – så er den en app"),
+        ):
+            row = tk.Frame(info, bg=c["card"])
+            row.pack(fill="x", pady=px(4))
+            tk.Label(
+                row,
+                text=number,
+                width=2,
+                bg=c["accent_soft"],
+                fg=c["accent"],
+                font=self.theme.font(10, "bold"),
+            ).pack(side="left")
+            tk.Label(
+                row, text=text, bg=c["card"], fg=c["text"], font=self.theme.font(10), anchor="w"
+            ).pack(side="left", padx=(px(10), 0))
+        self.web_link = tk.Label(
+            info,
+            text="",
+            bg=c["card"],
+            fg=c["muted"],
+            font=self.theme.font(8),
+            anchor="w",
+            justify="left",
+            wraplength=px(420),
+        )
+        self.web_link.pack(fill="x", pady=(px(12), 0))
+        buttons = tk.Frame(info, bg=c["card"])
+        buttons.pack(fill="x", pady=(px(10), 0))
+        Button(buttons, self.theme, "Kopiér link", self.copy_web_link, size="sm").pack(side="left")
+        Button(
+            buttons, self.theme, "Nyt link", self.confirm_new_web_link, size="sm", kind="ghost"
+        ).pack(side="left", padx=(px(6), 0))
+        tk.Label(
+            info,
+            text="Kun på dit eget netværk. Browser-forbindelsen er beskyttet af den hemmelige "
+            "nøgle i QR-koden, men krypteres ikke som app-til-app. “Nyt link” lukker alle "
+            "gamle telefoner ude.",
+            bg=c["card"],
+            fg=c["faint"],
+            font=self.theme.font(8),
+            anchor="w",
+            justify="left",
+            wraplength=px(420),
+        ).pack(fill="x", pady=(px(12), 0))
+
+        send = Card(inner, self.theme)
+        send.pack(fill="x", pady=(0, px(14)))
+        tk.Label(
+            send.body,
+            text="Send til iPhone",
+            bg=c["card"],
+            fg=c["text"],
+            font=self.theme.font(11, "bold"),
+            anchor="w",
+        ).pack(fill="x")
+        tk.Label(
+            send.body,
+            text="Træk filer ind på denne side, eller vælg dem. De dukker op på iPhone med det "
+            "samme, klar til at hente eller gemme i Fotos.",
+            bg=c["card"],
+            fg=c["muted"],
+            font=self.theme.font(9),
+            anchor="w",
+            justify="left",
+            wraplength=px(640),
+        ).pack(fill="x", pady=(px(2), px(10)))
+        row = tk.Frame(send.body, bg=c["card"])
+        row.pack(fill="x")
+        Button(row, self.theme, "Vælg filer…", self.pick_files_for_iphone, kind="primary").pack(
+            side="left"
+        )
+        Button(row, self.theme, "Send tekst…", self.compose_for_iphone).pack(
+            side="left", padx=(px(8), 0)
+        )
+        Button(
+            row, self.theme, "Send udklipsholder", self.send_clipboard_to_iphone, kind="ghost"
+        ).pack(side="left", padx=(px(8), 0))
+        self.web_outbox = tk.Frame(send.body, bg=c["card"])
+        self.web_outbox.pack(fill="x", pady=(px(12), 0))
+        self._refresh_web_page()
+
+    def _refresh_web_page(self) -> None:
+        c = self.theme.c
+        px = self.theme.px
+        enabled = self.web_share.enabled
+        self.web_toggle.set(enabled)
+        addresses = _sorted_lan_addresses() or ["127.0.0.1"]
+        url = self.web_share.url(addresses[0])
+        if enabled:
+            self.web_qr.show(qr_matrix(url))
+            others = [self.web_share.url(address) for address in addresses[1:3]]
+            self.web_link.configure(
+                text=url + ("\nVirker den ikke? Prøv: " + "  ·  ".join(others) if others else "")
+            )
+        else:
+            self.web_qr.delete("all")
+            self.web_qr.create_text(
+                self.web_qr.winfo_reqwidth() / 2,
+                self.web_qr.winfo_reqheight() / 2,
+                text="Slået fra",
+                fill="#73726C",
+                font=self.theme.font(11, "bold"),
+            )
+            self.web_link.configure(text="Slå adgangen til for at vise QR-koden.")
+        for child in self.web_outbox.winfo_children():
+            child.destroy()
+        if not self.web_share.outbox:
+            tk.Label(
+                self.web_outbox,
+                text="Intet venter på iPhone.",
+                bg=c["card"],
+                fg=c["faint"],
+                font=self.theme.font(9),
+                anchor="w",
+            ).pack(fill="x")
+            return
+        for item in self.web_share.outbox[:12]:
+            line = tk.Frame(self.web_outbox, bg=c["card"])
+            line.pack(fill="x", pady=px(3))
+            state = "Hentet ✓" if item.downloads else "Venter på iPhone"
+            size = f" · {_format_bytes(item.size)}" if item.kind == "file" else ""
+            tk.Label(
+                line,
+                text=("✎ " if item.kind == "text" else "↑ ") + item.name,
+                bg=c["card"],
+                fg=c["text"],
+                font=self.theme.font(10),
+                anchor="w",
+            ).pack(side="left")
+            tk.Label(
+                line,
+                text=f"   {state}{size}",
+                bg=c["card"],
+                fg=c["success"] if item.downloads else c["muted"],
+                font=self.theme.font(9),
+                anchor="w",
+            ).pack(side="left")
+            Button(
+                line,
+                self.theme,
+                "",
+                lambda item_id=item.item_id: self.remove_from_iphone(item_id),
+                size="sm",
+                kind="ghost",
+                icon="✕",
+                width=30,
+            ).pack(side="right")
+
+    def set_web_enabled(self, value: bool) -> None:
+        self.config_store.data["web_enabled"] = value
+        self.config_store.save()
+        action = self.web_share.start() if value else self.web_share.stop()
+        self.runtime.submit(action, "web_share_toggled")
+        self._refresh_web_page()
+
+    def copy_web_link(self) -> None:
+        if not self.web_share.enabled:
+            self.toast.show("Slå iPhone-adgang til først")
+            return
+        self._copy_to_clipboard(self.web_share.url((_sorted_lan_addresses() or ["127.0.0.1"])[0]))
+
+    def confirm_new_web_link(self) -> None:
+        self._confirm_danger(
+            "Nyt link",
+            "Lav et nyt link?",
+            "Telefoner med den gamle QR-kode kan ikke længere sende eller hente. "
+            "Scan den nye kode for at forbinde igen.",
+            "Lav nyt link",
+            self.new_web_link,
+        )
+
+    def new_web_link(self) -> None:
+        self.web_share.new_token()
+        self._refresh_web_page()
+        self.toast.show("Nyt link klar – scan QR-koden igen", "success")
+
+    def _ensure_web_enabled(self) -> bool:
+        if self.web_share.enabled:
+            return True
+        self.toast.show("Slå “Tillad iPhone-adgang” til først")
+        return False
+
+    def send_to_iphone(self, paths: list[Path]) -> None:
+        if not self._ensure_web_enabled():
+            return
+        files = [path for path in paths if path.is_file()]
+        if len(files) < len(paths):
+            self.toast.show("Mapper kan ikke sendes til iPhone – kun filer")
+        for path in files:
+            self.web_share.add_file(path)
+        if files:
+            self.toast.show(f"{_items(len(files))} klar på iPhone", "success")
+        self._refresh_web_page()
+
+    def pick_files_for_iphone(self) -> None:
+        if not self._ensure_web_enabled():
+            return
+        chosen = filedialog.askopenfilenames(title="Send filer til iPhone", parent=self)
+        if chosen:
+            self.send_to_iphone([Path(path) for path in chosen])
+
+    def compose_for_iphone(self) -> None:
+        if not self._ensure_web_enabled():
+            return
+        c = self.theme.c
+        px = self.theme.px
+        modal = Modal(self, self.theme, "Send tekst til iPhone", width=520)
+        modal.heading("Send til iPhone", "Teksten dukker op på iPhone med en Kopiér-knap.")
+        box = tk.Text(
+            modal.body,
+            height=6,
+            bg=c["entry"],
+            fg=c["text"],
+            insertbackground=c["text"],
+            relief="flat",
+            highlightthickness=1,
+            highlightbackground=c["border"],
+            highlightcolor=c["accent"],
+            font=self.theme.font(10),
+            wrap="word",
+            padx=px(10),
+            pady=px(8),
+        )
+        box.pack(fill="x", pady=(px(16), 0))
+
+        def submit() -> None:
+            text = box.get("1.0", "end").strip()
+            modal.close()
+            if text:
+                self.web_share.add_text(text)
+                self._refresh_web_page()
+                self.toast.show("Klar på iPhone", "success")
+
+        buttons = tk.Frame(modal.body, bg=c["bg"])
+        buttons.pack(fill="x", pady=(px(16), 0))
+        Button(buttons, self.theme, "Send", submit, kind="primary").pack(side="right")
+        Button(buttons, self.theme, "Annullér", modal.close, kind="ghost").pack(
+            side="right", padx=(0, px(8))
+        )
+        modal.bind("<Control-Return>", lambda _e: submit())
+        modal.present()
+        box.focus_set()
+
+    def send_clipboard_to_iphone(self) -> None:
+        if not self._ensure_web_enabled():
+            return
+        try:
+            text = self.clipboard_get()
+        except tk.TclError:
+            text = ""
+        if not text.strip():
+            self.toast.show("Udklipsholderen er tom")
+            return
+        self.web_share.add_text(text)
+        self._refresh_web_page()
+        self.toast.show("Udklipsholderen er klar på iPhone", "success")
+
+    def remove_from_iphone(self, item_id: str) -> None:
+        self.web_share.remove(item_id)
+        self._refresh_web_page()
+
+    async def _read_clipboard_for_web(self) -> str:
+        """Called on the asyncio thread; Tk may only be touched on its own thread."""
+        future: Future[str] = Future()
+        self.event_queue.put(("web_clipboard", future))
+        return await asyncio.wrap_future(future)
+
     def _build_settings_page(self) -> None:
         c = self.theme.c
         px = self.theme.px
@@ -1964,6 +2376,11 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self.event_queue.put(
                 ("status", f"Chrome-udvidelsens forbindelse er utilgængelig: {error}")
             )
+        if self.web_share.enabled:
+            try:
+                await self.web_share.start()
+            except OSError as error:
+                self.event_queue.put(("status", f"iPhone-adgang er utilgængelig: {error}"))
 
     async def _check_for_update(self) -> tuple[str, str] | None:
         """Ask GitHub (best effort, internet optional) whether a newer release exists."""
@@ -1987,6 +2404,8 @@ class H4xtorShareApp(TkinterDnD.Tk):
         return None
 
     async def _stop_services(self) -> None:
+        with contextlib.suppress(Exception):
+            await self.web_share.stop()
         with contextlib.suppress(Exception):
             await self.local_api.stop()
         await asyncio.to_thread(self.udp_discovery.stop)
@@ -2040,6 +2459,13 @@ class H4xtorShareApp(TkinterDnD.Tk):
                 self.toast.show(f"Fandt {value.name}", "success")
         elif tag == "core_event":
             self._handle_core_event(value)
+        elif tag == "web_clipboard":
+            try:
+                text = self.clipboard_get()
+            except tk.TclError:
+                text = ""
+            if not value.done():
+                value.set_result(text)
         elif tag == "scan_progress":
             done, total = value
             self.status_var.set(f"Scanner netværket: {done}/{total}")
@@ -2196,6 +2622,10 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self._notify(f"{kind} modtaget fra {event.peer_name}: {event.path.name}", "success")
         elif isinstance(event, TransferProgress):
             self._update_transfer(event)
+            if event.direction == "send" and any(
+                item.item_id == event.transfer_id for item in self.web_share.outbox
+            ):
+                self._refresh_web_page()  # "Hentet ✓"
         elif isinstance(event, WifiDirectOffer):
             self._offer_wifi_direct(event)
 
@@ -3050,6 +3480,9 @@ class H4xtorShareApp(TkinterDnD.Tk):
         if not paths:
             self._show_error(ValueError("Der var ingen filer i det, du slap."))
             return "break"
+        if self.active_page == "iphone":
+            self.send_to_iphone(paths)
+            return "break"
         target = self._drop_target_peer()
         if target is not None:
             self._send_paths(target, paths)
@@ -3164,19 +3597,85 @@ class H4xtorShareApp(TkinterDnD.Tk):
     def _render_transfer(self, state: TransferState) -> None:
         row = self.transfer_rows.get(state.transfer_id)
         if row is None:
-            self.transfer_empty.pack_forget()
             row = TransferRow(self, self.transfer_scroll.inner, state)
-            existing = [r.card for r in self.transfer_rows.values()]
-            if existing:
-                row.card.pack(fill="x", pady=(0, self.theme.px(10)), before=existing[-1])
-            else:
-                row.card.pack(fill="x", pady=(0, self.theme.px(10)))
             self.transfer_rows[state.transfer_id] = row
             self._trim_transfers()
+            self._layout_transfers()
         else:
+            was_visible = row.state.matches(self.transfer_filter)
             row.state = state
             row.refresh()
+            if state.matches(self.transfer_filter) != was_visible:
+                self._layout_transfers()
         self._update_transfer_badge()
+
+    def _layout_transfers(self) -> None:
+        """Show the rows that match the filter, newest first."""
+        visible = 0
+        for row in self.transfer_rows.values():
+            row.card.pack_forget()
+        for row in reversed(list(self.transfer_rows.values())):
+            if row.state.matches(self.transfer_filter):
+                row.card.pack(fill="x", pady=(0, self.theme.px(10)))
+                visible += 1
+        if visible:
+            self.transfer_empty.pack_forget()
+        else:
+            self.transfer_empty.configure(text=EMPTY_TRANSFERS[self.transfer_filter])
+            self.transfer_empty.pack(fill="x", pady=self.theme.px(8))
+
+    def set_transfer_filter(self, view: str) -> None:
+        self.transfer_filter = view
+        for key, chip in self.transfer_chips.items():
+            chip.kind = "soft" if key == view else "ghost"
+            chip._draw()
+        self._layout_transfers()
+
+    def remove_transfer(self, transfer_id: str) -> None:
+        state = self.transfers.get(transfer_id)
+        if state is not None and state.status == "active":
+            return  # cancel first; a live row must not vanish under the user
+        row = self.transfer_rows.pop(transfer_id, None)
+        self.transfers.pop(transfer_id, None)
+        if row is not None:
+            row.card.destroy()
+        self._layout_transfers()
+        self._update_transfer_badge()
+
+    def can_delete_transfer(self, state: TransferState) -> bool:
+        # Only what this PC received: a sent file is the user's own original.
+        return (
+            state.direction == "receive"
+            and state.status == "done"
+            and bool(state.path)
+            and Path(state.path).exists()
+        )
+
+    def confirm_delete_transfer(self, state: TransferState) -> None:
+        folder = Path(state.path).is_dir()
+        self._confirm_danger(
+            "Slet",
+            f"Slet {state.name}?",
+            ("Mappen og alt i den" if folder else "Filen")
+            + " slettes fra PC'en. Det kan ikke fortrydes.",
+            "Slet",
+            lambda: self.delete_transfer_file(state),
+        )
+
+    def delete_transfer_file(self, state: TransferState) -> None:
+        path = Path(state.path)
+        try:
+            if path.resolve() == self.config_store.incoming_directory.resolve():
+                raise ValueError("Modtagemappen selv kan ikke slettes herfra.")
+            if path.is_dir():
+                shutil.rmtree(path)
+            else:
+                path.unlink(missing_ok=True)
+        except Exception as error:  # noqa: BLE001
+            self._show_error(error)
+            return
+        self.remove_transfer(state.transfer_id)
+        self.toast.show(f"{state.name} er slettet")
 
     def _trim_transfers(self) -> None:
         while len(self.transfer_rows) > MAX_TRANSFER_ROWS:
@@ -3190,8 +3689,23 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self.transfers.pop(oldest, None)
 
     def _update_transfer_badge(self) -> None:
-        active = sum(1 for state in self.transfers.values() if state.status == "active")
+        states = list(self.transfers.values())
+        active = sum(1 for state in states if state.status == "active")
         self.transfer_badge.configure(text=str(active) if active else "")
+        for key, label in TRANSFER_FILTERS:
+            count = sum(1 for state in states if state.matches(key))
+            text = f"{label}  {count}" if count else label
+            chip = self.transfer_chips[key]
+            if chip._text != text:
+                chip.set_text(text)
+        done = [state for state in states if state.status == "done"]
+        summary = []
+        for direction, arrow, verb in (("receive", "↓", "modtaget"), ("send", "↑", "sendt")):
+            group = [state for state in done if state.direction == direction]
+            if group:
+                total = _format_bytes(sum(state.total for state in group))
+                summary.append(f"{arrow} {len(group)} {verb} · {total}")
+        self.transfer_summary.configure(text="     ".join(summary))
 
     @property
     def transfer_bars(self) -> dict[str, ProgressBar]:
@@ -3201,8 +3715,8 @@ class H4xtorShareApp(TkinterDnD.Tk):
         for key in [k for k, row in self.transfer_rows.items() if row.state.status != "active"]:
             self.transfer_rows.pop(key).card.destroy()
             self.transfers.pop(key, None)
-        if not self.transfer_rows:
-            self.transfer_empty.pack(fill="x", pady=self.theme.px(8))
+        self._layout_transfers()
+        self._update_transfer_badge()
 
     # -------------------------------------------------------------- clipboard
     def _schedule_clipboard_watch(self) -> None:

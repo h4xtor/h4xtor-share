@@ -20,12 +20,14 @@ desktop app, an Android app and a Chrome extension. Everything is local; nothing
 | `src/h4xtor_share/ui_kit.py` | Claude-style widgets: Theme, Button, Card, ScrollFrame, Monkey mascot … |
 | `src/h4xtor_share/server.py` / `client.py` | Protocol v1 (HTTPS on port 47474, pinned TLS fingerprints) |
 | `src/h4xtor_share/local_api.py` | Loopback API on 127.0.0.1:47476, used by the Chrome extension |
+| `src/h4xtor_share/web_share.py` + `web_page.py` | iPhone/browser sharing: plain HTTP on the LAN, port 47478, guarded by a random key in the QR link. Off until switched on (page "iPhone") |
 | `src/h4xtor_share/integration.py` | Windows integration: right-click menu (AllFilesystemObjects, NeverDefault), Send-to, autostart, Chrome |
 | `src/h4xtor_share/openers.py` | Opening and revealing files. Folders are **always** opened through `explorer.exe`, never through `os.startfile` |
 | `src/h4xtor_share/chrome_extension/` | MV3 extension (popup + context menu) |
 | `android/app/src/main/java/com/h4xtor/share/` | Android app (Java, minSdk 29). `MainActivity`, `ShareService`, `ShareTargetActivity`, `SpeedGraph` … |
 | `tests/` | pytest suite |
 | `tests/e2e/chrome_extension_e2e.py` | Real desktop app + Chrome extension + simulated phone |
+| `tests/e2e/iphone_web_e2e.py` | Real desktop app + its iPhone web page in Chromium posing as an iPhone |
 | `tests/e2e/android_e2e.py` | Real APK in an emulator against the desktop core (CI only). Screenshots go to the `ci-shots` branch |
 | `.github/workflows/ci.yml` | Tests (Win/macOS/Linux), both E2E suites, packaging, Android build. Pushing a `v*` tag makes a release |
 
@@ -46,7 +48,7 @@ gradle -p android testDebugUnitTest lintDebug assembleDebug
 2. Push to `main` and wait until CI is green, including **android-e2e**.
 3. `git tag vX.Y.Z && git push origin vX.Y.Z`. The Release workflow then attaches the .exe, APK and other builds.
 
-The latest release is **v1.1.8**. Without tag-push rights, start a release from Actions → Release → Run workflow (tag input).
+The latest release is **v1.1.9**. Without tag-push rights, start a release from Actions → Release → Run workflow (tag input).
 
 
 ## Known limits (be honest about these)

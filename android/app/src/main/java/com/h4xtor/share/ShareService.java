@@ -582,6 +582,39 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         changed();
     }
 
+    /** Drop one finished row from the list; the file itself stays. */
+    public void removeTransfer(String id) {
+        TransferItem item = transfers.get(id);
+        if (item != null && !"active".equals(item.status)) {
+            transfers.remove(id);
+            changed();
+        }
+    }
+
+    /** A received file the phone saved itself, so the app may delete it again. */
+    public static boolean canDelete(TransferItem item) {
+        return !item.outgoing && !item.folder && "done".equals(item.status)
+                && item.uri.startsWith("content://");
+    }
+
+    /** Delete a received file from the phone's Downloads and drop its row. */
+    public void deleteReceived(String id) {
+        TransferItem item = transfers.get(id);
+        if (item == null || !canDelete(item)) {
+            return;
+        }
+        network.execute(() -> {
+            try {
+                getContentResolver().delete(Uri.parse(item.uri), null, null);
+                transfers.remove(id);
+                message(item.name + " er slettet", false);
+            } catch (Exception error) {
+                message("Kunne ikke slette: " + H4xtorClient.safeMessage(error), true);
+            }
+            changed();
+        });
+    }
+
     public WifiDirectController wifiDirect() {
         return wifiDirect;
     }
