@@ -283,14 +283,38 @@ class WebShare:
         if request.query.get("preview") or request.method == "HEAD":
             return web.FileResponse(item.path, headers=headers)  # not a delivery
         # Stream it ourselves so "Hentet ✓" only shows once the last byte went out.
+        # A Range request (resumed download) gets just the missing part.
+        size = Path(item.path).stat().st_size
+        try:
+            wanted = request.http_range
+        except ValueError:
+            wanted = slice(None, None)
+        start = wanted.start or 0
+        stop = size if wanted.stop is None else min(wanted.stop, size)
+        if start < 0:  # "bytes=-N": the last N bytes
+            start = max(0, size + start)
+        status = 200
+        if "Range" in request.headers:
+            if start >= size:
+                raise web.HTTPRequestRangeNotSatisfiable(
+                    headers={"Content-Range": f"bytes */{size}"}
+                )
+            status = 206
+            headers["Content-Range"] = f"bytes {start}-{stop - 1}/{size}"
+        headers["Accept-Ranges"] = "bytes"
         headers["Content-Type"] = mimetypes.guess_type(item.name)[0] or "application/octet-stream"
-        headers["Content-Length"] = str(Path(item.path).stat().st_size)
-        response = web.StreamResponse(headers=headers)
+        headers["Content-Length"] = str(stop - start)
+        response = web.StreamResponse(status=status, headers=headers)
         await response.prepare(request)
         async with aiofiles.open(item.path, "rb") as source:
-            while chunk := await source.read(CHUNK_SIZE):
+            await source.seek(start)
+            remaining = stop - start
+            while remaining > 0 and (chunk := await source.read(min(CHUNK_SIZE, remaining))):
                 await response.write(chunk)
+                remaining -= len(chunk)
         await response.write_eof()
+        if stop < size:
+            return response  # only part of the file; the phone will ask for the rest
         item.downloads += 1
         self.event_callback(
             TransferProgress(

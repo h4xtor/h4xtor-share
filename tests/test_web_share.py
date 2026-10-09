@@ -128,6 +128,20 @@ async def test_outbox_download(web, tmp_path: Path) -> None:
             break
         await asyncio.sleep(0.02)
     assert item.downloads == 1
+
+    url = f"{base}/api/files/{item.item_id}?k={share.token}"
+    async with session.get(url, headers={"Range": "bytes=0-3"}) as r:
+        assert r.status == 206 and await r.read() == b"jpeg"
+        assert r.headers["Content-Range"] == "bytes 0-3/9"
+    async with session.get(url, headers={"Range": "bytes=5-"}) as r:  # resume
+        assert r.status == 206 and await r.read() == b"data"
+    for _ in range(50):
+        if item.downloads == 2:
+            break
+        await asyncio.sleep(0.02)
+    assert item.downloads == 2  # only the part that reached the end counts
+    async with session.get(url, headers={"Range": "bytes=99-"}) as r:
+        assert r.status == 416
     assert any(isinstance(e, TransferProgress) and e.direction == "send" for e in events)
 
     share.remove(item.item_id)
