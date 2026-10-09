@@ -82,6 +82,8 @@ public final class H4xtorServer {
     private final ExecutorService clients = Executors.newCachedThreadPool();
     private final AtomicBoolean running = new AtomicBoolean(false);
 
+    /** Last request from a PC on this phone's Wi-Fi Direct group (elapsedRealtime). */
+    volatile long lastWifiDirectRequestAt;
     private Thread acceptThread;
     private SSLServerSocket serverSocket;
 
@@ -189,6 +191,9 @@ public final class H4xtorServer {
             BufferedOutputStream output = new BufferedOutputStream(socket.getOutputStream());
             Request request = readRequest(input);
             request.remote = remoteAddress(socket.getInetAddress());
+            if (request.remote.startsWith("192.168.49.")) {
+                lastWifiDirectRequestAt = android.os.SystemClock.elapsedRealtime();
+            }
             try {
                 route(request, input, output);
             } catch (HttpError error) {
