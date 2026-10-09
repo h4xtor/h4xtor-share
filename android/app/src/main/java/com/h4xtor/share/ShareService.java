@@ -73,6 +73,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     private static final int NOTIFICATION_SERVICE = 1;
     private static final int NOTIFICATION_TRANSFERS = 2;
     private static final int CLIPBOARD_SUPPRESS_MS = 3000;
+    private static final long WIFI_DIRECT_IDLE_MS = 10 * 60_000L;
 
     private static volatile ShareService instance;
     private static final List<ServiceAction> pending = new CopyOnWriteArrayList<>();
@@ -643,8 +644,33 @@ public final class ShareService extends Service implements H4xtorServer.Listener
 
     private void healthLoop() {
         checkHealth();
+        stopIdleWifiDirect();
         main.removeCallbacks(healthTick);
         main.postDelayed(healthTick, foregroundUi ? 4_000 : 30_000);
+    }
+
+    /** Last time a PC was online over the Wi-Fi Direct group (or the group came up). */
+    private long wifiDirectUsedAt;
+
+    /**
+     * Leaving work with the group still up must not get in the way at home: once no PC
+     * has used it for a while, switch it off. The home PC is reached over normal Wi-Fi.
+     */
+    private void stopIdleWifiDirect() {
+        if (!wifiDirect.isActive()) {
+            return;
+        }
+        long now = SystemClock.elapsedRealtime();
+        // The PC talking to us counts too: its firewall may block our pings on that network.
+        wifiDirectUsedAt = Math.max(wifiDirectUsedAt, server.lastWifiDirectRequestAt);
+        for (Peer peer : peers.values()) {
+            if (peer.address.startsWith("192.168.49.") && isOnline(peer.deviceId)) {
+                wifiDirectUsedAt = now;
+            }
+        }
+        if (activeTransfers() == 0 && now - wifiDirectUsedAt > WIFI_DIRECT_IDLE_MS) {
+            stopWifiDirect();
+        }
     }
 
     private void checkHealth() {
@@ -1513,6 +1539,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         wifiDirect.start(new WifiDirectController.Callback() {
             @Override
             public void onGroupStarted(String ssid, String passphrase) {
+                wifiDirectUsedAt = SystemClock.elapsedRealtime();
                 message("Wi-Fi Direct er klar: " + ssid, false);
                 udp.announceNow();
                 updateServiceNotification();

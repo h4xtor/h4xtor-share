@@ -54,6 +54,8 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private String page = PAGE_DEVICES;
     private String historyMode = "received";
     private String selectedId;
+    /** Tapped in this session: stick to it. A remembered choice yields to whoever is online. */
+    private boolean pickedThisSession;
     private String pendingPeerId;
     private String pendingInvite;
     private boolean resumed;
@@ -382,7 +384,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private Peer selectedPeer() {
         Peer peer = service.peer(selectedId);
         if (peer != null && service.identity().isOutboundTrusted(peer.deviceId)) {
-            return peer;
+            // Work PC remembered, but now at home: send to the PC that is actually online.
+            Peer online = pickedThisSession || service.isOnline(peer.deviceId) ? null
+                    : service.preferredOnlinePeer();
+            return online != null ? online : peer;
         }
         List<Peer> paired = service.pairedPeers();
         for (Peer candidate : paired) {
@@ -395,6 +400,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
 
     private void select(Peer peer) {
         selectedId = peer.deviceId;
+        pickedThisSession = true;
         service.identity().setString("selected_peer", selectedId);
         render();
     }
@@ -980,7 +986,8 @@ public final class MainActivity extends Activity implements ShareService.UiListe
 
         List<Peer> desktops = new ArrayList<>();
         for (Peer peer : service.pairedPeers()) {
-            if (peer.supports("wifi-direct-join")) {
+            // Only PCs that can hear the offer right now (KESADMIN at work, HPadmin at home).
+            if (peer.supports("wifi-direct-join") && service.isOnline(peer.deviceId)) {
                 desktops.add(peer);
             }
         }
@@ -1000,6 +1007,8 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         stopParams.setMargins(ui.dp(10), 0, 0, 0);
         buttons.addView(stop, stopParams);
         card.addView(buttons, ui.margins(0, 10, 0, 0));
+        card.addView(ui.text("Slukker af sig selv efter 10 minutter uden brug, så din normale Wi-Fi "
+                + "derhjemme ikke bliver forstyrret.", 12.5f, ui.muted, false), ui.margins(0, 10, 0, 0));
         if (desktops.isEmpty()) {
             card.addView(ui.text("På PC'en: Indstillinger → Wi-Fi Direct → skriv netværk og kode.",
                     12.5f, ui.muted, false), ui.margins(0, 10, 0, 0));

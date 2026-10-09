@@ -329,6 +329,30 @@ def main() -> None:
     desktop.wait_for(LinkReceived, match=lambda event: event.url == "https://example.com/valgt")
     ok("share sheet with two PCs: pick AdminPC, link arrives there")
 
+    # ---- Work PC chosen, then home: the PC that is online gets it -------------
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(3)
+    assert scroll_to("^AdminPC$"), "AdminPC missing from the device list"
+    tap_text("^AdminPC$")  # remembered choice (the work PC)
+    time.sleep(1)
+    desktop.run(desktop.server.stop())  # left work: AdminPC is gone
+    # Next morning at home: a fresh screen (the service and its transfer list keep running).
+    shell(f"am start -W -f 0x10008000 -n {PKG}/.MainActivity")  # NEW_TASK | CLEAR_TASK
+    time.sleep(12)  # health pings: AdminPC offline, Bærbar online
+    shot("18-home-other-pc")
+    laptop.events.clear()
+    box = next(n for n in ui_nodes() if n.get("class") == "android.widget.EditText")
+    x1, y1, x2, y2 = map(int, re.findall(r"\d+", box.get("bounds")))
+    shell(f"input tap {(x1 + x2) // 2} {(y1 + y2) // 2}")
+    shell("input text hjemme-hp")
+    time.sleep(1)
+    tap_text("^Send$")
+    laptop.wait_for(ClipboardReceived, timeout=20, match=lambda event: event.text == "hjemme-hp")
+    ok("remembered PC offline: phone sends to the PC that is online")
+    shell("input keyevent BACK", check=False)  # hide the keyboard
+    desktop.run(desktop.server.start())  # back at work
+    time.sleep(10)
+
     # ---- Folder phone -> PC through the system folder picker -----------------
     shell(f"am start -W -n {PKG}/.MainActivity")
     time.sleep(3)
