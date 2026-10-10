@@ -25,6 +25,13 @@ ingen upload til nogen server, ingen størrelsesgrænse.
 | Kører i baggrunden | Ikon ved uret | Baggrundstjeneste + notifikationer |
 | Start automatisk | Med Windows | Når telefonen tænder |
 | Lyst / mørkt tema | Følger Windows | Følger Android |
+| Send til **alle enheder** på én gang | ✓ (også Chrome-udvidelsen) | ✓ (Del-arket) |
+| Telefonens notifikationer på PC'en – svar og afvis | Side *Notifikationer* + Windows-besked | Til/fra og valg af apps (slået fra som standard) |
+| SMS fra PC'en – læs og skriv | Side *SMS* | Til/fra (slået fra som standard) |
+| Skærmbillede på forlangende | Knap under *Fjernbetjening* | Du godkender på telefonen |
+| Find min telefon (ringer højt, også på lydløs) | Knap under *Fjernbetjening* | Stop på telefonen eller fra PC'en |
+| Fjernbetjening: lydstyrke, læs tekst højt, baggrundsbillede | ✓ | Til/fra |
+| Google Drive (valgfri, slået fra) | *Indstillinger → Sky* | – |
 
 ## Kom i gang
 
@@ -85,6 +92,12 @@ Wi-Fi. Knappen **Tilbage til <dit Wi-Fi>** skifter tilbage med ét klik.
 | `POST /api/v1/files/init` + `PUT /api/v1/files/<id>` | Fil med genoptagelse (`X-H4xtor-Offset`) |
 | `POST /api/v1/folders/init` + `PUT .../<folder>/<file>` + `POST /folders/complete` | Mappe |
 | `POST /api/v1/wifi-direct/offer` | Telefonen tilbyder PC'en sin Wi-Fi Direct-gruppe |
+| `POST /api/v1/notification`, `/sms/incoming` | Telefon → PC: notifikationer og nye SMS |
+| `POST /api/v1/notification/action`, `/sms/threads`, `/sms/messages`, `/sms/send` | PC → telefon: svar/afvis, læs og send SMS |
+| `POST /api/v1/screenshot`, `/find`, `/remote/volume`, `/remote/speak`, `PUT /remote/wallpaper` | PC → telefon: skærmbillede, find telefon, fjernbetjening |
+
+Nye funktioner annonceres som *capabilities*, så ældre versioner aldrig bliver kaldt med dem.
+Detaljer: [docs/protocol-v1.2.md](docs/protocol-v1.2.md).
 
 QR-format: `h4xtor://pair?v=1&id=…&n=…&fp=…&p=…&a=ip1,ip2&s=…&pl=…`
 
@@ -113,3 +126,15 @@ samt APK'en ved hvert push. Et `v*`-tag laver en release med alle filer.
   via kvikfeltet *Send udklip*. Den anden vej (PC → telefon) virker altid.
 - macOS har ingen offentlig Wi-Fi Direct-API; en Mac kan dog koble på telefonens gruppe
   som almindeligt Wi-Fi.
+- **Notifikationer, SMS og fjernbetjening kræver, at telefonen og PC'en er på samme netværk**
+  (eller Wi-Fi Direct). Der er ingen sky-relæ som i Join – det er bevidst.
+- **Skærmbillede på forlangende:** Android 14 og nyere kræver, at du godkender skærmoptagelse
+  på telefonen *hver gang*. Det kan ingen app komme udenom. Kan appen ikke vise spørgsmålet
+  med det samme, kommer der en notifikation, du skal trykke på.
+- **Svar på notifikationer** virker kun, når appen selv tilbyder et svarfelt i notifikationen
+  (fx beskeder). Andre notifikationer kan kun vises og afvises.
+- **SMS** bruger telefonens egen SMS-funktion og dit abonnement. MMS (billeder i SMS) vises ikke.
+- **Find min telefon** ringer via alarm-lyden. Står telefonen på *Forstyr ikke* med alarmer
+  slået fra, kan den kun vibrere.
+- **Google Drive** er kun forberedt: du kan forbinde og teste forbindelsen, men delingen bruger
+  den ikke endnu. Du skal selv oprette et OAuth-klient-ID i Google Cloud Console.
