@@ -394,6 +394,77 @@ class ProgressBar(tk.Canvas):
             self.create_oval(0, 0, self._h, self._h, fill=self.color, outline=self.color)
 
 
+class Slider(tk.Canvas):
+    """Horizontal 0-100 slider in the app's own style (the Tk Scale looks dated)."""
+
+    def __init__(
+        self,
+        parent: tk.Misc,
+        theme: Theme,
+        value: int = 50,
+        width: int = 240,
+        bg: str | None = None,
+    ) -> None:
+        self.theme = theme
+        self.value = max(0, min(100, int(value)))
+        self.enabled = True
+        self._h = theme.px(22)
+        super().__init__(
+            parent,
+            width=theme.px(width),
+            height=self._h,
+            bg=bg if bg is not None else parent.cget("bg"),
+            highlightthickness=0,
+            bd=0,
+            cursor="hand2",
+        )
+        self.bind("<Configure>", lambda _e: self._draw())
+        self.bind("<Button-1>", self._drag)
+        self.bind("<B1-Motion>", self._drag)
+
+    def set(self, value: int) -> None:
+        self.value = max(0, min(100, int(value)))
+        self._draw()
+
+    def set_enabled(self, enabled: bool) -> None:
+        self.enabled = enabled
+        self.configure(cursor="hand2" if enabled else "arrow")
+        self._draw()
+
+    def _span(self) -> tuple[float, float]:
+        knob = self._h / 2
+        return knob, max(self.winfo_width(), self.theme.px(60)) - knob
+
+    def _drag(self, event: tk.Event) -> None:
+        if not self.enabled:
+            return
+        left, right = self._span()
+        self.value = round(100 * max(0.0, min(1.0, (event.x - left) / (right - left))))
+        self._draw()
+
+    def _draw(self) -> None:
+        self.delete("all")
+        c = self.theme.c
+        left, right = self._span()
+        mid = self._h / 2
+        bar = self.theme.px(6)
+        x = left + (right - left) * self.value / 100
+        round_rect(
+            self, left, mid - bar / 2, right, mid + bar / 2, bar / 2,
+            fill=c["track"], outline=c["track"],
+        )
+        if self.value:
+            fill = c["accent"] if self.enabled else c["faint"]
+            round_rect(
+                self, left, mid - bar / 2, x, mid + bar / 2, bar / 2, fill=fill, outline=fill
+            )
+        knob = self._h / 2 - 2
+        self.create_oval(
+            x - knob, mid - knob, x + knob, mid + knob,
+            fill=c["card"], outline=c["accent"] if self.enabled else c["border_strong"], width=2,
+        )
+
+
 class Pill(tk.Canvas):
     """Small rounded status label."""
 

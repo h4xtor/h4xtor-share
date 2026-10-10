@@ -51,6 +51,7 @@ from h4xtor_share.models import (
 )
 from h4xtor_share.openers import open_path, reveal_in_folder
 from h4xtor_share.pairing import PairingInvite, parse_invite, qr_matrix
+from h4xtor_share.phone_pages import PhonePagesMixin
 from h4xtor_share.scanner import scan_lan as scan_lan_peers
 from h4xtor_share.server import ShareServer
 from h4xtor_share.tray import TrayIcon
@@ -388,7 +389,7 @@ class DeviceCard:
             return
         status = app.peer_status.get(peer.device_id)
         online = status is not None and status.online
-        selected = paired and app.selected_id == peer.device_id
+        selected = paired and app.selected_id == peer.device_id and not app.target_all
         platform_label = PLATFORM_LABELS.get(peer.platform.lower(), peer.platform.title())
         transport = TRANSPORT_LABELS.get(peer.transport, peer.transport)
         self.name_label.configure(text=peer.name + ("   ✓ valgt" if selected else ""))
@@ -420,6 +421,7 @@ class DeviceCard:
             menu.add_command(
                 label="Send udklipsholder", command=lambda: app.send_clipboard(self.peer)
             )
+            menu.add_command(label="Fjernbetjening", command=lambda: app.open_remote(self.peer))
             menu.add_separator()
             menu.add_command(label="Fjern enhed…", command=lambda: app.confirm_remove(self.peer))
         else:
@@ -605,11 +607,14 @@ class TransferRow:
             ).pack(side="left", padx=(theme.px(6), 0))
 
 
-class H4xtorShareApp(TkinterDnD.Tk):
+class H4xtorShareApp(PhonePagesMixin, TkinterDnD.Tk):
     NAV_ITEMS = (
         ("share", "⇄", "Del"),
         ("transfers", "↕", "Overførsler"),
         ("clipboard", "⧉", "Udklipsholder"),
+        ("notifications", "◈", "Notifikationer"),
+        ("sms", "✉", "SMS"),
+        ("remote", "◎", "Fjernbetjening"),
         ("history", "◷", "Historik"),
         ("iphone", "▯", "iPhone"),
         ("settings", "⚙", "Indstillinger"),
@@ -689,6 +694,8 @@ class H4xtorShareApp(TkinterDnD.Tk):
         self.peer_misses: dict[str, int] = {}
         self.device_cards: dict[str, DeviceCard] = {}
         self.selected_id: str | None = None
+        self.target_all = False  # "Til: Alle enheder" chosen in the target menu
+        self._init_phone_state()
         self.transfers: dict[str, TransferState] = {}
         self.transfer_rows: dict[str, TransferRow] = {}
         self.batches: dict[str, Future[Any]] = {}
@@ -821,9 +828,13 @@ class H4xtorShareApp(TkinterDnD.Tk):
         self._build_share_page()
         self._build_transfers_page()
         self._build_clipboard_page()
+        self._build_notifications_page()
+        self._build_sms_page()
+        self._build_remote_page()
         self._build_history_page()
         self._build_iphone_page()
         self._build_settings_page()
+        self.after(60000, self._notif_tick)
         for frame in self.pages.values():
             frame.grid(row=0, column=0, sticky="nsew")
         self.show_page("share")
@@ -880,6 +891,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
             )
 
         self.nav_rows: dict[str, tuple[tk.Frame, tk.Label, tk.Label]] = {}
+        self.nav_badges: dict[str, tk.Label] = {}
         for key, icon, label in self.NAV_ITEMS:
             row = tk.Frame(self.sidebar, bg=c["sidebar"], cursor="hand2")
             row.pack(fill="x", padx=px(10), pady=px(1))
@@ -910,6 +922,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
                 widget.bind("<Enter>", lambda _e, name=key: self._nav_hover(name, True))
                 widget.bind("<Leave>", lambda _e, name=key: self._nav_hover(name, False))
             self.nav_rows[key] = (row, icon_label, text_label)
+            self.nav_badges[key] = badge
             if key == "transfers":
                 self.transfer_badge = badge
 
@@ -985,6 +998,8 @@ class H4xtorShareApp(TkinterDnD.Tk):
         self.pages[name].tkraise()
         if name == "history":
             self._refresh_history()
+        elif name in {"notifications", "sms", "remote"}:
+            self._phone_page_shown(name)
 
     def _page(self, name: str, title: str, subtitle: str) -> tuple[tk.Frame, tk.Frame]:
         c = self.theme.c
@@ -1263,6 +1278,8 @@ class H4xtorShareApp(TkinterDnD.Tk):
         target = self._drop_target_peer()
         if target is not None:
             deliver(target)
+        elif self._all_selected():
+            deliver_all()
         else:
             self._choose_peer(deliver, "Send til…", all_callback=deliver_all)
 
@@ -1272,10 +1289,16 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self.show_qr_pairing()
             return
         menu = tk.Menu(self, tearoff=0)
+        if len(trusted) >= 2:
+            menu.add_command(
+                label=f"{'✓ ' if self._all_selected() else '   '}Alle enheder",
+                command=self.select_all_devices,
+            )
+            menu.add_separator()
         for peer in sorted(trusted, key=lambda item: item.name.lower()):
             status = self.peer_status.get(peer.device_id)
             online = status is not None and status.online
-            mark = "✓ " if self.selected_id == peer.device_id else "   "
+            mark = "✓ " if self.selected_id == peer.device_id and not self.target_all else "   "
             menu.add_command(
                 label=f"{mark}{peer.name}   ({'online' if online else 'offline'})",
                 command=lambda value=peer.device_id: self.select_peer(value),
@@ -1295,15 +1318,23 @@ class H4xtorShareApp(TkinterDnD.Tk):
             return
         c = self.theme.c
         target = self._drop_target_peer()
-        self.target_button.set_text(f"Til: {target.name} ▾" if target else "Vælg modtager ▾")
+        everyone = self._all_selected()
+        if everyone:
+            self.target_button.set_text("Til: Alle enheder ▾")
+        else:
+            self.target_button.set_text(f"Til: {target.name} ▾" if target else "Vælg modtager ▾")
         active = self._drop_active
         self.composer.set_colors(outline=c["accent"] if active else c["border_strong"])
         if active:
             hint = (
-                f"Slip for at sende til {target.name}" if target else "Slip – så vælger du modtager"
+                "Slip for at sende til alle enheder"
+                if everyone
+                else f"Slip for at sende til {target.name}"
+                if target
+                else "Slip – så vælger du modtager"
             )
             self.composer_hint.configure(text=hint, fg=c["accent"])
-        elif target is not None:
+        elif target is not None or everyone:
             self.composer_hint.configure(
                 text="Enter sender · Shift+Enter ny linje · links åbner direkte i browseren",
                 fg=c["faint"],
@@ -1318,7 +1349,18 @@ class H4xtorShareApp(TkinterDnD.Tk):
         self._draw_drop_zone()
         return "copy"
 
+    def _all_selected(self) -> bool:
+        return self.target_all and len(self._trusted_peers()) >= 2
+
+    def select_all_devices(self) -> None:
+        self.target_all = True
+        for card in self.device_cards.values():
+            card.update(card.peer)
+        self._draw_drop_zone()
+
     def _drop_target_peer(self) -> Peer | None:
+        if self._all_selected():
+            return None
         if self.selected_id and self.config_store.is_trusted(self.selected_id):
             return self.peers.get(self.selected_id)
         trusted = [
@@ -1337,6 +1379,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
 
     def select_peer(self, device_id: str) -> None:
         self.selected_id = device_id
+        self.target_all = False
         for card in self.device_cards.values():
             card.update(card.peer)
         self._draw_drop_zone()
@@ -2292,6 +2335,8 @@ class H4xtorShareApp(TkinterDnD.Tk):
         self.paired_section = section("Forbundne enheder")
         self._refresh_paired_list()
 
+        self._build_phone_settings(section)
+
         about = section("Om")
         tk.Label(
             about.body,
@@ -2538,6 +2583,9 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self._update_transfer_badge()
         elif tag == "group_result":
             self._group_result(value)
+        elif tag == "phone_call":
+            done, ok, result = value
+            done(ok, result)
         elif tag == "batch_failed":
             batch, error = value
             self.batches.pop(batch, None)
@@ -2596,6 +2644,8 @@ class H4xtorShareApp(TkinterDnD.Tk):
     def _handle_core_event(self, event: object) -> None:
         if isinstance(event, tuple):
             self._update_transfer(event)
+            return
+        if self._handle_phone_core_event(event):
             return
         if isinstance(event, PairingPrompt):
             self._show_pairing_code(event)
@@ -2663,6 +2713,8 @@ class H4xtorShareApp(TkinterDnD.Tk):
             state.path = str(event.path)
             self._render_transfer(state)
             self._refresh_history()
+            if not is_folder:
+                self._maybe_open_screenshot(event)
             kind = "Mappe" if is_folder else "Fil"
             self._notify(f"{kind} modtaget fra {event.peer_name}: {event.path.name}", "success")
         elif isinstance(event, TransferProgress):
@@ -3356,7 +3408,9 @@ class H4xtorShareApp(TkinterDnD.Tk):
         if peer is not None:
             return peer
         target = self._drop_target_peer()
-        if target is None:
+        if target is None and self._all_selected():
+            retry(None, to_all=True)
+        elif target is None:
             self._choose_peer(
                 retry, "Vælg en enhed", all_callback=lambda: retry(None, to_all=True)
             )
@@ -3699,6 +3753,8 @@ class H4xtorShareApp(TkinterDnD.Tk):
         target = self._drop_target_peer()
         if target is not None:
             self._send_paths(target, paths)
+        elif self._all_selected():
+            self._send_to_all("paths", paths)
         else:
             self._choose_peer(
                 lambda peer: self._send_paths(peer, paths),
@@ -4306,6 +4362,9 @@ class H4xtorShareApp(TkinterDnD.Tk):
             == 1
         ):
             self._send_paths(target, paths)
+            return
+        if self._all_selected():
+            self._send_to_all("paths", paths)
             return
         self._choose_peer(
             lambda peer: self._send_paths(peer, paths),
