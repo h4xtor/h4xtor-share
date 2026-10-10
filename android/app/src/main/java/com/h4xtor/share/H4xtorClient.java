@@ -294,6 +294,16 @@ public final class H4xtorClient {
                 .put("port", AppIdentity.PORT), 15_000);
     }
 
+    /** v1.2: mirror a phone notification (posted/removed) to a PC that supports "notifications". */
+    public void pushNotification(Peer peer, JSONObject payload) throws Exception {
+        authedPost(peer, "/api/v1/notification", payload, 10_000);
+    }
+
+    /** v1.2: tell a PC that supports "sms" about a new incoming text message. */
+    public void pushIncomingSms(Peer peer, JSONObject payload) throws Exception {
+        authedPost(peer, "/api/v1/sms/incoming", payload, 10_000);
+    }
+
     private JSONObject authedPost(Peer peer, String path, JSONObject body, int timeoutMs) throws Exception {
         requireTrusted(peer);
         return jsonRequest(peer.endpoint() + path, "POST", body,
@@ -335,8 +345,19 @@ public final class H4xtorClient {
 
     public void sendFile(Peer peer, Uri uri, ProgressListener listener, CancelToken cancel) throws Exception {
         requireTrusted(peer);
-        PreparedSource source = prepareSource(uri);
-        String key = peer.deviceId + "|" + uri;
+        sendPrepared(peer, prepareSource(uri), peer.deviceId + "|" + uri, listener, cancel);
+    }
+
+    /** Send a local file (e.g. a fresh screenshot in the app cache) under its own file name. */
+    public void sendFile(Peer peer, File file, ProgressListener listener, CancelToken cancel) throws Exception {
+        requireTrusted(peer);
+        PreparedSource source = new PreparedSource(file.getName(), file.length(),
+                () -> new FileInputStream(file), null);
+        sendPrepared(peer, source, peer.deviceId + "|" + file.getAbsolutePath(), listener, cancel);
+    }
+
+    private void sendPrepared(Peer peer, PreparedSource source, String key, ProgressListener listener,
+                              CancelToken cancel) throws Exception {
         String transferId = resumable.remove(key);
         if (transferId == null) {
             transferId = UUID.randomUUID().toString().replace("-", "");
@@ -362,6 +383,7 @@ public final class H4xtorClient {
             source.close();
         }
     }
+
 
     private static final class TreeEntry {
         final String id = UUID.randomUUID().toString().replace("-", "");

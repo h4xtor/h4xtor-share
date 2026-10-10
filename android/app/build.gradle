@@ -61,4 +61,6 @@ dependencies {
     implementation 'com.google.android.gms:play-services-code-scanner:16.1.0'
     implementation 'com.google.zxing:core:3.5.3'
     testImplementation 'junit:junit:4.13.2'
+    // android.jar only has stubs for org.json; the real thing lets JUnit test the JSON mapping.
+    testImplementation 'org.json:json:20231013'
 }

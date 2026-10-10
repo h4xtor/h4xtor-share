@@ -43,6 +43,9 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private static final int REQUEST_TREE = 2003;
     private static final int REQUEST_WIFI_PERMISSION = 2004;
     private static final int REQUEST_MEDIA_PERMISSION = 2005;
+    private static final int REQUEST_SMS_PERMISSION = 2006;
+    /** pendingPeerId value meaning "every paired, online device". */
+    private static final String ALL_ID = "*";
 
     private static final String PAGE_DEVICES = "devices";
     private static final String PAGE_TRANSFERS = "transfers";
@@ -58,6 +61,8 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     /** Tapped in this session: stick to it. A remembered choice yields to whoever is online. */
     private boolean pickedThisSession;
     private String pendingPeerId;
+    /** The composer sends to every online device instead of the selected one (this session only). */
+    private boolean sendToAll;
     private String pendingInvite;
     private boolean resumed;
 
@@ -205,6 +210,15 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             } else {
                 toast("Wi-Fi Direct kræver tilladelse til enheder i nærheden", true);
             }
+        }
+        if (requestCode == REQUEST_SMS_PERMISSION && service != null) {
+            boolean granted = checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
+                    && checkSelfPermission(Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED;
+            service.identity().setFlag("sms_enabled", granted);
+            service.refreshSms();
+            toast(granted ? "PC'en kan nu l\u00e6se og sende SMS"
+                    : "Uden adgang til SMS kan PC'en ikke vise eller sende beskeder", !granted);
+            render();
         }
         if (requestCode == REQUEST_MEDIA_PERMISSION && service != null) {
             boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
@@ -401,6 +415,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
 
     private void select(Peer peer) {
         selectedId = peer.deviceId;
+        sendToAll = false;
         pickedThisSession = true;
         service.identity().setString("selected_peer", selectedId);
         render();
@@ -630,14 +645,18 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         chip.setPadding(ui.dp(10), ui.dp(5), ui.dp(10), ui.dp(5));
         chip.setBackground(ui.ripple(ui.rounded(ui.surfaceAlt, 0, 999), 999));
         View dot = new View(this);
-        boolean online = service.isOnline(target.deviceId);
+        boolean all = sendToAll && service.pairedPeers().size() >= 2;
+        boolean online = all ? !service.onlinePairedPeers().isEmpty() : service.isOnline(target.deviceId);
         dot.setBackground(ui.rounded(online ? ui.success : ui.faint, 0, 999));
         chip.addView(dot, new LinearLayout.LayoutParams(ui.dp(7), ui.dp(7)));
-        TextView name = ui.text(target.name + "  ▾", 14f, ui.text, true);
+        TextView name = ui.text((all ? "Alle enheder" : target.name) + "  ▾", 14f, ui.text, true);
         name.setSingleLine(true);
         name.setEllipsize(TextUtils.TruncateAt.END);
         chip.addView(name, ui.wrap(7, 0, 0, 0));
-        chip.setOnClickListener(v -> choosePeer(this::select));
+        chip.setOnClickListener(v -> choosePeer(this::select, () -> {
+            sendToAll = true;
+            render();
+        }));
         to.addView(chip, ui.wrap(8, 0, 0, 0));
         card.addView(to);
 
@@ -647,10 +666,16 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         android.widget.HorizontalScrollView chipsScroll = new android.widget.HorizontalScrollView(this);
         chipsScroll.setHorizontalScrollBarEnabled(false);
         LinearLayout chips = ui.row();
-        chips.addView(toolChip(R.drawable.ic_file, "Filer", v -> pickFiles(target)));
-        chips.addView(toolChip(R.drawable.ic_image, "Fotos", v -> pickPhotos(target)), ui.wrap(6, 0, 0, 0));
-        chips.addView(toolChip(R.drawable.ic_folder, "Mappe", v -> pickTree(target)), ui.wrap(6, 0, 0, 0));
-        chips.addView(toolChip(R.drawable.ic_clipboard, null, v -> sendClipboard(target)), ui.wrap(6, 0, 0, 0));
+        chips.addView(toolChip(R.drawable.ic_file, "Filer", v -> pickFiles(target, all)));
+        chips.addView(toolChip(R.drawable.ic_image, "Fotos", v -> pickPhotos(target, all)), ui.wrap(6, 0, 0, 0));
+        chips.addView(toolChip(R.drawable.ic_folder, "Mappe", v -> {
+            if (all) {
+                toast("Mapper kan kun sendes til \u00e9n enhed ad gangen \u2013 v\u00e6lg en enhed f\u00f8rst", true);
+            } else {
+                pickTree(target);
+            }
+        }), ui.wrap(6, 0, 0, 0));
+        chips.addView(toolChip(R.drawable.ic_clipboard, null, v -> sendClipboard(target, all)), ui.wrap(6, 0, 0, 0));
         chipsScroll.addView(chips);
         bottom.addView(chipsScroll, ui.weight(1));
 
@@ -698,11 +723,16 @@ public final class MainActivity extends Activity implements ShareService.UiListe
 
     private void sendComposer() {
         Peer target = selectedPeer();
+        boolean all = sendToAll && service.pairedPeers().size() >= 2;
         String text = composerInput == null ? "" : composerInput.getText().toString().trim();
         if (target == null || text.isEmpty()) {
             return;
         }
-        service.sendText(target, text);
+        if (all) {
+            sendAllText(text);
+        } else {
+            service.sendText(target, text);
+        }
         composerInput.setText("");
         composerInput.clearFocus();
         android.view.inputmethod.InputMethodManager keyboard =
@@ -710,7 +740,20 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         if (keyboard != null) {
             keyboard.hideSoftInputFromWindow(composerInput.getWindowToken(), 0);
         }
-        toast((Ui.isLink(text) ? "Link sendt – åbner på " : "Sendt til ") + target.name, false);
+        if (!all) {
+            toast((Ui.isLink(text) ? "Link sendt – åbner på " : "Sendt til ") + target.name, false);
+        }
+    }
+
+    /** Text to every online device; the toast says who got it and who did not. */
+    private void sendAllText(String text) {
+        service.sendTextToAll(text, (results, summary) -> {
+            boolean failed = results.isEmpty();
+            for (ShareService.DeviceResult result : results) {
+                failed |= !result.ok;
+            }
+            toast(summary, failed);
+        });
     }
 
     private View clipboardSuggestion(Peer target) {
@@ -1435,6 +1478,9 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                 identity.flag("vibrate_done", true), value -> identity.setFlag("vibrate_done", value)));
         content.addView(tricks, ui.margins(0, 0, 0, 18));
 
+        content.addView(ui.label("Telefon på PC'en"), ui.margins(4, 0, 0, 8));
+        content.addView(phoneOnPcCard(identity), ui.margins(0, 0, 0, 18));
+
         content.addView(ui.label("Nørd-panel"), ui.margins(4, 0, 0, 8));
         content.addView(nerdPanel(), ui.margins(0, 0, 0, 18));
 
@@ -1603,6 +1649,145 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         return card;
     }
 
+    // ------------------------------------------------- "Telefon på PC'en"
+    private View phoneOnPcCard(AppIdentity identity) {
+        LinearLayout card = ui.card();
+
+        boolean access = NotificationMirrorService.hasAccess(this);
+        boolean mirror = identity.flag("mirror_notifications", false);
+        card.addView(toggleRow("Vis telefonens notifikationer på PC'en",
+                mirror && !access
+                        ? "Slået til, men h4xtor share mangler adgang til notifikationer – se herunder."
+                        : "Beskeder fra dine apps dukker op på PC'en, og du kan svare på dem derfra.",
+                mirror, value -> {
+                    identity.setFlag("mirror_notifications", value);
+                    if (value && !NotificationMirrorService.hasAccess(this)) {
+                        openNotificationAccess();
+                    }
+                    content.post(this::render);
+                }));
+        card.addView(ui.divider());
+        card.addView(notificationAccessRow(access));
+        card.addView(ui.divider());
+
+        java.util.Set<String> chosen = identity.mirrorApps();
+        LinearLayout apps = ui.row();
+        LinearLayout appTexts = ui.column();
+        appTexts.addView(ui.text("Hvilke apps", 15f, ui.text, true));
+        appTexts.addView(ui.text(chosen.isEmpty() ? "Alle apps"
+                : chosen.size() == 1 ? "1 app valgt" : chosen.size() + " apps valgt", 12.5f, ui.muted, false),
+                ui.margins(0, 2, 0, 0));
+        apps.addView(appTexts, ui.weight(1));
+        TextView pick = ui.button("Vælg apps", "soft");
+        pick.setMinHeight(ui.dp(36));
+        pick.setOnClickListener(v -> chooseMirrorApps());
+        apps.addView(pick);
+        card.addView(apps);
+        card.addView(ui.divider());
+
+        boolean smsFlag = identity.flag("sms_enabled", false);
+        boolean smsPermitted = checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
+                && checkSelfPermission(Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED;
+        card.addView(toggleRow("SMS fra PC'en",
+                smsFlag && !smsPermitted
+                        ? "Slået til, men tilladelsen til SMS mangler. Slå fra og til igen for at give den."
+                        : "PC'en kan vise dine SMS-samtaler og sende SMS fra dit nummer.",
+                smsFlag, value -> {
+                    if (!value) {
+                        identity.setFlag("sms_enabled", false);
+                        service.refreshSms();
+                        return;
+                    }
+                    if (smsPermitted) {
+                        identity.setFlag("sms_enabled", true);
+                        service.refreshSms();
+                        return;
+                    }
+                    new AlertDialog.Builder(this)
+                            .setTitle("SMS fra PC'en")
+                            .setMessage("For at vise og sende SMS fra PC'en skal h4xtor share have adgang til "
+                                    + "dine SMS og kontakter. Beskederne sendes kun til dine egne forbundne "
+                                    + "enheder på dit lokale netværk – aldrig ud på internettet.")
+                            .setNegativeButton("Annullér", (dialog, which) -> render())
+                            .setOnCancelListener(dialog -> render())
+                            .setPositiveButton("Fortsæt", (dialog, which) ->
+                                    requestPermissions(SmsBridge.permissions(), REQUEST_SMS_PERMISSION))
+                            .show();
+                }));
+        card.addView(ui.divider());
+
+        card.addView(toggleRow("Fjernbetjening fra PC'en (find telefon, lydstyrke, oplæsning, baggrund)",
+                "PC'en kan få telefonen til at ringe, skifte lydstyrke, læse tekst højt og skifte baggrund. "
+                        + "Skærmbilleder fra PC'en spørger altid dig først.",
+                identity.flag("remote_control", true), value -> identity.setFlag("remote_control", value)));
+        return card;
+    }
+
+    private View notificationAccessRow(boolean access) {
+        LinearLayout row = ui.row();
+        LinearLayout texts = ui.column();
+        texts.addView(ui.text(access ? "Adgang til notifikationer er givet ✓" : "Giv adgang til notifikationer",
+                15f, ui.text, true));
+        texts.addView(ui.text(access
+                ? "Tryk her, hvis du vil ændre det i Android."
+                : "Tryk her og slå \"h4xtor share\" til. Står der \"Begrænset indstilling\", så åbn App-info for "
+                        + "h4xtor share, tryk ⋮ og \"Tillad begrænsede indstillinger\" først.",
+                12.5f, access ? ui.accent : ui.muted, false), ui.margins(0, 2, 0, 0));
+        row.addView(texts, ui.weight(1));
+        row.setOnClickListener(v -> openNotificationAccess());
+        return row;
+    }
+
+    private void openNotificationAccess() {
+        try {
+            startActivity(new Intent(android.provider.Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));
+        } catch (Exception error) {
+            toast("Åbn Indstillinger → Notifikationer → Notifikationsadgang på telefonen", true);
+        }
+    }
+
+    /** Checkable list of installed apps; no tick at all means "all apps". */
+    private void chooseMirrorApps() {
+        android.content.pm.PackageManager manager = getPackageManager();
+        Intent launcher = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
+        java.util.Map<String, String> labels = new java.util.HashMap<>();
+        for (android.content.pm.ResolveInfo info : manager.queryIntentActivities(launcher, 0)) {
+            String packageName = info.activityInfo.packageName;
+            if (!getPackageName().equals(packageName) && !labels.containsKey(packageName)) {
+                labels.put(packageName, String.valueOf(info.loadLabel(manager)));
+            }
+        }
+        List<String> packages = new ArrayList<>(labels.keySet());
+        java.util.Collections.sort(packages, (a, b) -> labels.get(a).compareToIgnoreCase(labels.get(b)));
+        java.util.Set<String> current = service.identity().mirrorApps();
+        String[] names = new String[packages.size()];
+        boolean[] checked = new boolean[packages.size()];
+        for (int index = 0; index < packages.size(); index++) {
+            names[index] = labels.get(packages.get(index));
+            checked[index] = current.contains(packages.get(index));
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Vælg apps")
+                .setMultiChoiceItems(names, checked, (dialog, which, isChecked) -> checked[which] = isChecked)
+                .setNegativeButton("Annullér", null)
+                .setNeutralButton("Alle apps", (dialog, which) -> {
+                    service.identity().setMirrorApps(new java.util.HashSet<>());
+                    render();
+                })
+                .setPositiveButton("Gem", (dialog, which) -> {
+                    java.util.Set<String> selected = new java.util.HashSet<>();
+                    for (int index = 0; index < checked.length; index++) {
+                        if (checked[index]) {
+                            selected.add(packages.get(index));
+                        }
+                    }
+                    service.identity().setMirrorApps(selected);
+                    toast(selected.isEmpty() ? "Alle apps vises på PC'en" : selected.size() + " apps valgt", false);
+                    render();
+                })
+                .show();
+    }
+
     private interface Toggled {
         void set(boolean value);
     }
@@ -1650,25 +1835,39 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         void chosen(Peer peer);
     }
 
-    private void choosePeer(PeerChosen callback) {
+    private void choosePeer(PeerChosen callback, Runnable onAll) {
         List<Peer> paired = service.pairedPeers();
         if (paired.isEmpty()) {
             scanQr();
             return;
         }
-        String[] names = new String[paired.size()];
+        int offset = paired.size() >= 2 ? 1 : 0;
+        String[] names = new String[paired.size() + offset];
+        if (offset == 1) {
+            names[0] = "Alle enheder  ·  " + service.onlinePairedPeers().size() + " online";
+        }
         for (int index = 0; index < paired.size(); index++) {
             Peer peer = paired.get(index);
-            names[index] = peer.name + (service.isOnline(peer.deviceId) ? "  ·  online" : "  ·  offline");
+            names[index + offset] = peer.name + (service.isOnline(peer.deviceId) ? "  ·  online" : "  ·  offline");
         }
         new AlertDialog.Builder(this)
                 .setTitle("Vælg enhed")
-                .setItems(names, (dialog, which) -> callback.chosen(paired.get(which)))
+                .setItems(names, (dialog, which) -> {
+                    if (offset == 1 && which == 0) {
+                        onAll.run();
+                    } else {
+                        callback.chosen(paired.get(which - offset));
+                    }
+                })
                 .show();
     }
 
     private void pickFiles(Peer peer) {
-        pendingPeerId = peer.deviceId;
+        pickFiles(peer, false);
+    }
+
+    private void pickFiles(Peer peer, boolean all) {
+        pendingPeerId = all ? ALL_ID : peer.deviceId;
         Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("*/*");
@@ -1676,8 +1875,8 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         startActivityForResult(intent, REQUEST_FILES);
     }
 
-    private void pickPhotos(Peer peer) {
-        pendingPeerId = peer.deviceId;
+    private void pickPhotos(Peer peer, boolean all) {
+        pendingPeerId = all ? ALL_ID : peer.deviceId;
         Intent intent;
         if (Build.VERSION.SDK_INT >= 33) {
             intent = new Intent(MediaStore.ACTION_PICK_IMAGES);
@@ -1691,7 +1890,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         try {
             startActivityForResult(intent, REQUEST_FILES);
         } catch (ActivityNotFoundException error) {
-            pickFiles(peer);
+            pickFiles(peer, all);
         }
     }
 
@@ -1710,9 +1909,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         if (resultCode != RESULT_OK || data == null || service == null) {
             return;
         }
-        Peer peer = service.peer(pendingPeerId);
+        boolean toAll = ALL_ID.equals(pendingPeerId);
+        Peer peer = toAll ? null : service.peer(pendingPeerId);
         pendingPeerId = null;
-        if (peer == null) {
+        if (peer == null && !toAll) {
             return;
         }
         // Keep read access even if this screen is closed during a long transfer.
@@ -1734,13 +1934,20 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             } else if (data.getData() != null) {
                 uris.add(data.getData());
             }
-            if (!uris.isEmpty()) {
+            if (!uris.isEmpty() && toAll) {
+                int devices = service.sendUrisToAll(uris).size();
+                toast(devices == 0 ? "Ingen af dine enheder er online lige nu"
+                        : "Sender " + uris.size() + (uris.size() == 1 ? " fil" : " filer") + " til " + devices
+                        + (devices == 1 ? " enhed" : " enheder"), devices == 0);
+                page = PAGE_TRANSFERS;
+                render();
+            } else if (!uris.isEmpty()) {
                 service.sendUris(peer, uris);
                 toast("Sender " + uris.size() + (uris.size() == 1 ? " fil" : " filer") + " til " + peer.name, false);
                 page = PAGE_TRANSFERS;
                 render();
             }
-        } else if (requestCode == REQUEST_TREE && data.getData() != null) {
+        } else if (requestCode == REQUEST_TREE && data.getData() != null && peer != null) {
             service.sendTree(peer, data.getData());
             toast("Sender mappe til " + peer.name, false);
             page = PAGE_TRANSFERS;
@@ -1756,13 +1963,17 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         }
     }
 
-    private void sendClipboard(Peer peer) {
+    private void sendClipboard(Peer peer, boolean all) {
         String text = service.currentClipboard();
         if (text == null || text.trim().isEmpty()) {
             toast("Udklipsholderen er tom", true);
             return;
         }
-        service.sendText(peer, text);
+        if (all) {
+            sendAllText(text);
+        } else {
+            service.sendText(peer, text);
+        }
     }
 
     private void composeText(Peer peer) {
