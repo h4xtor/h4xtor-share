@@ -11,6 +11,13 @@ os.environ.setdefault("XDG_CONFIG_HOME", "/tmp/h4xtor-ui-test-smoke")
 
 
 @pytest.fixture(autouse=True)
+def _isolated_config(tmp_path, monkeypatch):
+    # Config() reads platformdirs (not XDG_CONFIG_HOME on Windows/macOS): never touch real data.
+    monkeypatch.setattr("h4xtor_share.config.user_config_dir", lambda _n: str(tmp_path / "cfg"))
+    monkeypatch.setattr("h4xtor_share.config.user_downloads_dir", lambda: str(tmp_path / "dl"))
+
+
+@pytest.fixture(autouse=True)
 def _free_tk_on_main_thread():
     # Closed apps leave Tk variables in reference cycles. Left to the garbage
     # collector they may be freed on the asyncio thread, which aborts Tcl
@@ -20,6 +27,18 @@ def _free_tk_on_main_thread():
 
 
 def _can_build_ui() -> bool:
+    import tempfile
+    from unittest import mock
+
+    scratch = tempfile.mkdtemp(prefix="h4x-ui-probe-")
+    with (
+        mock.patch("h4xtor_share.config.user_config_dir", lambda _n: scratch),
+        mock.patch("h4xtor_share.config.user_downloads_dir", lambda: scratch),
+    ):
+        return _probe_ui()
+
+
+def _probe_ui() -> bool:
     try:
         from h4xtor_share.app import H4xtorShareApp
 
@@ -264,11 +283,9 @@ def test_iphone_access_turns_itself_off_when_port_is_taken() -> None:
         app.close()
 
 
-def _paired_app(count: int, tmp_path, monkeypatch):
+def _paired_app(count: int, tmp_path, monkeypatch, extra_caps: tuple[str, ...] = ()):
     from h4xtor_share.models import Peer
 
-    # Never touch the real user config (Config() reads platformdirs, not XDG_CONFIG_HOME).
-    monkeypatch.setattr("h4xtor_share.config.user_config_dir", lambda _name: str(tmp_path))
     app = _new_app()
     peers = []
     for index in range(count):
@@ -279,7 +296,7 @@ def _paired_app(count: int, tmp_path, monkeypatch):
             47474,
             f"{index + 1:02x}" * 32,
             "android",
-            capabilities=("folders",) if index != 1 else (),
+            capabilities=(("folders",) if index != 1 else ()) + extra_caps,
         )
         app.config_store.trust_outbound_peer(peer.device_id, "t" * 40, peer.fingerprint, peer.name)
         app.peers[peer.device_id] = peer
@@ -437,5 +454,357 @@ def test_api_send_all_returns_result_per_device(tmp_path, monkeypatch) -> None:
         results = {item["name"]: item for item in future.result()}
         assert results["Mobil"]["ok"] is True and results["Mobil"]["error"] == ""
         assert results["Bærbar"]["ok"] is False and results["Bærbar"]["error"] == "nede"
+    finally:
+        app.close()
+
+
+PHONE_CAPS = ("notifications", "sms", "screenshot-request", "find-phone", "remote-control")
+
+
+def _walk(widget):
+    for child in widget.winfo_children():
+        yield child
+        yield from _walk(child)
+
+
+def _buttons(widget) -> dict:
+    return {w._text: w for w in _walk(widget) if hasattr(w, "_text") and hasattr(w, "command")}
+
+
+def _recorder(app, name: str, result=None, error: Exception | None = None) -> list:
+    calls: list = []
+
+    async def method(*args):
+        calls.append(args)
+        if error is not None:
+            raise error
+        return result
+
+    setattr(app.client, name, method)
+    return calls
+
+
+def _notification(peer, **kwargs):
+    from h4xtor_share.models import NotificationReceived
+
+    values = {
+        "peer_id": peer.device_id,
+        "peer_name": peer.name,
+        "key": "0|com.whatsapp|1",
+        "package": "com.whatsapp",
+        "app": "WhatsApp",
+        "title": "Mor",
+        "text": "Kommer du til middag?",
+        "time": 0,
+        "icon_png": b"",
+        "can_reply": True,
+        "can_dismiss": True,
+    }
+    values.update(kwargs)
+    return NotificationReceived(**values)
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_phone_pages_build_empty_and_with_a_phone(tmp_path, monkeypatch) -> None:
+    app, peers = _paired_app(1, tmp_path, monkeypatch, PHONE_CAPS)
+    try:
+        _recorder(app, "sms_threads", [])
+        for page in ("notifications", "sms", "remote", "settings"):
+            app.show_page(page)
+            app.update()
+        assert "Find telefon" in _buttons(app.remote_scroll.inner)
+    finally:
+        app.close()
+    # A phone that does not know the new features: controls disabled with a hint.
+    app, peers = _paired_app(1, tmp_path, monkeypatch)
+    try:
+        app.show_page("remote")
+        app.update()
+        assert "Telefonen skal opdateres" in " ".join(_texts(app.pages["remote"]))
+        app.show_page("sms")
+        app.update()
+        assert "Ingen forbundne enheder kan sende og modtage SMS" in app.sms_notice.cget("text")
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_notifications_card_reply_dismiss_remove(tmp_path, monkeypatch) -> None:
+    from pathlib import Path
+
+    from h4xtor_share.models import NotificationRemoved
+
+    app, peers = _paired_app(1, tmp_path, monkeypatch, PHONE_CAPS)
+    peer = peers[0]
+    shown: list[str] = []
+    app._notify = lambda message, tone="neutral": shown.append(message)
+    root = Path(__file__).resolve().parents[1] / "src" / "h4xtor_share"
+    icon = root / "chrome_extension" / "icons" / "icon48.png"
+    try:
+        app._handle_core_event(_notification(peer, icon_png=icon.read_bytes()))
+        app._handle_core_event(_notification(peer, key="b", app="SMS", icon_png=b"junk"))
+        app.update()
+        assert [e.key for e in app.notif_entries] == ["b", "0|com.whatsapp|1"]  # newest first
+        assert app.notif_entries[1].photo is not None  # real icon decoded
+        assert app.notif_entries[0].photo is None  # broken icon -> initial fallback
+        assert shown[0] == "WhatsApp: Mor – Kommer du til middag?"
+        assert app.nav_badges["notifications"].cget("text") == "2"
+        # An update of the same key neither duplicates nor notifies again.
+        app._handle_core_event(_notification(peer, text="Svar mig"))
+        assert len(app.notif_entries) == 2 and len(shown) == 2
+        assert app.notif_entries[1].text == "Svar mig"
+
+        app.show_page("notifications")
+        assert app.nav_badges["notifications"].cget("text") == ""
+
+        calls = _recorder(app, "notification_action")
+        entry = app.notif_entries[1]
+        app._notif_toggle_reply(entry)
+        assert entry.reply_row is not None
+        app._notif_reply(entry, "Ja, jeg kommer")
+        _pump(app, lambda: calls)
+        assert calls == [(peer, "0|com.whatsapp|1", "reply", "Ja, jeg kommer")]
+        app.update()
+        app._notif_dismiss(entry)
+        _pump(app, lambda: len(app.notif_entries) == 1)
+        assert calls[-1] == (peer, "0|com.whatsapp|1", "dismiss")
+
+        app._handle_core_event(NotificationRemoved(peer.device_id, peer.name, "b"))
+        assert app.notif_entries == []
+        assert "Ingen notifikationer endnu" in app.notif_empty.cget("text")
+
+        app.config_store.set_flag("show_phone_notifications", False)
+        shown.clear()
+        app._handle_core_event(_notification(peer, key="c"))
+        assert shown == []
+        app._notif_clear_all()
+        assert app.notif_entries == []
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_sms_page_threads_messages_live_update_and_errors(tmp_path, monkeypatch) -> None:
+    from h4xtor_share.models import SmsReceived
+
+    app, peers = _paired_app(1, tmp_path, monkeypatch, PHONE_CAPS)
+    peer = peers[0]
+    shown: list[str] = []
+    app._notify = lambda message, tone="neutral": shown.append(message)
+    threads = [
+        {
+            "thread_id": "12",
+            "address": "+4512345678",
+            "name": "Mor",
+            "snippet": "Hej",
+            "time": 1760090000000,
+            "unread": False,
+        },
+        {
+            "thread_id": "13",
+            "address": "+4587654321",
+            "name": "",
+            "snippet": "Tak",
+            "time": 1760080000000,
+            "unread": True,
+        },
+    ]
+    messages = [
+        {"id": "1", "address": "+4512345678", "body": "Hej", "time": 1760090000000,
+         "outgoing": False},
+        {"id": "2", "address": "+4512345678", "body": "Hej mor", "time": 1760090100000,
+         "outgoing": True},
+    ]
+    _recorder(app, "sms_threads", threads)
+    _recorder(app, "sms_messages", messages)
+    sent = _recorder(app, "send_sms")
+    try:
+        app.show_page("sms")
+        _pump(app, lambda: app.sms_threads.get(peer.device_id))
+        app.update()
+        assert len(app.sms_threads[peer.device_id]) == 2
+        app._sms_select(app.sms_threads[peer.device_id][0])
+        _pump(app, lambda: (peer.device_id, "12") in app.sms_messages)
+        app.update()
+        assert "Mor  ·  +4512345678" in app.sms_title.cget("text")
+        assert len(app.sms_msg_scroll.inner.winfo_children()) == 2  # two bubbles
+
+        # A live SMS in the open thread appears; one in another thread marks it unread.
+        app._handle_core_event(
+            SmsReceived(
+                peer.device_id,
+                peer.name,
+                "12",
+                "+4512345678",
+                "Mor",
+                "Middag kl. 18?",
+                1760091000000,
+            )
+        )
+        app.update()
+        assert len(app.sms_msg_scroll.inner.winfo_children()) == 3
+        assert app.sms_threads[peer.device_id][0]["snippet"] == "Middag kl. 18?"
+        assert shown[-1] == "SMS fra Mor: Middag kl. 18?"
+        app._handle_core_event(
+            SmsReceived(peer.device_id, peer.name, "13", "+4587654321", "", "Ring", 1760092000000)
+        )
+        top = app.sms_threads[peer.device_id][0]
+        assert top["thread_id"] == "13" and top["unread"] is True
+        assert shown[-1] == "SMS fra +4587654321: Ring"
+
+        app.sms_box.insert("1.0", "Kl. 18 passer")
+        app._sms_send()
+        _pump(app, lambda: sent)
+        assert sent == [(peer, "+4512345678", "Kl. 18 passer")]
+        _pump(app, lambda: not app.sms_box.get("1.0", "end").strip())
+        assert len(app.sms_msg_scroll.inner.winfo_children()) == 4
+
+        app._sms_start_new("+4500000000")
+        assert app.sms_current == {"thread_id": "", "address": "+4500000000", "name": ""}
+    finally:
+        app.close()
+
+    app, peers = _paired_app(1, tmp_path, monkeypatch, PHONE_CAPS)
+    _recorder(app, "sms_threads", error=RuntimeError("SMS er slået fra på telefonen."))
+    try:
+        app.show_page("sms")
+        _pump(app, lambda: "slået fra" in app.sms_notice.cget("text"))
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_remote_buttons_call_the_client_and_screenshot_opens(tmp_path, monkeypatch) -> None:
+    from pathlib import Path
+
+    from h4xtor_share.models import FileReceived
+
+    app, peers = _paired_app(1, tmp_path, monkeypatch, PHONE_CAPS)
+    peer = peers[0]
+    find = _recorder(app, "find_phone", True)
+    shot = _recorder(app, "request_screenshot")
+    volume = _recorder(app, "set_volume", 30)
+    speak = _recorder(app, "speak")
+    paper = _recorder(app, "set_wallpaper")
+    opened: list[str] = []
+    app.open_path_safely = opened.append
+    image = tmp_path / "bg.png"
+    image.write_bytes(b"png")
+    monkeypatch.setattr(
+        "h4xtor_share.phone_pages.filedialog.askopenfilename", lambda **_k: str(image)
+    )
+    try:
+        app.open_remote(peer)
+        app.update()
+        assert app.active_page == "remote" and app.remote_peer_id == peer.device_id
+        app.remote_find()
+        app.remote_stop_ring()
+        _pump(app, lambda: len(find) == 2)
+        assert find == [(peer, True), (peer, False)]
+        app.remote_scale.set(30)
+        app.remote_set_volume()
+        app.remote_speak_var.set("Hvor er du?")
+        app.remote_speak()
+        app.remote_wallpaper()
+        _pump(app, lambda: volume and speak and paper)
+        assert volume == [(peer, 30)] and speak == [(peer, "Hvor er du?")]
+        assert paper == [(peer, Path(image))]
+
+        app.remote_screenshot()
+        _pump(app, lambda: app.pending_screenshot is not None)
+        other = FileReceived("z" * 32, "Anden", Path("Skaermbillede-1.png"), 1)
+        app._maybe_open_screenshot(other)  # wrong phone
+        assert opened == []
+        app._maybe_open_screenshot(FileReceived(peer.device_id, peer.name, Path("foto.png"), 1))
+        assert opened == []  # not a screenshot
+        app._maybe_open_screenshot(
+            FileReceived(peer.device_id, peer.name, Path("Skaermbillede-20261010-1.png"), 1)
+        )
+        assert opened == ["Skaermbillede-20261010-1.png"]
+        assert app.pending_screenshot is None
+        assert shot == [(peer,)]
+    finally:
+        app.close()
+
+
+class FakeDrive:
+    def __init__(self, configured: bool, connected: bool = False) -> None:
+        self.configured, self.connected = configured, connected
+        self.files: list[str] = []
+        self.disconnected = False
+
+    def status(self):
+        return {
+            "configured": self.configured,
+            "connected": self.connected,
+            "email": "lennart@example.com" if self.connected else "",
+        }
+
+    async def connect(self, open_url):
+        self.connected = True
+        return "lennart@example.com"
+
+    async def list_root(self, limit: int = 20):
+        return self.files
+
+    async def disconnect(self):
+        self.connected = False
+        self.disconnected = True
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_google_drive_section_states(tmp_path, monkeypatch) -> None:
+    import tkinter as tk
+
+    app, _peers = _paired_app(1, tmp_path, monkeypatch)
+
+    def modal_count() -> int:
+        return len([w for w in app.winfo_children() if isinstance(w, tk.Toplevel)])
+
+    try:
+        app.gdrive = FakeDrive(configured=False)
+        app._drive_render()
+        assert "Forbind Google Drive" in _buttons(app.drive_body)
+        app._drive_connect()  # not configured -> setup help, nothing contacts Google
+        app.update()
+        modals = [w for w in app.winfo_children() if isinstance(w, tk.Toplevel)]
+        assert any("Google Cloud Console" in " ".join(_texts(m)) for m in modals)
+        assert app.gdrive.connected is False
+
+        app.gdrive = FakeDrive(configured=True)
+        app._drive_render()
+        app._drive_connect()
+        assert "Venter på Google" in " ".join(_texts(app.drive_body))
+        _pump(app, lambda: app.gdrive.connected and not app.drive_busy)
+        texts = " ".join(_texts(app.drive_body))
+        assert "Forbundet som lennart@example.com" in texts
+        assert {"Test forbindelse", "Afbryd"} <= set(_buttons(app.drive_body))
+
+        before = modal_count()
+        app._drive_test()  # empty Drive is fine and explained
+        _pump(app, lambda: modal_count() > before)
+        app.gdrive.files = ["a.txt", "b.txt"]
+        app._drive_test()
+        app._drive_disconnect()
+        _pump(app, lambda: "Forbind Google Drive" in _buttons(app.drive_body))
+        assert app.gdrive.disconnected
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_target_menu_all_devices(tmp_path, monkeypatch) -> None:
+    app, peers = _paired_app(2, tmp_path, monkeypatch)
+    try:
+        app.select_all_devices()
+        app.update()
+        assert app._all_selected() and app._drop_target_peer() is None
+        assert app.target_button._text == "Til: Alle enheder ▾"
+        retried: list = []
+        assert app._resolve_peer(None, lambda *a, **k: retried.append(k)) is None
+        assert retried == [{"to_all": True}]  # no chooser: straight to everyone
+        app.select_peer(peers[0].device_id)
+        assert not app._all_selected()
+        assert app.target_button._text == "Til: Mobil ▾"
     finally:
         app.close()
