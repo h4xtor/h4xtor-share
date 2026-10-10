@@ -27,6 +27,13 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <!-- Optional "SMS fra PC'en": asked at runtime, only after the user switches it on. -->
+    <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.SEND_SMS" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- "Fjernbetjening": set the wallpaper from the PC. -->
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
 
     <uses-feature
         android:name="android.hardware.wifi.direct"
@@ -34,6 +41,21 @@
     <uses-feature
         android:name="android.hardware.camera"
         android:required="false" />
+    <uses-feature
+        android:name="android.hardware.telephony"
+        android:required="false" />
+
+    <queries>
+        <!-- App list for "Vælg apps" in the notification settings. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+        <!-- Lets text-to-speech find the installed speech engines. -->
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="false"
@@ -102,7 +124,24 @@
         <service
             android:name=".ShareService"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
+            android:foregroundServiceType="connectedDevice|mediaProjection" />
+
+        <activity
+            android:name=".ScreenCaptureActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/Theme.H4xtorShare.Invisible" />
+
+        <service
+            android:name=".NotificationMirrorService"
+            android:exported="true"
+            android:label="h4xtor share – vis notifikationer på PC'en"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
 
         <service
             android:name=".ClipboardTileService"

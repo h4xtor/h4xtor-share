@@ -10,6 +10,8 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
+import android.media.projection.MediaProjection;
+import android.media.projection.MediaProjectionManager;
 import android.net.Uri;
 import android.net.wifi.WifiManager;
 import android.os.Build;
@@ -21,6 +23,7 @@ import android.os.SystemClock;
 
 import org.json.JSONObject;
 
+import java.io.File;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
@@ -64,6 +67,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
 
     public static final String ACTION_STOP = "com.h4xtor.share.STOP";
     public static final String ACTION_START = "com.h4xtor.share.START";
+    public static final String ACTION_FIND_STOP = "com.h4xtor.share.FIND_STOP";
     /** Carries shared URIs so their read grant lives as long as the service. */
     public static final String ACTION_HOLD = "com.h4xtor.share.HOLD";
 
@@ -72,6 +76,8 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     private static final String CHANNEL_EVENTS = "h4xtor_events";
     private static final int NOTIFICATION_SERVICE = 1;
     private static final int NOTIFICATION_TRANSFERS = 2;
+    private static final int NOTIFICATION_SCREENSHOT = 201;
+    private static final long SCREENSHOT_REQUEST_TTL_MS = 5 * 60_000L;
     private static final int CLIPBOARD_SUPPRESS_MS = 3000;
     private static final long WIFI_DIRECT_IDLE_MS = 10 * 60_000L;
 
@@ -160,6 +166,10 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     private DiscoveryController discovery;
     private UdpDiscovery udp;
     private WifiDirectController wifiDirect;
+    private SmsBridge sms;
+    private RemoteTools remote;
+    private volatile String screenshotPeerId;
+    private volatile long screenshotRequestedAt;
     private NotificationManager notifications;
     private ClipboardManager clipboard;
     private ClipboardManager.OnPrimaryClipChangedListener clipListener;
@@ -207,6 +217,8 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         udp = new UdpDiscovery(identity, this, this::knownAddresses);
         wifiDirect = new WifiDirectController(this, identity);
         notifications = getSystemService(NotificationManager.class);
+        remote = new RemoteTools(this, main);
+        sms = new SmsBridge(this, identity, main, network);
         clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
         createChannels();
         startForegroundCompat();
@@ -229,6 +241,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
             });
         });
         registerClipboard();
+        sms.syncObserver();
         try {
             startScreenshotWatcher();
         } catch (Exception ignored) {
@@ -246,6 +259,10 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         startForegroundCompat();
         if (intent != null) {
             identity.setFlag("stopped_by_user", ACTION_STOP.equals(intent.getAction()));
+        }
+        if (intent != null && ACTION_FIND_STOP.equals(intent.getAction())) {
+            remote.stopFind();
+            return START_STICKY;
         }
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             for (UiListener listener : listeners) {
@@ -268,6 +285,8 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     public void onDestroy() {
         instance = null;
         main.removeCallbacksAndMessages(null);
+        sms.stop();
+        remote.shutdown();
         if (screenshotObserver != null) {
             getContentResolver().unregisterContentObserver(screenshotObserver);
         }
@@ -471,6 +490,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     public void addListener(UiListener listener) {
         listeners.add(listener);
         foregroundUi = true;
+        remote.stopFind(); // opening the app means the phone has been found
         healthLoop();
     }
 
@@ -1190,6 +1210,199 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         return null;
     }
 
+    // ------------------------------------------------------- v1.2: PC commands
+    interface PeerCall {
+        void run(H4xtorClient client, Peer peer) throws Exception;
+    }
+
+    /**
+     * Run {@code call} for every paired, online PC that advertises {@code capability}. Used by
+     * the notification listener and the SMS watcher; does nothing when the user stopped sharing.
+     */
+    static void pushToPeers(Context context, String capability, PeerCall call) {
+        ShareService current = instance;
+        if (current != null) {
+            current.pushToPeers(capability, call);
+            return;
+        }
+        if (new AppIdentity(context).flag("stopped_by_user", false)) {
+            return;
+        }
+        try {
+            with(context, service -> service.pushToPeers(capability, call));
+        } catch (Exception ignored) {
+            // The system may refuse a background start; the next event tries again.
+        }
+    }
+
+    private void pushToPeers(String capability, PeerCall call) {
+        for (Peer peer : pairedPeers()) {
+            if (isOnline(peer.deviceId) && peer.supports(capability)) {
+                network.execute(() -> {
+                    try {
+                        call.run(client, peer);
+                    } catch (Exception error) {
+                        android.util.Log.w("h4xtor", "push " + capability + " failed", error);
+                    }
+                });
+            }
+        }
+    }
+
+    /** Called by the SMS settings toggle after the flag or the permissions changed. */
+    public void refreshSms() {
+        sms.syncObserver();
+    }
+
+    private static JSONObject ok() throws Exception {
+        return new JSONObject().put("ok", true);
+    }
+
+    private void requireRemote() throws H4xtorServer.HttpError {
+        if (!remote.enabled(identity)) {
+            throw new H4xtorServer.HttpError(403, "Fjernbetjening er slået fra på telefonen.");
+        }
+    }
+
+    @Override
+    public JSONObject onCommand(String peerId, String peerName, String route, JSONObject body)
+            throws Exception {
+        switch (route) {
+            case "/api/v1/notification/action":
+                if (!identity.flag("mirror_notifications", false)) {
+                    throw new H4xtorServer.HttpError(403, "Notifikationer er slået fra på telefonen.");
+                }
+                NotificationMirrorService.perform(
+                        body.optString("key", ""), body.optString("action", ""), body.optString("text", ""));
+                return ok();
+            case "/api/v1/sms/threads":
+                return sms.threads(body.optInt("limit", 50));
+            case "/api/v1/sms/messages":
+                return sms.messages(body.optString("thread_id", ""), body.optInt("limit", 100));
+            case "/api/v1/sms/send":
+                return sms.send(body.optString("address", ""), body.optString("text", ""));
+            case "/api/v1/screenshot":
+                requireRemote();
+                requestScreenshot(peerId);
+                return new JSONObject().put("accepted", true);
+            case "/api/v1/find": {
+                requireRemote();
+                String action = body.optString("action", "");
+                if ("start".equals(action)) {
+                    remote.startFind();
+                } else if ("stop".equals(action)) {
+                    remote.stopFind();
+                } else {
+                    throw new H4xtorServer.HttpError(400, "Ukendt handling.");
+                }
+                return new JSONObject().put("ringing", remote.isRinging());
+            }
+            case "/api/v1/remote/volume":
+                requireRemote();
+                if (!body.has("level")) {
+                    throw new H4xtorServer.HttpError(400, "Mangler lydstyrke.");
+                }
+                return new JSONObject().put("level", remote.setVolume(body.optInt("level", 0)));
+            case "/api/v1/remote/speak": {
+                requireRemote();
+                String text = body.optString("text", "").trim();
+                if (text.isEmpty() || text.length() > ShareLogic.SPEAK_MAX_CHARS) {
+                    throw new H4xtorServer.HttpError(400, "Teksten er tom eller længere end 1000 tegn.");
+                }
+                remote.speak(text);
+                return ok();
+            }
+            case "/api/v1/remote/wallpaper":
+                requireRemote();
+                remote.setWallpaper(new File(body.getString("file")));
+                return ok();
+            default:
+                throw new H4xtorServer.HttpError(404, "Not found.");
+        }
+    }
+
+    // ------------------------------------------------- screenshot on demand
+    private void requestScreenshot(String peerId) {
+        screenshotPeerId = peerId;
+        screenshotRequestedAt = SystemClock.elapsedRealtime();
+        Intent consent = new Intent(this, ScreenCaptureActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        // Android often blocks activities started from the background, so the tap-able
+        // notification is always posted too; the activity removes it when it opens.
+        notifyEvent(NOTIFICATION_SCREENSHOT, "PC'en vil tage et skærmbillede – tryk for at tillade",
+                "Du bliver spørgt, om skærmen må deles én gang.",
+                PendingIntent.getActivity(this, 5, consent,
+                        PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+        main.post(() -> {
+            try {
+                startActivity(consent);
+            } catch (Exception ignored) {
+                // The notification is the fallback.
+            }
+        });
+    }
+
+    /** True while a PC is waiting for the user to allow a screenshot. */
+    boolean hasScreenshotRequest() {
+        return screenshotPeerId != null
+                && SystemClock.elapsedRealtime() - screenshotRequestedAt < SCREENSHOT_REQUEST_TTL_MS;
+    }
+
+    void screenshotDeclined() {
+        screenshotPeerId = null;
+        notifications.cancel(NOTIFICATION_SCREENSHOT);
+        message("Skærmbilledet blev ikke delt", false);
+    }
+
+    /** The user allowed screen capture: grab one frame and send it to the PC that asked. */
+    void startScreenCapture(int resultCode, Intent data) {
+        String peerId = screenshotPeerId;
+        notifications.cancel(NOTIFICATION_SCREENSHOT);
+        if (peerId == null || !hasScreenshotRequest()) {
+            screenshotPeerId = null;
+            return;
+        }
+        try {
+            // Android requires the mediaProjection service type BEFORE the projection is created.
+            startForeground(NOTIFICATION_SERVICE, buildServiceNotification(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                            | ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
+        } catch (Exception error) {
+            screenshotPeerId = null;
+            message("Skærmbillede mislykkedes: " + H4xtorClient.safeMessage(error), true);
+            return;
+        }
+        // Let the consent dialog disappear so it is not part of the picture.
+        main.postDelayed(() -> {
+            try {
+                MediaProjection projection = getSystemService(MediaProjectionManager.class)
+                        .getMediaProjection(resultCode, data);
+                ScreenshotCapture.capture(this, projection, (file, error) ->
+                        main.post(() -> finishScreenshot(peerId, file, error)));
+            } catch (Exception error) {
+                finishScreenshot(peerId, null, H4xtorClient.safeMessage(error));
+            }
+        }, 600);
+    }
+
+    private void finishScreenshot(String peerId, File file, String error) {
+        screenshotPeerId = null;
+        startForegroundCompat(); // drop the mediaProjection type again
+        Peer target = peer(peerId);
+        if (file == null || target == null) {
+            message(file == null ? "Skærmbillede mislykkedes: " + error
+                    : "PC'en er ikke længere forbundet", true);
+            return;
+        }
+        TransferItem item = newTransfer(file.getName(), false, target);
+        item.total = file.length();
+        runTransfer(item, current -> {
+            client.sendFile(target, file, (name, sent, total) -> progress(current, sent, total), current.cancel);
+            recordSent(target, "file", file.getName(), file.length());
+            //noinspection ResultOfMethodCallIgnored
+            file.delete();
+        });
+    }
+
     // ---------------------------------------------------------------- sending
     private TransferItem newTransfer(String name, boolean folder, Peer peer) {
         TransferItem item = new TransferItem(
@@ -1301,16 +1514,107 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         });
     }
 
-    /** Broadcast text to every paired, online device. Returns how many got it queued. */
-    public int sendTextToAll(String text) {
-        int count = 0;
+    /** Outcome of one device in a "send to all". */
+    public static final class DeviceResult {
+        public final Peer peer;
+        public final boolean ok;
+        public final String error;
+
+        DeviceResult(Peer peer, boolean ok, String error) {
+            this.peer = peer;
+            this.ok = ok;
+            this.error = error == null ? "" : error;
+        }
+    }
+
+    /** The transfers started for one device in {@link #sendUrisToAll}. */
+    public static final class DeviceSend {
+        public final Peer peer;
+        public final List<String> ids;
+
+        DeviceSend(Peer peer, List<String> ids) {
+            this.peer = peer;
+            this.ids = ids;
+        }
+    }
+
+    public interface AllListener {
+        /** Called on the main thread once every device has answered. */
+        void onDone(List<DeviceResult> results, String summary);
+    }
+
+    /** Paired devices that answered the last health check. */
+    public List<Peer> onlinePairedPeers() {
+        List<Peer> result = new ArrayList<>();
         for (Peer peer : pairedPeers()) {
             if (isOnline(peer.deviceId)) {
-                sendText(peer, text);
-                count++;
+                result.add(peer);
             }
         }
-        return count;
+        return result;
+    }
+
+    /** Broadcast text to every paired, online device. Returns how many got it queued. */
+    public int sendTextToAll(String text) {
+        return sendTextToAll(text, null);
+    }
+
+    /** Like {@link #sendTextToAll(String)}, and reports a result per device when all are done. */
+    public int sendTextToAll(String text, AllListener listener) {
+        List<Peer> targets = onlinePairedPeers();
+        String value = text == null ? "" : text.trim();
+        if (value.isEmpty() || targets.isEmpty()) {
+            if (listener != null) {
+                main.post(() -> listener.onDone(new ArrayList<>(), "Ingen af dine enheder er online"));
+            }
+            return 0;
+        }
+        clipboardObserved = value;
+        List<DeviceResult> results = Collections.synchronizedList(new ArrayList<>());
+        AtomicInteger left = new AtomicInteger(targets.size());
+        for (Peer peer : targets) {
+            network.execute(() -> {
+                try {
+                    if (Ui.isLink(value)) {
+                        client.sendLink(peer, value);
+                        recordSent(peer, "link", value, 0);
+                    } else {
+                        client.sendClipboard(peer, value);
+                        recordSent(peer, "clipboard", value, 0);
+                    }
+                    results.add(new DeviceResult(peer, true, ""));
+                } catch (Exception error) {
+                    results.add(new DeviceResult(peer, false, H4xtorClient.safeMessage(error)));
+                }
+                if (left.decrementAndGet() == 0 && listener != null) {
+                    List<DeviceResult> done = new ArrayList<>(results);
+                    main.post(() -> listener.onDone(done, summarize(done)));
+                }
+            });
+        }
+        return targets.size();
+    }
+
+    /** Send the same files to every paired, online device in parallel (one transfer each). */
+    public List<DeviceSend> sendUrisToAll(List<Uri> uris) {
+        List<DeviceSend> started = new ArrayList<>();
+        for (Peer peer : onlinePairedPeers()) {
+            started.add(new DeviceSend(peer, sendUris(peer, uris)));
+        }
+        return started;
+    }
+
+    /** "Sendt til 2 af 3 - Baerbar fejlede: ..." for a finished send-to-all. */
+    public static String summarize(List<DeviceResult> results) {
+        List<String> names = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        for (DeviceResult result : results) {
+            if (!result.ok) {
+                names.add(result.peer.name);
+                errors.add(result.error);
+            }
+        }
+        return ShareLogic.allSummary(results.size(), names, errors);
     }
 
     public void cancel(String id) {

@@ -180,6 +180,25 @@ public final class ShareTargetActivity extends Activity {
             list.addView(open, ui.margins(0, 14, 0, 0));
             return;
         }
+        if (peers.size() >= 2) {
+            int onlineCount = service.onlinePairedPeers().size();
+            LinearLayout all = ui.card();
+            all.setClickable(true);
+            all.setBackground(ui.ripple(ui.rounded(ui.accentSoft, 0, 18), 18));
+            LinearLayout allRow = ui.row();
+            allRow.addView(ui.iconBadge(R.drawable.ic_nav_share, 42, ui.surface, ui.accent));
+            LinearLayout allTexts = ui.column();
+            allTexts.addView(ui.text("Alle enheder", 16f, ui.text, true));
+            allTexts.addView(ui.text(onlineCount + " af " + peers.size() + " er online lige nu",
+                    12.5f, onlineCount > 0 ? ui.success : ui.muted, false));
+            LinearLayout.LayoutParams allParams = ui.weight(1);
+            allParams.setMargins(ui.dp(14), 0, 0, 0);
+            allRow.addView(allTexts, allParams);
+            allRow.addView(ui.icon(R.drawable.ic_nav_share, ui.accent, 22));
+            all.addView(allRow);
+            all.setOnClickListener(v -> sendAll(service));
+            list.addView(all, ui.margins(0, 0, 0, 10));
+        }
         for (Peer peer : peers) {
             boolean online = service.isOnline(peer.deviceId);
             LinearLayout card = ui.card();
@@ -206,13 +225,17 @@ public final class ShareTargetActivity extends Activity {
     private boolean closing;
 
     /** Stay open and show how far the upload has come (bar, %, speed, time left). */
-    private void showProgress(ShareService service, Peer peer, List<String> ids) {
+    private void showProgress(ShareService service, String label, List<ShareService.DeviceSend> groups) {
+        List<String> ids = new ArrayList<>();
+        for (ShareService.DeviceSend group : groups) {
+            ids.addAll(group.ids);
+        }
         list.removeAllViews();
         if (chooseLabel != null) {
             chooseLabel.setVisibility(View.GONE);
         }
         LinearLayout box = ui.column();
-        TextView title = ui.text("Sender til " + peer.name, 15f, ui.text, true);
+        TextView title = ui.text("Sender til " + label, 15f, ui.text, true);
         box.addView(title);
         LinearLayout numbers = ui.row();
         TextView percent = ui.text("0%", 34f, ui.text, true);
@@ -276,14 +299,16 @@ public final class ShareTargetActivity extends Activity {
                     graph.setSamples(lead.samples());
                 }
                 if (failed > 0 && done + failed == ids.size()) {
-                    title.setText("Kunne ikke sende alt til " + peer.name);
+                    title.setText(groups.size() > 1 ? groupSummary(service, groups)
+                            : "Kunne ikke sende alt til " + label);
                     title.setTextColor(ui.danger);
                     background.setText("Luk – prøv igen fra Overførsler");
                     return;
                 }
                 if (done == ids.size() && !closing) {
                     closing = true;
-                    title.setText("✓ Sendt til " + peer.name);
+                    title.setText(groups.size() > 1 ? "✓ " + groupSummary(service, groups)
+                            : "✓ Sendt til " + label);
                     speed.setText(Ui.formatSpeed(total / Math.max(0.001, seconds)) + " gns.");
                     detail.setText(Ui.formatBytes(total) + " på " + Ui.formatDuration(seconds));
                     ticker.postDelayed(ShareTargetActivity.this::finish, 1400);
@@ -300,29 +325,89 @@ public final class ShareTargetActivity extends Activity {
         ticker.post(tick);
     }
 
+    /** "Sendt til 2 af 3 – Bærbar fejlede: …" built from the per-device transfers. */
+    private static String groupSummary(ShareService service, List<ShareService.DeviceSend> groups) {
+        List<String> names = new ArrayList<>();
+        List<String> errors = new ArrayList<>();
+        for (ShareService.DeviceSend group : groups) {
+            boolean bad = false;
+            String error = "";
+            for (String id : group.ids) {
+                ShareService.TransferItem item = service.transfer(id);
+                if (item != null && ("failed".equals(item.status) || "cancelled".equals(item.status))) {
+                    bad = true;
+                    if (error.isEmpty() && item.error != null) {
+                        error = item.error;
+                    }
+                }
+            }
+            if (bad) {
+                names.add(group.peer.name);
+                errors.add(error);
+            }
+        }
+        return ShareLogic.allSummary(groups.size(), names, errors);
+    }
+
     @Override
     protected void onDestroy() {
         ticker.removeCallbacksAndMessages(null);
         super.onDestroy();
     }
 
+    /** Hand the read grant to the service: it outlives this short-lived sheet. */
+    private void holdGrant() {
+        Intent hold = new Intent(this, ShareService.class).setAction(ShareService.ACTION_HOLD);
+        ClipData clip = ClipData.newRawUri("h4xtor", uris.get(0));
+        for (int index = 1; index < uris.size(); index++) {
+            clip.addItem(new ClipData.Item(uris.get(index)));
+        }
+        hold.setClipData(clip);
+        hold.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try {
+            startForegroundService(hold);
+        } catch (Exception ignored) {
+            // Service already running in the foreground; grant attempt is best effort.
+        }
+    }
+
+    /** "Alle enheder": files go to every online device in parallel, text is sent to each. */
+    private void sendAll(ShareService service) {
+        if (service.onlinePairedPeers().isEmpty()) {
+            Toast.makeText(this, "Ingen af dine enheder er online lige nu", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (!uris.isEmpty()) {
+            holdGrant();
+            showProgress(service, "alle enheder", service.sendUrisToAll(uris));
+            return;
+        }
+        list.removeAllViews();
+        if (chooseLabel != null) {
+            chooseLabel.setVisibility(View.GONE);
+        }
+        TextView status = ui.text("Sender til alle enheder\u2026", 15f, ui.text, true);
+        list.addView(status);
+        service.sendTextToAll(text, (results, summary) -> {
+            if (isFinishing()) {
+                return;
+            }
+            boolean allOk = !results.isEmpty();
+            for (ShareService.DeviceResult result : results) {
+                allOk &= result.ok;
+            }
+            status.setText((allOk ? "\u2713 " : "") + summary);
+            status.setTextColor(allOk ? ui.text : ui.danger);
+            ticker.postDelayed(this::finish, allOk ? 1400 : 3500);
+        });
+    }
+
     private void send(ShareService service, Peer peer) {
         if (!uris.isEmpty()) {
-            // Hand the read grant to the service: it outlives this short-lived sheet.
-            Intent hold = new Intent(this, ShareService.class).setAction(ShareService.ACTION_HOLD);
-            ClipData clip = ClipData.newRawUri("h4xtor", uris.get(0));
-            for (int index = 1; index < uris.size(); index++) {
-                clip.addItem(new ClipData.Item(uris.get(index)));
-            }
-            hold.setClipData(clip);
-            hold.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            try {
-                startForegroundService(hold);
-            } catch (Exception ignored) {
-                // Service already running in the foreground; grant attempt is best effort.
-            }
+            holdGrant();
             List<String> ids = service.sendUris(peer, uris);
-            showProgress(service, peer, ids);
+            showProgress(service, peer.name,
+                    java.util.Collections.singletonList(new ShareService.DeviceSend(peer, ids)));
             return;
         } else {
             service.sendText(peer, text);

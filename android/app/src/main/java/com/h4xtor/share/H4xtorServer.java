@@ -62,11 +62,19 @@ public final class H4xtorServer {
         void onFileReceived(String transferId, String peerName, String fileName, String uri, long size);
         void onFolderReceived(String transferId, String peerName, String folderName, int files, long size);
         void onStatus(String text);
+
+        /**
+         * v1.2 commands from a paired PC (notification actions, SMS, screenshot request, find
+         * phone, remote control). Throw {@link HttpError} for 400/403/404 with a Danish reason.
+         */
+        JSONObject onCommand(String peerId, String peerName, String route, JSONObject body)
+                throws Exception;
     }
 
     private static final long PAIRING_TTL_MS = 120_000L;
     private static final long QR_TTL_MS = 300_000L;
     private static final int JSON_BODY_LIMIT = 4 * 1024 * 1024;
+    static final long WALLPAPER_LIMIT = 20L * 1024 * 1024;
     private static final int BUFFER_SIZE = 1024 * 1024;
     private static final int MAX_FOLDER_ENTRIES = 10_000;
     private static final long PROGRESS_INTERVAL_MS = 200L;
@@ -341,6 +349,21 @@ public final class H4xtorServer {
                 sendJson(output, 200, new JSONObject().put("forgotten", true));
                 return;
             }
+            case "POST /api/v1/notification/action":
+            case "POST /api/v1/sms/threads":
+            case "POST /api/v1/sms/messages":
+            case "POST /api/v1/sms/send":
+            case "POST /api/v1/screenshot":
+            case "POST /api/v1/find":
+            case "POST /api/v1/remote/volume":
+            case "POST /api/v1/remote/speak": {
+                JSONObject body = readJsonBody(request, input);
+                sendJson(output, 200, command(auth, path, body));
+                return;
+            }
+            case "PUT /api/v1/remote/wallpaper":
+                wallpaperUpload(request, input, output, auth);
+                return;
             case "POST /api/v1/files/init":
                 fileInit(request, input, output, auth);
                 return;
@@ -358,6 +381,43 @@ public final class H4xtorServer {
                 return;
             default:
                 throw new HttpError(404, "Not found.");
+        }
+    }
+
+    private JSONObject command(Auth auth, String route, JSONObject body) throws HttpError {
+        try {
+            return listener.onCommand(auth.peerId, auth.peerName, route, body);
+        } catch (HttpError error) {
+            throw error;
+        } catch (Exception error) {
+            throw new HttpError(500, safeMessage(error));
+        }
+    }
+
+    /** PUT raw image bytes (max 20 MB) into the cache, hand the file to the listener, delete it. */
+    private void wallpaperUpload(Request request, InputStream input, OutputStream output, Auth auth)
+            throws Exception {
+        boolean chunked = request.headers.getOrDefault("transfer-encoding", "")
+                .toLowerCase(Locale.ROOT).contains("chunked");
+        long length = contentLength(request);
+        if (!chunked && (length <= 0 || length > WALLPAPER_LIMIT)) {
+            throw new HttpError(400, "Billedet er tomt eller større end 20 MB.");
+        }
+        File file = File.createTempFile("wallpaper-", ".img", context.getCacheDir());
+        try {
+            try (OutputStream out = new BufferedOutputStream(new FileOutputStream(file))) {
+                copyRequestBody(request, input, out, 0L, WALLPAPER_LIMIT, null);
+            } catch (IllegalArgumentException tooBig) {
+                throw new HttpError(400, "Billedet er større end 20 MB.");
+            }
+            if (file.length() == 0) {
+                throw new HttpError(400, "Billedet er tomt.");
+            }
+            sendJson(output, 200, command(auth, "/api/v1/remote/wallpaper",
+                    new JSONObject().put("file", file.getAbsolutePath())));
+        } finally {
+            //noinspection ResultOfMethodCallIgnored
+            file.delete();
         }
     }
 
@@ -1029,6 +1089,7 @@ public final class H4xtorServer {
             case 200: reason = "OK"; break;
             case 400: reason = "Bad Request"; break;
             case 401: reason = "Unauthorized"; break;
+            case 403: reason = "Forbidden"; break;
             case 404: reason = "Not Found"; break;
             case 409: reason = "Conflict"; break;
             default: reason = "Error";
