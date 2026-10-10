@@ -29,8 +29,11 @@ from h4xtor_share.models import (  # noqa: E402
     FileReceived,
     FolderReceived,
     LinkReceived,
+    NotificationReceived,
+    NotificationRemoved,
     Peer,
     PeerPaired,
+    SmsReceived,
 )
 from h4xtor_share.pairing import PairingInvite  # noqa: E402
 from h4xtor_share.server import ShareServer  # noqa: E402
@@ -161,6 +164,106 @@ class Desktop:
 
 def prefs() -> str:
     return shell(f"run-as {PKG} cat shared_prefs/h4xtor_share.xml", check=False)
+
+
+def open_settings_row(pattern: str) -> None:
+    """Open Indstillinger and tap the row matching *pattern* (scrolling to it)."""
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(2)
+    for _ in range(3):
+        tap_text("^Indstillinger$")
+        time.sleep(1)
+        if scroll_to(pattern):
+            break
+    else:
+        raise AssertionError(f"settings row {pattern!r} missing")
+    tap_text(pattern)
+    time.sleep(2)
+
+
+def v12_checks(desktop: Desktop, phone: Peer) -> None:
+    """v1.2 (Join parity): notifications, SMS, find phone, remote control, screenshot."""
+    for capability in ("notifications", "sms", "screenshot-request", "find-phone",
+                       "remote-control"):
+        assert phone.supports(capability), f"phone does not advertise {capability}"
+
+    # ---- Notifications are off by default: the phone refuses actions ----------
+    try:
+        desktop.run(desktop.client.notification_action(phone, "x", "dismiss"))
+        raise AssertionError("notification action accepted while mirroring is off")
+    except RuntimeError as error:
+        assert "slået fra" in str(error), error
+    ok("notification mirroring is off by default")
+
+    # ---- Phone notification -> PC, then dismissed from the PC -----------------
+    open_settings_row("^Vis telefonens notifikationer på PC'en$")
+    shot("20-notification-access")
+    shell("input keyevent BACK", check=False)  # leave Android's access screen
+    shell(f"cmd notification allow_listener {PKG}/{PKG}.NotificationMirrorService")
+    time.sleep(4)
+    assert "flag_mirror_notifications\" value=\"true" in prefs(), "mirror toggle not saved"
+    desktop.events.clear()
+    shell("cmd notification post -S bigtext -t Mor e2e-tag 'Kommer du til middag?'")
+    note = desktop.wait_for(NotificationReceived, timeout=45,
+                            match=lambda event: event.title == "Mor")
+    assert "middag" in note.text, note
+    assert note.can_dismiss, note
+    ok("phone notification shows up on the PC (title, text, app)")
+    desktop.run(desktop.client.notification_action(phone, note.key, "dismiss"))
+    desktop.wait_for(NotificationRemoved, timeout=20, match=lambda event: event.key == note.key)
+    ok("notification dismissed from the PC disappears on the phone")
+
+    # ---- SMS in the emulator ---------------------------------------------------
+    open_settings_row("^SMS fra PC'en$")  # permissions were granted at install (-g)
+    time.sleep(2)
+    assert "flag_sms_enabled\" value=\"true" in prefs(), "SMS toggle not saved"
+    shot("21-sms-enabled")
+    desktop.events.clear()
+    adb("emu", "sms", "send", "4512345678", "Hej fra mor", check=False)
+    sms: SmsReceived = desktop.wait_for(SmsReceived, timeout=60,
+                                        match=lambda event: "Hej fra mor" in event.body)
+    ok("new SMS is pushed to the PC right away")
+    threads = desktop.run(desktop.client.sms_threads(phone))
+    assert any(str(t.get("thread_id")) == sms.thread_id for t in threads), threads
+    messages = desktop.run(desktop.client.sms_messages(phone, sms.thread_id))
+    assert any("Hej fra mor" in m.get("body", "") for m in messages), messages
+    ok("PC reads SMS threads and messages")
+    desktop.run(desktop.client.send_sms(phone, "4512345678", "Svar fra PC'en"))
+    deadline = time.time() + 30
+    while time.time() < deadline:
+        messages = desktop.run(desktop.client.sms_messages(phone, sms.thread_id))
+        if any(m.get("outgoing") and "Svar fra PC" in m.get("body", "") for m in messages):
+            break
+        time.sleep(2)
+    else:
+        raise AssertionError(f"sent SMS not in the thread: {messages}")
+    ok("PC sends an SMS through the phone")
+
+    # ---- Find my phone + remote control ---------------------------------------
+    assert desktop.run(desktop.client.find_phone(phone, True)) is True
+    time.sleep(2)
+    shot("22-find-phone")
+    assert screen_has("Find telefon", 5) or "Find telefon" in shell(
+        "dumpsys notification --noredact", check=False), "no find-phone notification"
+    assert desktop.run(desktop.client.find_phone(phone, False)) is False
+    ok("find my phone rings and stops from the PC")
+    assert desktop.run(desktop.client.set_volume(phone, 40)) in range(30, 51)
+    desktop.run(desktop.client.speak(phone, "Hej fra PC'en"))
+    ok("remote volume and read-aloud")
+
+    # ---- Screenshot on demand: the user allows it, the PNG lands on the PC -----
+    desktop.events.clear()
+    desktop.run(desktop.client.request_screenshot(phone))
+    time.sleep(3)
+    shot("23-screenshot-consent")
+    # The app asks for the whole screen, so Android shows a single confirm button.
+    tap_text("(?i)^(start now|start|share screen|start nu|del skærm)$", timeout=20)
+    picture: FileReceived = desktop.wait_for(
+        FileReceived, timeout=60, match=lambda e: e.path.name.startswith("Skaermbillede-"))
+    assert picture.path.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n", "screenshot is not a PNG"
+    ok("screenshot on demand arrives on the PC as a PNG")
+    desktop.run(desktop.client.set_wallpaper(phone, picture.path))
+    ok("wallpaper set from the PC")
 
 
 def main() -> None:
@@ -447,6 +550,8 @@ def main() -> None:
         time.sleep(0.5)
     assert got_shot is not None, "new screenshot was not sent to the PC"
     ok("new screenshot sent to the PC automatically")
+
+    v12_checks(desktop, phone)
 
     # ---- Screens for design review ---------------------------------------------
     shell(f"am start -W -n {PKG}/.MainActivity")

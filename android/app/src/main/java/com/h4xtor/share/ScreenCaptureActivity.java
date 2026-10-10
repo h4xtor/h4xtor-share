@@ -23,7 +23,13 @@ public final class ScreenCaptureActivity extends Activity {
             return;
         }
         if (savedInstanceState == null) {
-            startActivityForResult(getSystemService(MediaProjectionManager.class).createScreenCaptureIntent(),
+            MediaProjectionManager manager = getSystemService(MediaProjectionManager.class);
+            // Android 14+: ask for the whole screen directly, so the user only taps "Start"
+            // instead of first picking between "one app" and "entire screen".
+            startActivityForResult(android.os.Build.VERSION.SDK_INT >= 34
+                            ? manager.createScreenCaptureIntent(
+                                    android.media.projection.MediaProjectionConfig.createConfigForDefaultDisplay())
+                            : manager.createScreenCaptureIntent(),
                     REQUEST_CAPTURE);
         }
     }
