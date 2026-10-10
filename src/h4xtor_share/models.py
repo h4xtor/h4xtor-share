@@ -18,6 +18,8 @@ DESKTOP_CAPABILITIES: tuple[str, ...] = (
     "wifi-direct-join",
     "unpair",
     "speedtest",
+    "notifications",
+    "sms",
 )
 
 
@@ -130,6 +132,39 @@ class WifiDirectOffer:
     passphrase: str
     owner_address: str
     port: int
+
+
+@dataclass(slots=True)
+class NotificationReceived:
+    peer_id: str
+    peer_name: str
+    key: str
+    package: str
+    app: str
+    title: str
+    text: str
+    time: int
+    icon_png: bytes
+    can_reply: bool
+    can_dismiss: bool
+
+
+@dataclass(slots=True)
+class NotificationRemoved:
+    peer_id: str
+    peer_name: str
+    key: str
+
+
+@dataclass(slots=True)
+class SmsReceived:
+    peer_id: str
+    peer_name: str
+    thread_id: str
+    address: str
+    name: str
+    body: str
+    time: int
 
 
 @dataclass(slots=True)
