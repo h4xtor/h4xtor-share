@@ -28,6 +28,8 @@ EXTENSION_ORIGIN_PREFIXES = ("chrome-extension://", "moz-extension://", "edge-ex
 DevicesProvider = Callable[[], list[dict[str, Any]]]
 Sender = Callable[[str, str, str], Awaitable[None]]
 Approver = Callable[[str, str], Awaitable[bool]]
+# (kind, value) -> one {"id", "name", "ok", "error"} per paired device
+SenderAll = Callable[[str, str], Awaitable[list[dict[str, Any]]]]
 
 
 def _hash(token: str) -> str:
@@ -43,6 +45,7 @@ class LocalApi:
         sender: Sender,
         approver: Approver,
         host: str = "127.0.0.1",
+        sender_all: SenderAll | None = None,
     ) -> None:
         self.config = config
         self.port = port
@@ -50,6 +53,7 @@ class LocalApi:
         self.devices = devices
         self.sender = sender
         self.approver = approver
+        self.sender_all = sender_all
         self.runner: web.AppRunner | None = None
         self.app = web.Application(middlewares=[self._guard], client_max_size=1024 * 1024)
         self.app.add_routes(
@@ -58,6 +62,7 @@ class LocalApi:
                 web.post("/v1/connect", self.connect),
                 web.get("/v1/devices", self.list_devices),
                 web.post("/v1/send", self.send),
+                web.post("/v1/send-all", self.send_all),
                 web.post("/v1/disconnect", self.disconnect),
             ]
         )
@@ -147,6 +152,18 @@ class LocalApi:
         self._require(request)
         return web.json_response({"devices": self.devices()})
 
+    @staticmethod
+    def _parse_content(payload: Any) -> tuple[str, str]:
+        if not isinstance(payload, dict):
+            raise web.HTTPBadRequest(text="Invalid JSON.")
+        kind = str(payload.get("kind") or "")
+        value = str(payload.get("value") or "").strip()
+        if kind not in {"link", "text", "file-url"} or not value:
+            raise web.HTTPBadRequest(text="Nothing to send.")
+        if len(value) > 100_000:
+            raise web.HTTPBadRequest(text="Too much text.")
+        return kind, value
+
     async def send(self, request: web.Request) -> web.Response:
         self._require(request)
         try:
@@ -154,12 +171,7 @@ class LocalApi:
         except ValueError as error:
             raise web.HTTPBadRequest(text="Invalid JSON.") from error
         device_id = str(payload.get("device_id") or "")
-        kind = str(payload.get("kind") or "")
-        value = str(payload.get("value") or "").strip()
-        if kind not in {"link", "text", "file-url"} or not value:
-            raise web.HTTPBadRequest(text="Nothing to send.")
-        if len(value) > 100_000:
-            raise web.HTTPBadRequest(text="Too much text.")
+        kind, value = self._parse_content(payload)
         known = {device["id"] for device in self.devices()}
         if device_id not in known:
             raise web.HTTPNotFound(text="Unknown or unpaired device.")
@@ -168,3 +180,17 @@ class LocalApi:
         except Exception as error:  # noqa: BLE001 - report the reason to the extension
             raise web.HTTPBadGateway(text=str(error) or "Sending failed.") from error
         return web.json_response({"ok": True})
+
+    async def send_all(self, request: web.Request) -> web.Response:
+        self._require(request)
+        try:
+            payload = await request.json()
+        except ValueError as error:
+            raise web.HTTPBadRequest(text="Invalid JSON.") from error
+        kind, value = self._parse_content(payload)
+        if not self.devices():
+            raise web.HTTPNotFound(text="No paired devices.")
+        if self.sender_all is None:
+            raise web.HTTPNotImplemented(text="Sending to all devices is not available.")
+        # Partial failure is a normal 200: every device reports its own result.
+        return web.json_response({"results": await self.sender_all(kind, value)})

@@ -262,3 +262,180 @@ def test_iphone_access_turns_itself_off_when_port_is_taken() -> None:
     finally:
         blocker.close()
         app.close()
+
+
+def _paired_app(count: int, tmp_path, monkeypatch):
+    from h4xtor_share.models import Peer
+
+    # Never touch the real user config (Config() reads platformdirs, not XDG_CONFIG_HOME).
+    monkeypatch.setattr("h4xtor_share.config.user_config_dir", lambda _name: str(tmp_path))
+    app = _new_app()
+    peers = []
+    for index in range(count):
+        peer = Peer(
+            f"{index + 1:02x}" * 16,
+            ["Mobil", "Bærbar", "Tablet"][index],
+            f"192.168.1.{50 + index}",
+            47474,
+            f"{index + 1:02x}" * 32,
+            "android",
+            capabilities=("folders",) if index != 1 else (),
+        )
+        app.config_store.trust_outbound_peer(peer.device_id, "t" * 40, peer.fingerprint, peer.name)
+        app.peers[peer.device_id] = peer
+        app._upsert_peer(peer)
+        peers.append(peer)
+    return app, peers
+
+
+def _texts(widget) -> list[str]:
+    found = []
+    for child in widget.winfo_children():
+        with contextlib.suppress(Exception):
+            found.append(str(child.cget("text")))
+        found.extend(_texts(child))
+    return found
+
+
+def _pump(app, until, seconds: float = 10.0) -> None:
+    import time
+
+    deadline = time.time() + seconds
+    while not until() and time.time() < deadline:
+        app.update()
+        time.sleep(0.02)
+    assert until()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_chooser_offers_all_devices_only_with_two_or_more(tmp_path, monkeypatch) -> None:
+    import tkinter as tk
+
+    app, _peers = _paired_app(3, tmp_path, monkeypatch)
+    try:
+        app._choose_peer(lambda _p: None, "Vælg", all_callback=lambda: None)
+        app.update()
+        modals = [w for w in app.winfo_children() if isinstance(w, tk.Toplevel)]
+        assert "Alle enheder" in _texts(modals[-1])
+        modals[-1].destroy()
+        # no all_callback (e.g. other callers) -> no extra card
+        app._choose_peer(lambda _p: None, "Vælg")
+        app.update()
+        modals = [w for w in app.winfo_children() if isinstance(w, tk.Toplevel)]
+        assert "Alle enheder" not in _texts(modals[-1])
+    finally:
+        app.close()
+
+    app, _peers = _paired_app(2, tmp_path, monkeypatch)
+    try:
+        app._choose_peer(lambda _p: None, "Vælg", all_callback=lambda: None)
+        app.update()
+        modals = [w for w in app.winfo_children() if isinstance(w, tk.Toplevel)]
+        assert "Alle enheder" in _texts(modals[-1])
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_send_text_to_all_reports_one_summary(tmp_path, monkeypatch) -> None:
+    app, peers = _paired_app(3, tmp_path, monkeypatch)
+    sent: list[str] = []
+    summaries = []
+
+    async def send_clipboard(peer, text):
+        if peer.name == "Bærbar":
+            raise RuntimeError("Bærbar er offline")
+        sent.append(peer.name)
+
+    async def send_link(peer, url):
+        sent.append(peer.name)
+
+    app.client.send_clipboard = send_clipboard
+    app.client.send_link = send_link
+    original = app._show_send_all_summary
+    app._show_send_all_summary = lambda group: (summaries.append(group), original(group))
+    try:
+        assert app._send_to_all("text", "hej alle")
+        _pump(app, lambda: summaries)
+        group = summaries[0]
+        assert sorted(sent) == ["Mobil", "Tablet"]
+        assert group.total == 3 and len(group.ok) == 2
+        assert group.problems == [("Bærbar", "Bærbar er offline")]
+        assert len(summaries) == 1
+
+        summaries.clear()
+        assert app._send_to_all("text", "https://example.com")
+        _pump(app, lambda: summaries)
+        assert len(summaries[0].ok) == 3
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_send_files_and_folders_to_all_skips_unsupported_and_reports(
+    tmp_path, monkeypatch
+) -> None:
+    app, peers = _paired_app(3, tmp_path, monkeypatch)
+    (tmp_path / "dir").mkdir()
+    (tmp_path / "dir" / "a.txt").write_text("a")
+    (tmp_path / "b.txt").write_text("b")
+    got: list[tuple[str, str]] = []
+    summaries = []
+
+    async def send_file(peer, path, progress):
+        if peer.name == "Tablet":
+            raise RuntimeError("Tablet svarer ikke")
+        got.append((peer.name, path.name))
+
+    async def send_folder(peer, path, progress):
+        got.append((peer.name, path.name))
+
+    app.client.send_file = send_file
+    app.client.send_folder = send_folder
+    app._show_send_all_summary = summaries.append
+    try:
+        assert app._send_to_all("paths", [tmp_path / "dir", tmp_path / "b.txt"])
+        _pump(app, lambda: summaries)
+        group = summaries[0]
+        # Mobil gets both, Bærbar (no folder support) only the file, Tablet's file fails.
+        assert sorted(got) == [
+            ("Bærbar", "b.txt"),
+            ("Mobil", "b.txt"),
+            ("Mobil", "dir"),
+            ("Tablet", "dir"),
+        ]
+        assert sorted(group.ok) == ["Bærbar", "Mobil"]
+        assert group.problems == [("Tablet", "Tablet svarer ikke")]
+
+        summaries.clear()
+        got.clear()
+        assert app._send_to_all("paths", [tmp_path / "dir"])
+        _pump(app, lambda: summaries)
+        # Bærbar cannot take folders: reported, not sent.
+        assert ("Bærbar", "Kan ikke modtage mapper endnu.") in summaries[0].problems
+        assert sorted(got) == [("Mobil", "dir"), ("Tablet", "dir")]
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_api_send_all_returns_result_per_device(tmp_path, monkeypatch) -> None:
+    import asyncio
+
+    app, peers = _paired_app(2, tmp_path, monkeypatch)
+
+    async def send_link(peer, url):
+        if peer.name == "Bærbar":
+            raise RuntimeError("nede")
+
+    app.client.send_link = send_link
+    try:
+        future = asyncio.run_coroutine_threadsafe(
+            app._api_send_all("link", "https://example.com"), app.runtime.loop
+        )
+        _pump(app, future.done)
+        results = {item["name"]: item for item in future.result()}
+        assert results["Mobil"]["ok"] is True and results["Mobil"]["error"] == ""
+        assert results["Bærbar"]["ok"] is False and results["Bærbar"]["error"] == "nede"
+    finally:
+        app.close()

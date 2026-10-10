@@ -66,8 +66,38 @@ export async function send(deviceId, kind, value) {
   });
 }
 
+// Pseudo-device for "send to every paired device" (stored as deviceId "all").
+export const ALL = { id: "all", name: "Alle enheder", platform: "all", online: true, all: true };
+
+export async function sendAll(kind, value) {
+  const result = await call("/v1/send-all", {
+    method: "POST",
+    body: { kind, value },
+    timeoutMs: 180000,
+  });
+  return result.results || [];
+}
+
+// "Sendt til 2 af 3 – Bærbar: offline" from the per-device results of sendAll().
+export function summarize(results, list = []) {
+  const failed = results.filter((r) => !r.ok);
+  const sent = results.length - failed.length;
+  let text = `Sendt til ${sent} af ${results.length}`;
+  if (sent === results.length) text = `Sendt til alle ${results.length} enheder`;
+  if (failed.length) {
+    const why = failed.map((r) => {
+      const device = list.find((d) => d.id === r.id);
+      const reason = device && !device.online ? "offline" : (r.error || "fejl").split(/(?<=\.)\s/)[0];
+      return `${r.name}: ${reason}`;
+    });
+    text += ` – ${why.join(", ")}`;
+  }
+  return { sent, total: results.length, failed: failed.length, text };
+}
+
 export async function chosenDevice(list) {
   const { deviceId } = await chrome.storage.local.get("deviceId");
+  if (deviceId === ALL.id && list.length >= 2) return ALL;
   return (
     list.find((d) => d.id === deviceId) ||
     list.find((d) => d.selected) ||
