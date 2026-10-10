@@ -1,0 +1,55 @@
+ACCESSIBILITY MANAGER (dumpsys accessibility)
+
+currentUserId=0
+hasWindowMagnificationConnection=false
+Magnifier on display#0
+    MagnificationConfig[mode: 1, activated: false, scale: 1.0, centerX: 540.0, centerY: 1171.0] 
+    Magnification region=SkRegion((5,5,1075,2337))
+    IdOfLastServiceToMagnify=-1
+    SupportWindowMagnification=true
+    WindowMagnificationConnectionState=DISCONNECTED
+User state[
+     attributes:{id=0, touchExplorationEnabled=false, serviceHandlesDoubleTap=false, requestMultiFingerGestures=false, requestTwoFingerPassthrough=false, sendMotionEventsEnabledfalse, displayMagnificationEnabled=false, autoclickEnabled=false, nonInteractiveUiTimeout=0, interactiveUiTimeout=0, installedServiceCount=4, magnificationModes={0=1}, magnificationCapabilities=3, audioDescriptionByDefaultEnabled=false, magnificationFollowTypingEnabled=true, alwaysOnMagnificationEnabled=true}
+     shortcut key:{}
+     button:{}
+     button target:{null}
+     Bound services:{Service[label=h4xtor share – send kopieret tekst til PC, feedbackType[FEEDBACK_GENERIC], capabilities=1, eventTypes=TYPE_VIEW_CLICKED, notificationTimeout=100, requestA11yBtn=false]}
+     Enabled services:{{com.h4xtor.share/com.h4xtor.share.CopyWatchService}}
+     Binding services:{}
+     Crashed services:{}
+     Client list info:{
+          Client list callbacks: 18
+          Client list killed: false
+          Client list broadcasts count: -1
+          Registered clients:{
+[com.h4xtor.share][com.google.android.inputmethod.latin][com.google.android.apps.nexuslauncher][com.google.android.apps.nexuslauncher][com.android.systemui][com.google.android.youtube][com.h4xtor.share][com.h4xtor.share][com.google.android.apps.wellbeing][com.google.android.apps.nexuslauncher][com.google.android.as][com.android.chrome][com.h4xtor.share][com.google.android.apps.nexuslauncher][com.google.android.googlequicksearchbox][com.google.android.apps.youtube.music][com.google.android.googlequicksearchbox][com.google.android.contacts]}]
+Global Info [ Top focused display Id = 0
+     Active Window Id = 28
+     Top Focused Window Id = 28
+     Accessibility Focused Window Id = -1 ]
+
+Display[0] : 
+A11yWindow[AccessibilityWindowInfo[title=null, displayId=0, id=40, taskId=-1, type=TYPE_SYSTEM, layer=2, region=SkRegion((21,1396,189,1501)), bounds=Rect(21, 1396 - 189, 1501), focused=false, active=false, pictureInPicture=false, transitionTime=126592, hasParent=false, isAnchored=false, hasChildren=false]]
+WindowInfo[WindowInfo[title=null, displayId=0, taskId=-1, type=2036, layer=0, token=android.os.BinderProxy@1806e23, region=SkRegion((21,1396,189,1501)), bounds=Rect(21, 1396 - 189, 1501), parent=null, focused=false, children=[], accessibility anchor=9223372034707292159, pictureInPicture=false, watchOutsideTouch=true, mTransformMatrix=Matrix{[1.0, 0.0, 0.0][0.0, 1.0, 0.0][0.0, 0.0, 1.0]}, mMagnificationSpec=<scale:1.0,offsetX:0.0,offsetY:0.0>, locales=[en_US]]]
+,
+A11yWindow[AccessibilityWindowInfo[title=null, displayId=0, id=22, taskId=-1, type=TYPE_SYSTEM, layer=1, region=SkRegion((0,0,1080,136)), bounds=Rect(0, 0 - 1080, 136), focused=false, active=false, pictureInPicture=false, transitionTime=120129, hasParent=false, isAnchored=false, hasChildren=false]]
+WindowInfo[WindowInfo[title=null, displayId=0, taskId=-1, type=2000, layer=1, token=android.os.BinderProxy@7276ff7, region=SkRegion((0,0,1080,136)), bounds=Rect(0, 0 - 1080, 136), parent=null, focused=false, children=null, accessibility anchor=9223372034707292159, pictureInPicture=false, watchOutsideTouch=false, mTransformMatrix=Matrix{[1.0, 0.0, 0.0][0.0, 1.0, 0.0][0.0, 0.0, 1.0]}, mMagnificationSpec=<scale:1.0,offsetX:0.0,offsetY:0.0>, locales=[en_US]]]
+,
+A11yWindow[AccessibilityWindowInfo[title=null, displayId=0, id=28, taskId=12, type=TYPE_APPLICATION, layer=0, region=SkRegion((0,0,1080,2400)), bounds=Rect(0, 0 - 1080, 2400), focused=true, active=true, pictureInPicture=false, transitionTime=128376, hasParent=false, isAnchored=false, hasChildren=false]]
+WindowInfo[WindowInfo[title=null, displayId=0, taskId=12, type=2, layer=2, token=android.os.BinderProxy@322872b, region=SkRegion((0,0,1080,2400)), bounds=Rect(0, 0 - 1080, 2400), parent=null, focused=true, children=null, accessibility anchor=9223372034707292159, pictureInPicture=false, watchOutsideTouch=false, mTransformMatrix=Matrix{[1.0, 0.0, 0.0][0.0, 1.0, 0.0][0.0, 0.0, 1.0]}, mMagnificationSpec=<scale:1.0,offsetX:0.0,offsetY:0.0>, locales=[en_US]]]
+
+
+Window attributes:[{12=AccessibilityWindowAttributes{mAccessibilityWindowTitle=English (US) (QWERTY)mLocales=[en_US]}, 15=AccessibilityWindowAttributes{mAccessibilityWindowTitle=Chrome First Run ExperiencemLocales=[en_US]}, 16=AccessibilityWindowAttributes{mAccessibilityWindowTitle=nullmLocales=[en_US]}, 17=AccessibilityWindowAttributes{mAccessibilityWindowTitle=nullmLocales=[en_US]}, 18=AccessibilityWindowAttributes{mAccessibilityWindowTitle=Navigation barmLocales=[en_US]}, 19=AccessibilityWindowAttributes{mAccessibilityWindowTitle=nullmLocales=[en_US]}, 20=AccessibilityWindowAttributes{mAccessibilityWindowTitle=Navigation bar Edge PanelmLocales=[en_US]}, 21=AccessibilityWindowAttributes{mAccessibilityWindowTitle=nullmLocales=[en_US]}, 22=AccessibilityWindowAttributes{mAccessibilityWindowTitle=nullmLocales=[en_US]}, 23=AccessibilityWindowAttributes{mAccessibilityWindowTitle=nullmLocales=[en_US]}, 25=AccessibilityWindowAttributes{mAccessibilityWindowTitle=h4xtor sharemLocales=[en_US]}, 28=AccessibilityWindowAttributes{mAccessibilityWindowTitle=nullmLocales=[en_US]}, 29=AccessibilityWindowAttributes{mAccessibilityWindowTitle=ContactsmLocales=[en_US]}, 38=AccessibilityWindowAttributes{mAccessibilityWindowTitle=HomemLocales=[en_US]}, 39=AccessibilityWindowAttributes{mAccessibilityWindowTitle=DiscovermLocales=[en_US]}, 40=AccessibilityWindowAttributes{mAccessibilityWindowTitle=nullmLocales=[en_US]}, 42=AccessibilityWindowAttributes{mAccessibilityWindowTitle=nullmLocales=[en_US]}}]
+Global client list info:{
+    Client list callbacks: 8
+    Client list killed: false
+    Client list broadcasts count: -1
+    Registered clients:{
+[com.google.android.permissioncontroller][com.google.android.googlesdksetup][com.google.android.gsf, com.google.android.gms][android, com.android.inputdevices, com.android.location.fused, com.android.providers.settings, com.android.dynsystem, com.android.keychain, com.android.settings, com.android.wallpaperbackup, com.android.server.telecom, com.android.localtransport, com.android.emulator.multidisplay][com.android.systemui][com.android.location.fused, com.android.emulator.multidisplay, com.android.inputdevices, com.android.localtransport, com.android.keychain, android, com.android.wallpaperbackup, com.android.server.telecom, com.android.dynsystem, com.android.providers.settings, com.android.settings][com.google.android.documentsui][com.android.location.fused, com.android.dynsystem, com.android.inputdevices, com.android.emulator.multidisplay, com.android.localtransport, com.android.settings, com.android.providers.settings, com.android.server.telecom, com.android.keychain, com.android.wallpaperbackup, android]
+
+Proxy manager state:
+    Number of proxy connections: 0
+    Registered proxy connections:
+Accessibility Display Listener:
+    SystemUI uid: 10168
+    1 valid display: 0

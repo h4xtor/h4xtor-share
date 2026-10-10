@@ -1,0 +1,63 @@
+--------- beginning of main
+10-10 13:53:30.329  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:53:34.550  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:53:36.618  3282  3282 I h4xtor  : copy watcher connected
+--------- beginning of system
+10-10 13:53:42.393   523  2200 W ActivityTaskManager: callingPackage for (uid=2000, pid=8147) has no WPC
+10-10 13:53:42.395   523  2200 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.h4xtor.share/.MainActivity} with LAUNCH_SINGLE_TASK from uid 2000 (BAL_ALLOW_PERMISSION) result code=3
+10-10 13:53:45.638  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:53:48.741  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:53:52.201  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:53:56.212  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:53:58.291  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:53:59.211   523  2200 I ActivityTaskManager: START u0 {act=android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS cmp=com.android.settings/.Settings$NotificationAccessSettingsActivity} with LAUNCH_MULTIPLE from uid 10192 (BAL_ALLOW_VISIBLE_WINDOW) result code=0
+10-10 13:54:00.186   523   541 I ActivityTaskManager: Displayed com.android.settings/.Settings$NotificationAccessSettingsActivity for user 0: +935ms
+10-10 13:54:07.539   523  1806 W ActivityTaskManager: callingPackage for (uid=2000, pid=8332) has no WPC
+10-10 13:54:07.542   523  1806 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.h4xtor.share/.MainActivity} with LAUNCH_SINGLE_TASK from uid 2000 (BAL_ALLOW_PERMISSION) result code=3
+10-10 13:54:10.798  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:54:13.883  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:54:17.367  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:54:21.371  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:54:23.444  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:54:39.064  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:54:42.148  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:54:44.151   523   988 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.h4xtor.share/.ScreenCaptureActivity} with LAUNCH_MULTIPLE from uid 10192 (BAL_ALLOW_VISIBLE_WINDOW) result code=0
+10-10 13:54:44.655   523   544 W ActivityTaskManager: Activity top resumed state loss timeout for ActivityRecord{9bef935 u0 com.h4xtor.share/.MainActivity t16}
+10-10 13:54:44.655   523   544 W ActivityTaskManager: Activity pause timeout for ActivityRecord{9bef935 u0 com.h4xtor.share/.MainActivity t16}
+10-10 13:54:44.967   523  1805 I ActivityTaskManager: START u0 {cmp=com.android.systemui/.media.MediaProjectionPermissionActivity (has extras)} with LAUNCH_SINGLE_TOP from uid 10192 (BAL_ALLOW_VISIBLE_WINDOW) result code=0
+10-10 13:54:45.687   523   541 I ActivityTaskManager: Displayed com.android.systemui/.media.MediaProjectionPermissionActivity for user 0: +1s518ms
+10-10 13:54:52.404  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:54:55.468   523   988 W ActivityTaskManager: callingPackage for (uid=2000, pid=8717) has no WPC
+10-10 13:54:55.481   523   988 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.h4xtor.share/.MainActivity} with LAUNCH_SINGLE_TASK from uid 2000 (BAL_ALLOW_PERMISSION) result code=3
+10-10 13:54:55.753   523   988 I ActivityTaskManager: Activity reported stop, but no longer stopping: ActivityRecord{151a46 u0 com.google.android.apps.nexuslauncher/.NexusLauncherActivity t7} STOPPED
+10-10 13:54:56.012   523   541 I ActivityTaskManager: Config changes=80000000 {1.0 310mcc260mnc [en_US] ldltr sw411dp w411dp h838dp 420dpi nrml long port finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 136 - 1080, 2337) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} as.6 s.184 fontWeightAdjustment=0}
+10-10 13:54:56.020   523   541 V ActivityTaskManager: Sending to IME proc com.google.android.inputmethod.latin new config {1.0 310mcc260mnc [en_US] ldltr sw411dp w411dp h838dp 420dpi nrml long port finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 136 - 1080, 2337) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} as.6 s.243 fontWeightAdjustment=0}
+10-10 13:54:56.040   523   541 W ActivityTaskManager: Current config: {1.0 310mcc260mnc [en_US] ldltr sw411dp w411dp h838dp 420dpi nrml long port finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 136 - 1080, 2337) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} as.6 s.184 fontWeightAdjustment=0} unchanged for IME proc com.google.android.inputmethod.latin
+10-10 13:54:56.068   523   541 W ActivityTaskManager: Current config: {1.0 310mcc260mnc [en_US] ldltr sw411dp w411dp h838dp 420dpi nrml long port finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 136 - 1080, 2337) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} as.6 s.184 fontWeightAdjustment=0} unchanged for IME proc com.google.android.inputmethod.latin
+10-10 13:55:02.306  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:55:06.883  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:55:08.952  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:55:12.498  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:55:16.136  3282  3282 I h4xtor  : copy watcher connected
+10-10 13:55:17.019   523  2399 W ActivityTaskManager: callingPackage for (uid=2000, pid=8907) has no WPC
+10-10 13:55:17.026   523  2399 I ActivityTaskManager: START u0 {act=android.intent.action.SEND typ=text/plain flg=0x10000000 cmp=com.h4xtor.share/.ShareTargetActivity (has extras)} with LAUNCH_MULTIPLE from uid 2000 (BAL_ALLOW_PERMISSION) result code=0
+10-10 13:55:17.388   523   541 I ActivityTaskManager: Displayed com.h4xtor.share/.ShareTargetActivity for user 0: +366ms
+10-10 13:55:17.766   523  2340 W ActivityTaskManager: Request to remove task ignored for non-existent task 17
+10-10 13:55:18.411   523  2340 I ActivityTaskManager: Config changes=200 {1.0 310mcc260mnc [en_US] ldltr sw411dp w411dp h838dp 420dpi nrml long port night finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 136 - 1080, 2337) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} as.6 s.258 fontWeightAdjustment=0}
+10-10 13:55:18.424   523  2340 W ActivityTaskManager: Current config: {1.0 310mcc260mnc [en_US] ldltr sw411dp w411dp h838dp 420dpi nrml long port finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 136 - 1080, 2337) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} as.6 s.258 fontWeightAdjustment=0} unchanged for IME proc com.google.android.inputmethod.latin
+10-10 13:55:18.443   523  2340 V ActivityTaskManager: Sending to IME proc com.google.android.inputmethod.latin new config {1.0 310mcc260mnc [en_US] ldltr sw411dp w411dp h838dp 420dpi nrml long port night finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 136 - 1080, 2337) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} as.6 s.329 fontWeightAdjustment=0}
+10-10 13:55:18.630   523   538 I ActivityTaskManager: Config changes=20000400 {1.0 310mcc260mnc [en_US] ldltr sw411dp w411dp h862dp 420dpi nrml long port night finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 136 - 1080, 2400) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} as.6 s.332 fontWeightAdjustment=0}
+10-10 13:55:18.642   523   538 W ActivityTaskManager: Current config: {1.0 310mcc260mnc [en_US] ldltr sw411dp w411dp h838dp 420dpi nrml long port night finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 136 - 1080, 2337) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} as.6 s.332 fontWeightAdjustment=0} unchanged for IME proc com.google.android.inputmethod.latin
+10-10 13:55:18.659   523   538 V ActivityTaskManager: Sending to IME proc com.google.android.inputmethod.latin new config {1.0 310mcc260mnc [en_US] ldltr sw411dp w411dp h862dp 420dpi nrml long port night finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 136 - 1080, 2400) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} as.6 s.403 fontWeightAdjustment=0}
+10-10 13:55:18.685   523  2340 W ActivityTaskManager: Force removing ActivityRecord{eaf6ecc u0 com.h4xtor.share/.ShareTargetActivity t18 f}}: app died, no saved state
+10-10 13:55:18.688   523  2340 W ActivityTaskManager: Force removing ActivityRecord{9bef935 u0 com.h4xtor.share/.MainActivity t16 f}}: app died, no saved state
+10-10 13:55:18.780   523  2188 I ActivityTaskManager: Config changes=20000400 {1.0 310mcc260mnc [en_US] ldltr sw411dp w411dp h838dp 420dpi nrml long port night finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 136 - 1080, 2337) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} as.6 s.406 fontWeightAdjustment=0}
+10-10 13:55:18.793   523  2188 W ActivityTaskManager: Current config: {1.0 310mcc260mnc [en_US] ldltr sw411dp w411dp h862dp 420dpi nrml long port night finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 136 - 1080, 2400) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} as.6 s.406 fontWeightAdjustment=0} unchanged for IME proc com.google.android.inputmethod.latin
+10-10 13:55:18.815   523  2188 V ActivityTaskManager: Sending to IME proc com.google.android.inputmethod.latin new config {1.0 310mcc260mnc [en_US] ldltr sw411dp w411dp h838dp 420dpi nrml long port night finger qwerty/v/v -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2400) mAppBounds=Rect(0, 136 - 1080, 2337) mMaxBounds=Rect(0, 0 - 1080, 2400) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mDisplayWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0} as.6 s.476 fontWeightAdjustment=0}
+10-10 13:55:18.972   523  2246 W ActivityTaskManager: callingPackage for (uid=2000, pid=8937) has no WPC
+10-10 13:55:18.997   523  2246 I ActivityTaskManager: Add Task{a3c71ca #16 type=standard A=10192:com.h4xtor.share} to hidden list because adding Task{2e09d23 #19 type=standard A=10192:com.h4xtor.share}
+10-10 13:55:18.997   523  2246 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.h4xtor.share/.MainActivity} with LAUNCH_SINGLE_TASK from uid 2000 (BAL_ALLOW_PERMISSION) result code=0
+10-10 13:55:19.499   523   544 W ActivityTaskManager: Activity top resumed state loss timeout for ActivityRecord{5d35f85 u0 com.android.chrome/org.chromium.chrome.browser.firstrun.FirstRunActivity t9}
+10-10 13:55:19.504   523   544 W ActivityTaskManager: Activity pause timeout for ActivityRecord{5d35f85 u0 com.android.chrome/org.chromium.chrome.browser.firstrun.FirstRunActivity t9}
+10-10 13:55:21.322   523   541 I ActivityTaskManager: Displayed com.h4xtor.share/.MainActivity for user 0: +2s270ms
+10-10 13:55:22.422   523  2200 W ActivityTaskManager: Request to remove task ignored for non-existent task 18

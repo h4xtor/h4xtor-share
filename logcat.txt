@@ -1,0 +1,68 @@
+--------- beginning of main
+10-10 13:55:19.029  8941  8941 I om.h4xtor.share: Late-enabling -Xcheck:jni
+10-10 13:55:19.083  8941  8941 I om.h4xtor.share: Using CollectorTypeCC GC.
+10-10 13:55:19.088  8941  8941 W om.h4xtor.share: Unexpected CPU variant for x86: x86_64.
+10-10 13:55:19.088  8941  8941 W om.h4xtor.share: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, tremont, kabylake, default
+10-10 13:55:19.317  8941  8941 D CompatibilityChangeReporter: Compat change id reported: 171979766; UID 10192; state: ENABLED
+10-10 13:55:19.317  8941  8941 D CompatibilityChangeReporter: Compat change id reported: 242716250; UID 10192; state: ENABLED
+10-10 13:55:19.338  8941  8941 W ziparchive: Unable to open '/data/app/~~EGkB5MjS1gAwL9Uz3xRZKg==/com.h4xtor.share-qCI4UG63cFe3EOBO3IC90Q==/base.dm': No such file or directory
+10-10 13:55:19.338  8941  8941 W ziparchive: Unable to open '/data/app/~~EGkB5MjS1gAwL9Uz3xRZKg==/com.h4xtor.share-qCI4UG63cFe3EOBO3IC90Q==/base.dm': No such file or directory
+10-10 13:55:19.496  8941  8941 D nativeloader: Configuring clns-6 for other apk /data/app/~~EGkB5MjS1gAwL9Uz3xRZKg==/com.h4xtor.share-qCI4UG63cFe3EOBO3IC90Q==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~EGkB5MjS1gAwL9Uz3xRZKg==/com.h4xtor.share-qCI4UG63cFe3EOBO3IC90Q==/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.h4xtor.share
+10-10 13:55:19.523  8941  8941 V GraphicsEnvironment: Currently set values for:
+10-10 13:55:19.523  8941  8941 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+10-10 13:55:19.523  8941  8941 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+10-10 13:55:19.567  8941  8941 V GraphicsEnvironment: ANGLE GameManagerService for com.h4xtor.share: false
+10-10 13:55:19.568  8941  8941 V GraphicsEnvironment: com.h4xtor.share is not listed in per-application setting
+10-10 13:55:19.568  8941  8941 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+10-10 13:55:19.817  8941  8968 D libEGL  : loaded /vendor/lib64/egl/libEGL_emulation.so
+10-10 13:55:19.819  8941  8968 D libEGL  : loaded /vendor/lib64/egl/libGLESv1_CM_emulation.so
+10-10 13:55:19.821  8941  8968 D libEGL  : loaded /vendor/lib64/egl/libGLESv2_emulation.so
+10-10 13:55:20.038  8941  8941 D CompatibilityChangeReporter: Compat change id reported: 171228096; UID 10192; state: ENABLED
+10-10 13:55:20.047  8941  8941 D CompatibilityChangeReporter: Compat change id reported: 210923482; UID 10192; state: ENABLED
+10-10 13:55:20.119  8941  8941 D CompatibilityChangeReporter: Compat change id reported: 237531167; UID 10192; state: DISABLED
+10-10 13:55:20.120  8941  8941 W OpenGLRenderer: Unknown dataspace 0
+10-10 13:55:20.205  8941  8941 D CompatibilityChangeReporter: Compat change id reported: 270306772; UID 10192; state: ENABLED
+10-10 13:55:20.206  8941  8941 D CompatibilityChangeReporter: Compat change id reported: 235355681; UID 10192; state: ENABLED
+10-10 13:55:20.217  8941  8941 D CompatibilityChangeReporter: Compat change id reported: 160794467; UID 10192; state: ENABLED
+10-10 13:55:20.245  8941  8973 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+10-10 13:55:20.408  8941  8966 W OpenGLRenderer: Failed to initialize 101010-2 format, error = EGL_SUCCESS
+10-10 13:55:20.435  8941  8966 I Gralloc4: mapper 4.x is not supported
+10-10 13:55:21.341  8941  8958 I OpenGLRenderer: Davey! duration=1001ms; Flags=1, FrameTimelineVsyncId=35201, IntendedVsync=436333434947, Vsync=436500101607, InputEventId=0, HandleInputStart=436507395358, AnimationStart=436507401068, PerformTraversalsStart=436507404064, DrawStart=436639919959, FrameDeadline=436350101613, FrameInterval=436507165059, FrameStartTime=16666666, SyncQueued=436655261313, SyncStart=436729013246, IssueDrawCommandsStart=436729494303, SwapBuffers=437170209559, FrameCompleted=437409079693, DequeueBufferDuration=3957, QueueBufferDuration=311711, GpuCompleted=437409002258, SwapBuffersCompleted=437409079693, DisplayPresentTime=0, CommandSubmissionCompleted=437170209559, 
+10-10 13:55:21.367  8941  8941 W NsdServiceInfo: Key lengths > 9 are discouraged: fingerprint
+10-10 13:55:21.370  8941  8941 W NsdServiceInfo: Key lengths > 9 are discouraged: capabilities
+10-10 13:55:21.385  8941  8941 D TrafficStats: tagSocket(104) with statsTag=0xffffffff, statsUid=-1
+10-10 13:55:21.518  8941  8984 D TrafficStats: tagSocket(106) with statsTag=0xffffffff, statsUid=-1
+10-10 13:55:21.559  8941  8985 D TrafficStats: tagSocket(109) with statsTag=0xffffffff, statsUid=-1
+10-10 13:55:21.559  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:21.559  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:21.592  8941  8941 I Choreographer: Skipped 71 frames!  The application may be doing too much work on its main thread.
+10-10 13:55:21.644  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:21.645  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:21.666  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:21.666  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:22.298  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:22.308  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:22.313  8941  8955 I OpenGLRenderer: Davey! duration=1883ms; Flags=0, FrameTimelineVsyncId=35314, IntendedVsync=436600101603, Vsync=437783434889, InputEventId=0, HandleInputStart=437785657855, AnimationStart=437785661932, PerformTraversalsStart=437785967473, DrawStart=437816038283, FrameDeadline=437433434903, FrameInterval=437785053508, FrameStartTime=16666666, SyncQueued=437825364501, SyncStart=437825415173, IssueDrawCommandsStart=437825700925, SwapBuffers=438326543103, FrameCompleted=438483598832, DequeueBufferDuration=5851, QueueBufferDuration=385629, GpuCompleted=438483598832, SwapBuffersCompleted=438467531685, DisplayPresentTime=0, CommandSubmissionCompleted=438326543103, 
+10-10 13:55:22.331  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:22.332  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:22.371  8941  8941 I Choreographer: Skipped 34 frames!  The application may be doing too much work on its main thread.
+10-10 13:55:25.491  8941  8993 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-10 13:55:25.492  8941  8992 D TrafficStats: tagSocket(125) with statsTag=0xffffffff, statsUid=-1
+10-10 13:55:26.129  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:26.129  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:26.142  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:26.142  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:26.199  8941  8966 D EGL_emulation: app_time_stats: avg=991.81ms min=49.25ms max=3707.68ms count=5
+10-10 13:55:29.492  8941  9015 D TrafficStats: tagSocket(137) with statsTag=0xffffffff, statsUid=-1
+10-10 13:55:29.492  8941  9014 D TrafficStats: tagSocket(131) with statsTag=0xffffffff, statsUid=-1
+10-10 13:55:30.155  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:30.155  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:30.185  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:30.185  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:30.248  8941  8966 D EGL_emulation: app_time_stats: avg=2022.62ms min=31.59ms max=4013.64ms count=2
+10-10 13:55:30.977  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:30.978  8941  8941 D AutofillManager: view not autofillable - has multiline input type
+10-10 13:55:32.421  8941  8974 D TrafficStats: tagSocket(117) with statsTag=0xffffffff, statsUid=-1
+10-10 13:55:32.450  8941  8966 D EGL_emulation: app_time_stats: avg=435.88ms min=14.06ms max=1275.15ms count=5
+10-10 13:55:33.492  8941  9035 D TrafficStats: tagSocket(130) with statsTag=0xffffffff, statsUid=-1
+10-10 13:55:34.143  8941  8966 D EGL_emulation: app_time_stats: avg=561.65ms min=14.81ms max=1538.86ms count=3
