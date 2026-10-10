@@ -110,8 +110,11 @@ class GoogleDrive:
         if sys.platform == "win32":
             path.write_bytes(_dpapi(raw, True))
         else:
-            path.write_bytes(raw)
-            path.chmod(0o600)
+            # Created owner-only from the first byte, not chmod-ed after the write.
+            descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(descriptor, "wb") as output:
+                output.write(raw)
+            path.chmod(0o600)  # an older file may have been created with wider permissions
 
     def _load_tokens(self) -> dict[str, str] | None:
         path = self.config.gdrive_token_path
