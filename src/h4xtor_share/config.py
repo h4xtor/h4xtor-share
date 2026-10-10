@@ -96,6 +96,10 @@ class Config:
         return self.path.parent / "history.json"
 
     @property
+    def gdrive_token_path(self) -> Path:
+        return self.path.parent / "gdrive.token"
+
+    @property
     def clipboard_sync_enabled(self) -> bool:
         return bool(self.data.get("clipboard_sync", True))
 

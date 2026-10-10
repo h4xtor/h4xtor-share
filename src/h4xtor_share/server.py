@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import re
 import secrets
 import shutil
@@ -21,10 +23,13 @@ from h4xtor_share.models import (
     FileReceived,
     FolderReceived,
     LinkReceived,
+    NotificationReceived,
+    NotificationRemoved,
     PairingPrompt,
     Peer,
     PeerForgotten,
     PeerPaired,
+    SmsReceived,
     TransferProgress,
     WifiDirectOffer,
 )
@@ -40,6 +45,8 @@ MAX_PENDING_PAIRINGS = 10
 FINGERPRINT_PATTERN = re.compile(r"^[a-f0-9]{64}$")
 DEVICE_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
 MAX_URL_LENGTH = 8192
+MAX_NOTIFICATION_KEY = 512
+MAX_ICON_BASE64 = 64 * 1024
 CHUNK_SIZE = 1024 * 1024
 TRANSFER_ID_PATTERN = re.compile(r"^[a-f0-9]{32}$")
 MAX_FOLDER_ENTRIES = 10_000
@@ -159,6 +166,8 @@ class ShareServer:
                 web.post("/api/v1/speedtest", self.speedtest),
                 web.post("/api/v1/wifi-direct/offer", self.wifi_direct_offer),
                 web.post("/api/v1/clipboard", self.clipboard),
+                web.post("/api/v1/notification", self.notification),
+                web.post("/api/v1/sms/incoming", self.sms_incoming),
                 web.post("/api/v1/files/init", self.file_init),
                 web.put("/api/v1/files/{transfer_id}", self.file_upload),
                 web.post("/api/v1/folders/init", self.folder_init),
@@ -436,6 +445,84 @@ class ShareServer:
             ClipboardReceived(peer_id=peer_id, peer_name=peer_name, text=text)
         )
         return web.json_response({"accepted": True, "characters": len(text)})
+
+    @staticmethod
+    async def _json_object(request: web.Request) -> dict[str, Any]:
+        try:
+            payload = await request.json()
+        except ValueError as error:
+            raise web.HTTPBadRequest(text="Body must be JSON.") from error
+        if not isinstance(payload, dict):
+            raise web.HTTPBadRequest(text="Body must be a JSON object.")
+        return payload
+
+    @staticmethod
+    def _clip(payload: dict[str, Any], field: str, limit: int) -> str:
+        value = payload.get(field)
+        return value[:limit] if isinstance(value, str) else ""
+
+    @staticmethod
+    def _int(value: Any) -> int:
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return 0
+
+    async def notification(self, request: web.Request) -> web.Response:
+        peer_id, peer_name = self.authenticate(request)
+        payload = await self._json_object(request)
+        event = payload.get("event")
+        key = self._clip(payload, "key", MAX_NOTIFICATION_KEY)
+        if event not in ("posted", "removed"):
+            raise web.HTTPBadRequest(text="Unknown notification event.")
+        if not key:
+            raise web.HTTPBadRequest(text="Notification key is missing.")
+        if event == "removed":
+            self.event_callback(NotificationRemoved(peer_id=peer_id, peer_name=peer_name, key=key))
+            return web.json_response({"accepted": True})
+        icon = b""
+        raw_icon = payload.get("icon")
+        if isinstance(raw_icon, str) and 0 < len(raw_icon) <= MAX_ICON_BASE64:
+            try:
+                icon = base64.b64decode(raw_icon, validate=True)
+            except (binascii.Error, ValueError):
+                icon = b""
+        self.event_callback(
+            NotificationReceived(
+                peer_id=peer_id,
+                peer_name=peer_name,
+                key=key,
+                package=self._clip(payload, "package", 200),
+                app=self._clip(payload, "app", 80),
+                title=self._clip(payload, "title", 200),
+                text=self._clip(payload, "text", 4000),
+                time=self._int(payload.get("time")),
+                icon_png=icon,
+                can_reply=payload.get("can_reply") is True,
+                can_dismiss=payload.get("can_dismiss") is True,
+            )
+        )
+        return web.json_response({"accepted": True})
+
+    async def sms_incoming(self, request: web.Request) -> web.Response:
+        peer_id, peer_name = self.authenticate(request)
+        payload = await self._json_object(request)
+        address = self._clip(payload, "address", 64)
+        if not address:
+            raise web.HTTPBadRequest(text="SMS address is missing.")
+        thread = payload.get("thread_id")
+        self.event_callback(
+            SmsReceived(
+                peer_id=peer_id,
+                peer_name=peer_name,
+                thread_id=str(thread)[:64] if thread is not None else "",
+                address=address,
+                name=self._clip(payload, "name", 80),
+                body=self._clip(payload, "body", 4000),
+                time=self._int(payload.get("time")),
+            )
+        )
+        return web.json_response({"accepted": True})
 
     async def speedtest(self, request: web.Request) -> web.Response:
         """Swallow up to 256 MB and report how fast it arrived (nothing is stored)."""

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import mimetypes
 import secrets
 import uuid
-from collections.abc import AsyncIterator, Callable
+from collections.abc import AsyncIterator, Callable, Coroutine
 from pathlib import Path
 from typing import Any
 
@@ -14,6 +15,7 @@ from h4xtor_share.models import DESKTOP_CAPABILITIES, Peer, TransferProgress
 from h4xtor_share.pairing import PairingInvite
 
 CHUNK_SIZE = 1024 * 1024
+MAX_WALLPAPER_BYTES = 20 * 1024 * 1024
 
 
 async def _raise_for_status(response: aiohttp.ClientResponse) -> None:
@@ -231,6 +233,109 @@ class PeerClient:
         ) as response:
             await _raise_for_status(response)
             return await response.json()
+
+    async def _authed_put_bytes(
+        self,
+        peer: Peer,
+        path: str,
+        data: bytes,
+        content_type: str,
+        timeout_seconds: float = 120,
+    ) -> dict[str, Any]:
+        headers, ssl_value = self.auth(peer)
+        headers["Content-Type"] = content_type
+        timeout = aiohttp.ClientTimeout(total=timeout_seconds)
+        async with aiohttp.ClientSession(timeout=timeout) as session, session.put(
+            f"{peer.endpoint}{path}", data=data, headers=headers, ssl=ssl_value
+        ) as response:
+            await _raise_for_status(response)
+            return await response.json()
+
+    @staticmethod
+    def _require(peer: Peer, capability: str) -> None:
+        if not peer.supports(capability):
+            raise RuntimeError("Telefonen skal opdateres for at kunne det.")
+
+    async def notification_action(
+        self, peer: Peer, key: str, action: str, text: str = ""
+    ) -> None:
+        self._require(peer, "notifications")
+        body: dict[str, Any] = {"key": key, "action": action}
+        if text:
+            body["text"] = text
+        await self._authed_post(peer, "/api/v1/notification/action", body)
+
+    async def sms_threads(self, peer: Peer, limit: int = 50) -> list[dict[str, Any]]:
+        self._require(peer, "sms")
+        payload = await self._authed_post(peer, "/api/v1/sms/threads", {"limit": limit})
+        return list(payload.get("threads") or [])
+
+    async def sms_messages(
+        self, peer: Peer, thread_id: str, limit: int = 100
+    ) -> list[dict[str, Any]]:
+        self._require(peer, "sms")
+        payload = await self._authed_post(
+            peer, "/api/v1/sms/messages", {"thread_id": thread_id, "limit": limit}
+        )
+        return list(payload.get("messages") or [])
+
+    async def send_sms(self, peer: Peer, address: str, text: str) -> None:
+        self._require(peer, "sms")
+        await self._authed_post(peer, "/api/v1/sms/send", {"address": address, "text": text})
+
+    async def request_screenshot(self, peer: Peer) -> None:
+        self._require(peer, "screenshot-request")
+        await self._authed_post(peer, "/api/v1/screenshot", {})
+
+    async def find_phone(self, peer: Peer, ring: bool) -> bool:
+        self._require(peer, "find-phone")
+        payload = await self._authed_post(
+            peer, "/api/v1/find", {"action": "start" if ring else "stop"}
+        )
+        return bool(payload.get("ringing"))
+
+    async def set_volume(self, peer: Peer, level: int) -> int:
+        self._require(peer, "remote-control")
+        level = max(0, min(100, int(level)))
+        payload = await self._authed_post(peer, "/api/v1/remote/volume", {"level": level})
+        return int(payload.get("level", level))
+
+    async def speak(self, peer: Peer, text: str) -> None:
+        self._require(peer, "remote-control")
+        await self._authed_post(peer, "/api/v1/remote/speak", {"text": text[:1000]})
+
+    async def set_wallpaper(self, peer: Peer, path: Path) -> None:
+        self._require(peer, "remote-control")
+        if path.stat().st_size > MAX_WALLPAPER_BYTES:
+            raise ValueError("Billedet er for stort (maks. 20 MB).")
+        content_type = mimetypes.guess_type(path.name)[0] or "application/octet-stream"
+        if not content_type.startswith("image/"):
+            raise ValueError("Vælg en billedfil.")
+        await self._authed_put_bytes(
+            peer, "/api/v1/remote/wallpaper", path.read_bytes(), content_type
+        )
+
+    # Phone-side emulation helpers (tests / E2E): what the Android app sends to the PC.
+    async def push_notification(self, peer: Peer, payload: dict[str, Any]) -> None:
+        await self._authed_post(peer, "/api/v1/notification", payload)
+
+    async def push_sms(self, peer: Peer, payload: dict[str, Any]) -> None:
+        await self._authed_post(peer, "/api/v1/sms/incoming", payload)
+
+    @staticmethod
+    async def send_to_all(
+        peers: list[Peer], coroutine_factory: Callable[[Peer], Coroutine[Any, Any, Any]]
+    ) -> list[tuple[Peer, BaseException | None]]:
+        """Run one coroutine per peer concurrently; report each peer's outcome."""
+        results = await asyncio.gather(
+            *(coroutine_factory(peer) for peer in peers), return_exceptions=True
+        )
+        outcomes: list[tuple[Peer, BaseException | None]] = []
+        for peer, result in zip(peers, results, strict=True):
+            if isinstance(result, asyncio.CancelledError):
+                raise result
+            outcomes.append((peer, result if isinstance(result, BaseException) else None))
+        return outcomes
 
     async def send_link(self, peer: Peer, url: str) -> None:
         """Push a URL that the receiver opens in its browser."""
