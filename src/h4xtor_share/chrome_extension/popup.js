@@ -1,7 +1,7 @@
-import { chosenDevice, connect, devices, getToken, send } from "./api.js";
+import { ALL, chosenDevice, connect, devices, getToken, send, sendAll, summarize } from "./api.js";
 
 const $ = (id) => document.getElementById(id);
-const COLORS = { android: "#3DDC84", windows: "#2F7BEA", linux: "#E8A33D", darwin: "#8E8E93", macos: "#8E8E93" };
+const COLORS = { android: "#3DDC84", windows: "#2F7BEA", linux: "#E8A33D", darwin: "#8E8E93", macos: "#8E8E93", all: "#D97757" };
 let list = [];
 let current = null;
 
@@ -30,13 +30,13 @@ function renderDevices() {
     empty.textContent = "Ingen forbundne enheder. Forbind din telefon i h4xtor share på PC'en.";
     container.append(empty);
   }
-  for (const device of list) {
+  for (const device of list.length >= 2 ? [ALL, ...list] : list) {
     const row = document.createElement("button");
     row.className = "device" + (current && current.id === device.id ? " active" : "");
     const avatar = document.createElement("span");
     avatar.className = "avatar";
     avatar.style.background = COLORS[(device.platform || "").toLowerCase()] || "#A3A19A";
-    avatar.textContent = (device.platform || "?").slice(0, 1).toUpperCase();
+    avatar.textContent = device.all ? "★" : (device.platform || "?").slice(0, 1).toUpperCase();
     const texts = document.createElement("span");
     const name = document.createElement("div");
     name.className = "name";
@@ -45,7 +45,8 @@ function renderDevices() {
     meta.className = "meta";
     const dot = document.createElement("span");
     dot.className = "dot" + (device.online ? " on" : "");
-    meta.append(dot, device.online ? "Online" : "Offline");
+    if (device.all) meta.append(`${list.length} enheder`);
+    else meta.append(dot, device.online ? "Online" : "Offline");
     texts.append(name, meta);
     row.append(avatar, texts);
     row.addEventListener("click", async () => {
@@ -56,7 +57,9 @@ function renderDevices() {
     container.append(row);
   }
   $("send-tab").disabled = !current;
-  $("send-tab").textContent = current ? `Send denne fane til ${current.name}` : "Send denne fane";
+  $("send-tab").textContent = current
+    ? `Send denne fane til ${current.all ? "alle enheder" : current.name}`
+    : "Send denne fane";
 }
 
 async function refresh() {
@@ -87,6 +90,11 @@ async function refresh() {
 async function sendValue(kind, value, label) {
   if (!current) return toast("Vælg en enhed først", true);
   try {
+    if (current.all) {
+      const summary = summarize(await sendAll(kind, value), list);
+      toast(summary.failed ? summary.text : `${label} sendt til alle ${summary.total} enheder ✓`, summary.sent === 0);
+      return;
+    }
     await send(current.id, kind, value);
     toast(`${label} sendt til ${current.name} ✓`);
   } catch (error) {

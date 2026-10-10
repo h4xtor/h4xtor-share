@@ -223,6 +223,26 @@ class AsyncRuntime:
 
 
 @dataclass
+class SendGroup:
+    """Collects the per-device outcomes of one "Alle enheder" send into one summary."""
+
+    total: int
+    what: str = ""  # e.g. "3 elementer"; empty for text and links
+    ok: list[str] = field(default_factory=list)
+    problems: list[tuple[str, str]] = field(default_factory=list)
+
+    def add(self, name: str, error: str = "") -> None:
+        if error:
+            self.problems.append((name, error))
+        else:
+            self.ok.append(name)
+
+    @property
+    def done(self) -> bool:
+        return len(self.ok) + len(self.problems) >= self.total
+
+
+@dataclass
 class TransferState:
     transfer_id: str
     name: str
@@ -654,6 +674,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self._api_devices,
             self._api_send,
             self._api_approve,
+            sender_all=self._api_send_all,
         )
         self.web_share = WebShare(
             self.config_store,
@@ -1235,11 +1256,15 @@ class H4xtorShareApp(TkinterDnD.Tk):
                 "success",
             )
 
+        def deliver_all() -> None:
+            if self._send_to_all("text", text):
+                self.composer_text.delete("1.0", "end")
+
         target = self._drop_target_peer()
         if target is not None:
             deliver(target)
         else:
-            self._choose_peer(deliver, "Send til…")
+            self._choose_peer(deliver, "Send til…", all_callback=deliver_all)
 
     def _choose_target(self) -> None:
         trusted = [p for p in self.peers.values() if self.config_store.is_trusted(p.device_id)]
@@ -2511,6 +2536,8 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self._refresh_history()
             self.toast.show(f"{_items(count)} sendt til {peer_name}", "success")
             self._update_transfer_badge()
+        elif tag == "group_result":
+            self._group_result(value)
         elif tag == "batch_failed":
             batch, error = value
             self.batches.pop(batch, None)
@@ -3330,19 +3357,24 @@ class H4xtorShareApp(TkinterDnD.Tk):
             return peer
         target = self._drop_target_peer()
         if target is None:
-            self._choose_peer(retry, "Vælg en enhed")
+            self._choose_peer(
+                retry, "Vælg en enhed", all_callback=lambda: retry(None, to_all=True)
+            )
         return target
 
-    def send_clipboard(self, peer: Peer | None = None) -> None:
-        target = self._resolve_peer(peer, self.send_clipboard)
-        if target is None:
+    def send_clipboard(self, peer: Peer | None = None, to_all: bool = False) -> None:
+        target = None if to_all else self._resolve_peer(peer, self.send_clipboard)
+        if target is None and not to_all:
             return
         try:
             text = self.clipboard_get()
         except tk.TclError:
             self._show_error(RuntimeError("Udklipsholderen er tom."))
             return
-        self._send_text(target, text)
+        if target is None:
+            self._send_to_all("text", text)
+        else:
+            self._send_text(target, text)
 
     def _send_text(self, peer: Peer, text: str) -> None:
         text = text.strip("\n")
@@ -3405,15 +3437,126 @@ class H4xtorShareApp(TkinterDnD.Tk):
         text = self.compose_box.get("1.0", "end").strip()
         if not text:
             return
-        targets = [
-            peer for peer in self.peers.values() if self.config_store.is_trusted(peer.device_id)
+        if self._send_to_all("text", text):
+            self.compose_box.delete("1.0", "end")
+
+    async def _per_peer(
+        self, peers: list[Peer], job: Callable[[Peer], Any]
+    ) -> list[tuple[Peer, str]]:
+        """Run ``job(peer)`` for every peer at once; one failure never stops the others.
+
+        Returns ``(peer, error)`` per peer, in order; ``error`` is empty on success.
+        """
+        results = await asyncio.gather(*(job(peer) for peer in peers), return_exceptions=True)
+        return [
+            (peer, friendly_error(result, peers) if isinstance(result, BaseException) else "")
+            for peer, result in zip(peers, results, strict=True)
         ]
-        if not targets:
+
+    def _send_to_all(self, kind: str, payload: Any) -> bool:
+        """Send text/links (``kind="text"``) or files/folders (``"paths"``) to every paired device.
+
+        Existing per-device transfer rows stay; one toast starts it and one summary ends it.
+        Returns False when nothing was started.
+        """
+        peers = self._trusted_peers()
+        if not peers:
             self._show_error(RuntimeError("Ingen forbundne enheder endnu."))
+            return False
+        group = SendGroup(total=len(peers))
+        if kind == "text":
+            text = str(payload).strip("\n")
+            if not text:
+                return False
+            self._clipboard_observed = text
+
+            async def send_text(peer: Peer) -> None:
+                if is_link(text):
+                    await self.client.send_link(peer, text.strip())
+                else:
+                    await self.client.send_clipboard(peer, text)
+                self.history.record_sent_text(peer, text)
+
+            async def run() -> None:
+                for peer, error in await self._per_peer(peers, send_text):
+                    self.event_queue.put(("group_result", (group, peer.name, error, "")))
+
+            self.toast.show(f"Sender til {len(peers)} enheder…")
+            self.runtime.submit(run(), "send_all_started")
+            return True
+        paths = [path for path in payload if path.exists()]
+        if not paths:
+            return False
+        group.what = _items(len(paths))
+        self.toast.show(f"Sender {group.what} til {len(peers)} enheder…")
+        for peer in peers:
+            peer_paths = paths if peer.supports_folders else [p for p in paths if p.is_file()]
+            if not peer_paths:
+                group.add(peer.name, "Kan ikke modtage mapper endnu.")
+                continue
+            if len(peer_paths) < len(paths):
+                group.what = ""  # item counts differ per device; keep the summary generic
+            self._send_paths(peer, peer_paths, group)
+        if group.done:
+            self._show_send_all_summary(group)
+        return True
+
+    def _group_result(self, value: tuple[Any, ...]) -> None:
+        group, peer_name, error, batch = value
+        if batch:
+            self.batches.pop(batch, None)
+            if error:
+                self._mark_batch(batch, "failed")
+            self._refresh_history()
+            self._update_transfer_badge()
+        group.add(peer_name, error)
+        if group.done:
+            self._show_send_all_summary(group)
+
+    def _show_send_all_summary(self, group: SendGroup) -> None:
+        sent, total = len(group.ok), group.total
+        if sent == total:
+            text = f"{group.what} sendt til {total} enheder" if group.what else (
+                f"Sendt til {total} enheder"
+            )
+            self.toast.show(text, "success")
             return
-        for peer in targets:
-            self._send_text(peer, text)
-        self.compose_box.delete("1.0", "end")
+        if sent == 0:
+            self.toast.show(f"Kunne ikke sende til nogen af de {total} enheder", "danger", 6000)
+        else:
+            self.toast.show(f"Sendt til {sent} af {total} enheder", "warning", 6000)
+        c = self.theme.c
+        px = self.theme.px
+        modal = Modal(self, self.theme, "Ikke sendt til alle")
+        modal.heading(
+            "Ikke sendt til alle enheder",
+            f"Det lykkedes for {sent} af {total}. Det her gik galt:",
+        )
+        for name, reason in group.problems:
+            row = tk.Frame(modal.body, bg=c["bg"])
+            row.pack(fill="x", pady=(px(10), 0))
+            tk.Label(
+                row,
+                text=name,
+                bg=c["bg"],
+                fg=c["text"],
+                font=self.theme.font(10, "bold"),
+                anchor="w",
+            ).pack(fill="x")
+            tk.Label(
+                row,
+                text=reason,
+                bg=c["bg"],
+                fg=c["muted"],
+                font=self.theme.font(10),
+                anchor="w",
+                justify="left",
+                wraplength=px(440),
+            ).pack(fill="x")
+        buttons = tk.Frame(modal.body, bg=c["bg"])
+        buttons.pack(fill="x", pady=(px(16), 0))
+        Button(buttons, self.theme, "Luk", modal.close, kind="primary").pack(side="right")
+        modal.present()
 
     def _send_compose_pick(self) -> None:
         text = self.compose_box.get("1.0", "end").strip()
@@ -3424,9 +3567,25 @@ class H4xtorShareApp(TkinterDnD.Tk):
             self._send_text(peer, text)
             self.compose_box.delete("1.0", "end")
 
-        self._choose_peer(chosen, "Send tekst til…")
+        def chosen_all() -> None:
+            if self._send_to_all("text", text):
+                self.compose_box.delete("1.0", "end")
 
-    def _choose_peer(self, callback: Any, title: str, subtitle: str = "") -> None:
+        self._choose_peer(chosen, "Send tekst til…", all_callback=chosen_all)
+
+    def _trusted_peers(self) -> list[Peer]:
+        return [
+            peer for peer in self.peers.values() if self.config_store.is_trusted(peer.device_id)
+        ]
+
+    def _choose_peer(
+        self,
+        callback: Any,
+        title: str,
+        subtitle: str = "",
+        all_callback: Callable[[], None] | None = None,
+    ) -> None:
+        """Ask which device to use. ``all_callback`` adds "Alle enheder" (2+ devices only)."""
         trusted = [
             peer for peer in self.peers.values() if self.config_store.is_trusted(peer.device_id)
         ]
@@ -3440,6 +3599,32 @@ class H4xtorShareApp(TkinterDnD.Tk):
         px = self.theme.px
         modal = Modal(self, self.theme, title)
         modal.heading(title, subtitle)
+        if all_callback is not None and len(trusted) >= 2:
+            card = Card(modal.body, self.theme, padding=12, radius=10)
+            card.pack(fill="x", pady=(px(10), 0))
+            Avatar(card.body, self.theme, "all", size=32).pack(side="left")
+            tk.Label(
+                card.body,
+                text="Alle enheder",
+                bg=c["card"],
+                fg=c["text"],
+                font=self.theme.font(10, "bold"),
+            ).pack(side="left", padx=(px(10), 0))
+            tk.Label(
+                card.body,
+                text=f"{len(trusted)} forbundne",
+                bg=c["card"],
+                fg=c["faint"],
+                font=self.theme.font(9),
+            ).pack(side="left", padx=(px(8), 0))
+
+            def pick_all(action: Callable[[], None] = all_callback) -> None:
+                modal.close()
+                action()
+
+            Button(card.body, self.theme, "Vælg", pick_all, kind="primary", size="sm").pack(
+                side="right"
+            )
         for peer in sorted(trusted, key=lambda item: item.name.lower()):
             status = self.peer_status.get(peer.device_id)
             online = status is not None and status.online
@@ -3470,25 +3655,35 @@ class H4xtorShareApp(TkinterDnD.Tk):
             )
         modal.present()
 
-    def send_files(self, peer: Peer | None = None) -> None:
-        target = self._resolve_peer(peer, self.send_files)
-        if target is None:
+    def send_files(self, peer: Peer | None = None, to_all: bool = False) -> None:
+        target = None if to_all else self._resolve_peer(peer, self.send_files)
+        if target is None and not to_all:
             return
-        paths = filedialog.askopenfilenames(title=f"Send filer til {target.name}", parent=self)
-        if paths:
+        who = "alle enheder" if target is None else target.name
+        paths = filedialog.askopenfilenames(title=f"Send filer til {who}", parent=self)
+        if not paths:
+            return
+        if target is None:
+            self._send_to_all("paths", [Path(raw) for raw in paths])
+        else:
             self._send_paths(target, [Path(raw) for raw in paths])
 
-    def send_folder(self, peer: Peer | None = None) -> None:
-        target = self._resolve_peer(peer, self.send_folder)
-        if target is None:
+    def send_folder(self, peer: Peer | None = None, to_all: bool = False) -> None:
+        target = None if to_all else self._resolve_peer(peer, self.send_folder)
+        if target is None and not to_all:
             return
-        if not target.supports_folders:
+        if target is not None and not target.supports_folders:
             self._show_error(RuntimeError(f"{target.name} kan ikke modtage mapper endnu."))
             return
+        who = "alle enheder" if target is None else target.name
         path = filedialog.askdirectory(
-            title=f"Send mappe til {target.name}", initialdir=str(Path.home()), parent=self
+            title=f"Send mappe til {who}", initialdir=str(Path.home()), parent=self
         )
-        if path:
+        if not path:
+            return
+        if target is None:
+            self._send_to_all("paths", [Path(path)])
+        else:
             self._send_paths(target, [Path(path)])
 
     def _files_dropped(self, event: Any) -> str:
@@ -3509,13 +3704,14 @@ class H4xtorShareApp(TkinterDnD.Tk):
                 lambda peer: self._send_paths(peer, paths),
                 "Hvor skal filerne hen?",
                 f"{_items(len(paths))} klar til at blive sendt.",
+                all_callback=lambda: self._send_to_all("paths", paths),
             )
         return "break"
 
-    def _send_paths(self, peer: Peer, paths: list[Path]) -> None:
+    def _send_paths(self, peer: Peer, paths: list[Path], group: SendGroup | None = None) -> None:
         files = [path for path in paths if path.is_file()]
         folders = [path for path in paths if path.is_dir()]
-        if folders and not peer.supports_folders:
+        if folders and not peer.supports_folders and group is None:
             self._show_error(RuntimeError(f"{peer.name} kan ikke modtage mapper endnu."))
             folders = []
         if not files and not folders:
@@ -3546,15 +3742,26 @@ class H4xtorShareApp(TkinterDnD.Tk):
             try:
                 await asyncio.gather(*(send_one(path) for path in files + folders))
             except asyncio.CancelledError:
-                self.event_queue.put(("batch_cancelled", batch))
+                if group is not None:
+                    self.event_queue.put(("group_result", (group, peer.name, "Annulleret", batch)))
+                else:
+                    self.event_queue.put(("batch_cancelled", batch))
                 raise
             except Exception as error:
-                self.event_queue.put(("batch_failed", (batch, error)))
+                if group is not None:
+                    message = friendly_error(error, self.peers.values())
+                    self.event_queue.put(("group_result", (group, peer.name, message, batch)))
+                else:
+                    self.event_queue.put(("batch_failed", (batch, error)))
                 raise
-            self.event_queue.put(("batch_done", (batch, peer.name, len(files) + len(folders))))
+            if group is not None:
+                self.event_queue.put(("group_result", (group, peer.name, "", batch)))
+            else:
+                self.event_queue.put(("batch_done", (batch, peer.name, len(files) + len(folders))))
 
         count = len(files) + len(folders)
-        self.toast.show(f"Sender {_items(count)} til {peer.name}…")
+        if group is None:
+            self.toast.show(f"Sender {_items(count)} til {peer.name}…")
         future = asyncio.run_coroutine_threadsafe(send_all(), self.runtime.loop)
         self.batches[batch] = future
         self.show_page("transfers")
@@ -3927,6 +4134,15 @@ class H4xtorShareApp(TkinterDnD.Tk):
             await self._send_download(peer, value)
         self.event_queue.put(("status", f"Sendt fra Chrome til {peer.name}"))
 
+    async def _api_send_all(self, kind: str, value: str) -> list[dict[str, Any]]:
+        known = {device["id"] for device in self._api_devices()}
+        peers = [peer for peer in list(self.peers.values()) if peer.device_id in known]
+        outcome = await self._per_peer(peers, lambda p: self._api_send(p.device_id, kind, value))
+        return [
+            {"id": peer.device_id, "name": peer.name, "ok": not error, "error": error}
+            for peer, error in outcome
+        ]
+
     async def _send_download(self, peer: Peer, url: str) -> None:
         """Download a file from the web (e.g. an image) and send it as a real file."""
         import tempfile
@@ -4095,6 +4311,7 @@ class H4xtorShareApp(TkinterDnD.Tk):
             lambda peer: self._send_paths(peer, paths),
             "Hvor skal det sendes hen?",
             f"{_items(len(paths))} klar til at blive sendt.",
+            all_callback=lambda: self._send_to_all("paths", paths),
         )
 
     def show_window(self) -> None:

@@ -23,6 +23,7 @@ os.environ["XDG_DOWNLOAD_DIR"] = str(WORK / "downloads")
 
 from playwright.sync_api import sync_playwright  # noqa: E402
 
+import h4xtor_share.config as _config_module  # noqa: E402
 from h4xtor_share.app import H4xtorShareApp  # noqa: E402
 from h4xtor_share.client import PeerClient  # noqa: E402
 from h4xtor_share.config import Config  # noqa: E402
@@ -30,6 +31,10 @@ from h4xtor_share.crypto import ensure_certificate, server_ssl_context  # noqa: 
 from h4xtor_share.models import ClipboardReceived, FileReceived, LinkReceived  # noqa: E402
 from h4xtor_share.pairing import PairingInvite  # noqa: E402
 from h4xtor_share.server import ShareServer  # noqa: E402
+
+# platformdirs ignores XDG_CONFIG_HOME on Windows/macOS: keep the test off the real user config.
+_config_module.user_config_dir = lambda *_a, **_k: str(WORK / "desktop-config")
+_config_module.user_downloads_dir = lambda *_a, **_k: str(WORK / "downloads")
 
 EXT = ROOT / "src" / "h4xtor_share" / "chrome_extension"
 SHOTS = Path(os.environ.get("E2E_SHOTS", WORK / "shots"))
@@ -39,16 +44,18 @@ SHOTS.mkdir(parents=True, exist_ok=True)
 class Phone:
     """A headless h4xtor-share node standing in for the Android phone."""
 
-    def __init__(self) -> None:
-        self.config = Config(WORK / "phone" / "config.json")
+    def __init__(self, name: str = "Testtelefon", port: int = 47490, folder: str = "phone") -> None:
+        self.name = name
+        self.port = port
+        self.config = Config(WORK / folder / "config.json")
         self.config.data.update(
-            device_name="Testtelefon",
-            port=47490,
+            device_name=name,
+            port=port,
             platform="android",
-            incoming_directory=str(WORK / "phone-in"),
+            incoming_directory=str(WORK / f"{folder}-in"),
         )
         self.config.save()
-        cert, key, self.fp = ensure_certificate(self.config.path.parent, "Testtelefon")
+        cert, key, self.fp = ensure_certificate(self.config.path.parent, name)
         self.events: list[object] = []
         self.server = ShareServer(
             self.config,
@@ -64,9 +71,9 @@ class Phone:
     def invite(self) -> PairingInvite:
         return PairingInvite(
             self.config.device_id,
-            "Testtelefon",
+            self.name,
             self.fp,
-            47490,
+            self.port,
             ("127.0.0.1",),
             self.server.create_qr_secret(),
             "android",
@@ -225,6 +232,51 @@ def main() -> None:
         assert received.path.read_bytes() == (web_root / "kat.png").read_bytes()
         phone.wait_for(LinkReceived)
         print("OK image downloaded and sent as a real file")
+
+        # "Alle enheder": a second phone joins; the popup offers the all-row and fans out.
+        phone2 = Phone("Testtelefon 2", 47491, "phone2")
+        peer2 = asyncio.run_coroutine_threadsafe(
+            app.client.pair_with_qr(phone2.invite()), app.runtime.loop
+        ).result(15)
+        app.event_queue.put(("pair_confirmed", peer2))
+        pump(app, 5.5)
+        popup.reload()
+        popup.wait_for_selector("#state-ready:not(.hidden)", timeout=10000)
+        names = popup.locator("#devices .device .name").all_inner_texts()
+        assert names[0] == "Alle enheder" and len(names) == 3, names
+        popup.click("#devices .device:has-text('Alle enheder')")
+        assert "alle enheder" in popup.inner_text("#send-tab")
+        popup.fill("#text", "Hej til alle")
+        popup.click("#send-text")
+        assert phone.wait_for(ClipboardReceived).text == "Hej til alle"
+        assert phone2.wait_for(ClipboardReceived).text == "Hej til alle"
+        popup.wait_for_selector("#toast:not(.hidden)", timeout=5000)
+        assert "alle 2 enheder" in popup.inner_text("#toast"), popup.inner_text("#toast")
+        popup.fill("#text", "https://example.com/til-alle")
+        popup.press("#text", "Enter")
+        assert phone.wait_for(LinkReceived).url == "https://example.com/til-alle"
+        assert phone2.wait_for(LinkReceived).url == "https://example.com/til-alle"
+        # The choice is remembered across popup opens.
+        popup.reload()
+        popup.wait_for_selector("#state-ready:not(.hidden)", timeout=10000)
+        assert popup.locator("#devices .device.active .name").inner_text() == "Alle enheder"
+        page_shot(popup, "ext-all-devices")
+        # One phone goes away: partial result, summary names the failing device.
+        asyncio.run_coroutine_threadsafe(phone2.server.stop(), phone2.loop).result(10)
+        popup.fill("#text", "Kun en modtager")
+        popup.click("#send-text")
+        assert phone.wait_for(ClipboardReceived).text == "Kun en modtager"
+        deadline = time.time() + 20
+        while time.time() < deadline and not (popup.text_content("#toast") or "").startswith(
+            "Sendt til 1 af 2"
+        ):
+            time.sleep(0.1)
+        toast = popup.text_content("#toast")
+        assert toast.startswith("Sendt til 1 af 2") and "Testtelefon 2" in toast, toast
+        # Drop the second phone again so the later steps keep their one-device flow.
+        app.config_store.data["trusted_peers"].pop(peer2.device_id, None)
+        app.config_store.save()
+        print("OK send to all devices (popup, remembered choice, partial failure)")
 
         # A website must not be able to talk to the app.
         status_code = page.evaluate(

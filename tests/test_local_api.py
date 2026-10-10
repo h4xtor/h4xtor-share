@@ -99,3 +99,91 @@ async def test_connect_list_and_send(api) -> None:
             assert r.status == 200
         async with session.get(f"{base}/v1/devices", headers=auth) as r:
             assert r.status == 401
+
+
+async def _serve(tmp_path: Path, devices, sender_all):
+    config = Config(tmp_path / "config.json")
+
+    async def sender(_d: str, _k: str, _v: str) -> None: ...
+
+    async def approver(_n: str, _o: str) -> bool:
+        return True
+
+    server = LocalApi(
+        config, free_port(), lambda: devices, sender, approver, sender_all=sender_all
+    )
+    await server.start()
+    async with aiohttp.ClientSession() as session, session.post(
+        f"http://127.0.0.1:{server.port}/v1/connect",
+        headers={"Origin": EXT},
+        json={"name": "Chrome"},
+    ) as r:
+        token = (await r.json())["token"]
+    return server, {"Origin": EXT, "Authorization": f"Bearer {token}"}
+
+
+async def test_send_all(tmp_path: Path) -> None:
+    calls: list[tuple[str, str]] = []
+
+    async def sender_all(kind: str, value: str) -> list[dict]:
+        calls.append((kind, value))
+        return [
+            {"id": "a" * 32, "name": "S24", "ok": True, "error": ""},
+            {"id": "b" * 32, "name": "Bærbar", "ok": False, "error": "Kan ikke nå Bærbar."},
+        ]
+
+    devices = [
+        {"id": "a" * 32, "name": "S24", "platform": "android", "online": True},
+        {"id": "b" * 32, "name": "Bærbar", "platform": "windows", "online": False},
+    ]
+    server, auth = await _serve(tmp_path, devices, sender_all)
+    url = f"http://127.0.0.1:{server.port}/v1/send-all"
+    try:
+        async with aiohttp.ClientSession() as session:
+            body = {"kind": "link", "value": "https://example.com"}
+            async with session.post(url, headers={"Origin": EXT}, json=body) as r:
+                assert r.status == 401
+            async with session.post(url, headers=auth, json={"kind": "nope", "value": "x"}) as r:
+                assert r.status == 400
+            async with session.post(url, headers=auth, json={"kind": "text", "value": " "}) as r:
+                assert r.status == 400
+            big = {"kind": "text", "value": "x" * 100_001}
+            async with session.post(url, headers=auth, json=big) as r:
+                assert r.status == 400
+            async with session.post(url, headers=auth, data="not json") as r:
+                assert r.status == 400
+            assert calls == []
+            # Partial failure is still a 200 with one result per device.
+            async with session.post(url, headers=auth, json=body) as r:
+                assert r.status == 200
+                results = (await r.json())["results"]
+        assert [x["ok"] for x in results] == [True, False]
+        assert results[1]["name"] == "Bærbar"
+        assert calls == [("link", "https://example.com")]
+    finally:
+        await server.stop()
+
+
+async def test_send_all_without_devices_or_sender(tmp_path: Path) -> None:
+    async def sender_all(_k: str, _v: str) -> list[dict]:
+        raise AssertionError("must not be called")
+
+    body = {"kind": "text", "value": "hej"}
+    server, auth = await _serve(tmp_path, [], sender_all)
+    try:
+        async with aiohttp.ClientSession() as session, session.post(
+            f"http://127.0.0.1:{server.port}/v1/send-all", headers=auth, json=body
+        ) as r:
+            assert r.status == 404
+    finally:
+        await server.stop()
+
+    one = [{"id": "a" * 32, "name": "S24", "platform": "android", "online": True}]
+    server, auth = await _serve(tmp_path, one, None)  # backward-compatible: no sender_all
+    try:
+        async with aiohttp.ClientSession() as session, session.post(
+            f"http://127.0.0.1:{server.port}/v1/send-all", headers=auth, json=body
+        ) as r:
+            assert r.status == 501
+    finally:
+        await server.stop()

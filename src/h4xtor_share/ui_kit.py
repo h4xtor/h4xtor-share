@@ -76,6 +76,7 @@ PLATFORM_STYLE = {
     "linux": ("#E8A33D", "L"),
     "darwin": ("#8E8E93", "M"),
     "macos": ("#8E8E93", "M"),
+    "all": ("#D97757", "★"),
 }
 
 

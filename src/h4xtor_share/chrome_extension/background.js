@@ -1,4 +1,4 @@
-import { chosenDevice, devices, send } from "./api.js";
+import { ALL, chosenDevice, devices, send, sendAll, summarize } from "./api.js";
 
 const ROOT = "h4xtor-root";
 const CONTEXTS = ["page", "link", "selection", "image", "video", "audio"];
@@ -21,6 +21,20 @@ async function rebuildMenus() {
       enabled: false,
     });
     return;
+  }
+  if (list.length >= 2) {
+    chrome.contextMenus.create({
+      id: `device:${ALL.id}`,
+      parentId: ROOT,
+      title: ALL.name,
+      contexts: CONTEXTS,
+    });
+    chrome.contextMenus.create({
+      id: "h4xtor-separator",
+      parentId: ROOT,
+      type: "separator",
+      contexts: CONTEXTS,
+    });
   }
   for (const device of list) {
     chrome.contextMenus.create({
@@ -71,9 +85,21 @@ async function deliver(deviceId, deviceName, kind, value) {
   try {
     await chrome.action.setBadgeBackgroundColor({ color: "#C6613F" });
     await chrome.action.setBadgeText({ text: "…" });
-    await send(deviceId, kind, value);
-    await chrome.action.setBadgeText({ text: "✓" });
-    await notify(`${describe(kind)} sendt til ${deviceName}`, value.slice(0, 120));
+    if (deviceId === ALL.id) {
+      let list = [];
+      try {
+        list = await devices();
+      } catch (error) {
+        // Only used to say "offline" instead of the raw error.
+      }
+      const summary = summarize(await sendAll(kind, value), list);
+      await chrome.action.setBadgeText({ text: summary.failed ? "!" : "✓" });
+      await notify(`${describe(kind)}: ${summary.text}`, value.slice(0, 120));
+    } else {
+      await send(deviceId, kind, value);
+      await chrome.action.setBadgeText({ text: "✓" });
+      await notify(`${describe(kind)} sendt til ${deviceName}`, value.slice(0, 120));
+    }
   } catch (error) {
     await chrome.action.setBadgeText({ text: "!" });
     await notify("Kunne ikke sende", error.message);
@@ -86,7 +112,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!String(info.menuItemId).startsWith("device:")) return;
   const deviceId = String(info.menuItemId).slice("device:".length);
   const [kind, value] = payloadFor(info, tab);
-  let name = "enheden";
+  let name = deviceId === ALL.id ? ALL.name : "enheden";
   try {
     const list = await devices();
     name = (list.find((d) => d.id === deviceId) || {}).name || name;
