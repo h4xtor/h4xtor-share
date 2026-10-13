@@ -32,6 +32,8 @@ ingen upload til nogen server, ingen størrelsesgrænse.
 | Find min telefon (ringer højt, også på lydløs) | Knap under *Fjernbetjening* | Stop på telefonen eller fra PC'en |
 | Fjernbetjening: lydstyrke, læs tekst højt, baggrundsbillede | ✓ | Til/fra |
 | Google Drive (valgfri, slået fra) | *Indstillinger → Sky* | – |
+| Automatisk opdatering (spørger altid først) | Windows-.exe: henter, tjekker SHA-256 og genstarter. macOS/Linux: åbner download-siden | Henter, tjekker SHA-256, Android beder dig bekræfte |
+| Opdateringslog – også uden internet | *Indstillinger → Om* | *Indstillinger → Om* |
 
 ## Kom i gang
 
@@ -68,6 +70,10 @@ Wi-Fi. Knappen **Tilbage til <dit Wi-Fi>** skifter tilbage med ét klik.
 - Modtagne filnavne renses (ingen `../`, ingen reserverede Windows-navne), og eksisterende
   filer overskrives aldrig.
 - Kun `http(s)`-links kan åbnes automatisk.
+- **Opdateringer** hentes kun fra Releases i [h4xtor/h4xtor-share](https://github.com/h4xtor/h4xtor-share/releases)
+  over HTTPS, og filen skal passe med sin SHA-256-tjeksum (`.sha256`), før den installeres.
+  Intet installeres uden dit ja. Opdateringen er lokal på hver enhed og rører hverken parring
+  eller nøgler.
 
 ## Teknik i korte træk
 
@@ -115,7 +121,8 @@ gradle -p android testDebugUnitTest lintDebug assembleDebug
 ```
 
 GitHub Actions tester på Windows, macOS og Linux, bygger `.exe`, macOS- og Linux-binærer
-samt APK'en ved hvert push. Et `v*`-tag laver en release med alle filer.
+samt APK'en ved hvert push. Et `v*`-tag laver en release med alle filer, en `.sha256` til hver
+og `CHANGELOG.md`. Udgivelsen fejler, hvis `CHANGELOG.md` mangler versionen.
 
 ## Ærlige begrænsninger
 
@@ -136,5 +143,21 @@ samt APK'en ved hvert push. Et `v*`-tag laver en release med alle filer.
 - **SMS** bruger telefonens egen SMS-funktion og dit abonnement. MMS (billeder i SMS) vises ikke.
 - **Find min telefon** ringer via alarm-lyden. Står telefonen på *Forstyr ikke* med alarmer
   slået fra, kan den kun vibrere.
+- **Automatisk opdatering forbinder til GitHub** (api.github.com og github.com) højst én gang i
+  døgnet, plus når du trykker *Søg efter opdatering nu*. Det er den eneste forbindelse ud af dit
+  netværk. Slå *Søg automatisk efter opdateringer* fra under *Indstillinger → Om*, hvis du ikke vil det.
+- **Version 1.2.0 og ældre kan ikke opdatere sig selv.** Hent og installér 1.3.0 i hånden én gang;
+  derefter klarer appen resten.
+- **Android spørger altid selv**, om du vil opdatere – det kan ingen app springe over. Første gang
+  skal du også tillade *Installer ukendte apps* for h4xtor share (appen viser dig vejen).
+  Efter opdateringen åbner appen igen, hvis Android tillader det; ellers kommer notifikationen
+  *Opdateret – tryk for at åbne*.
+- **På PC'en opdaterer kun Windows-.exe'en sig selv.** Den skifter filen ud, hvor den ligger, og
+  sætter den gamle version tilbage, hvis den nye ikke starter. Ligger .exe'en i en mappe, du ikke
+  må skrive i (fx *Programmer*), stopper opdateringen uden at ændre noget. På macOS og Linux åbner
+  *Opdatér nu* download-siden.
+- **Android-appen signeres med en fast nøgle, der ligger i repoet** (så hver version kan installeres
+  oven på den forrige). Det betyder, at alle kan bygge en APK med samme signatur – appens egen
+  opdatering beskytter sig ved kun at hente fra repoets Releases og tjekke SHA-256.
 - **Google Drive** er kun forberedt: du kan forbinde og teste forbindelsen, men delingen bruger
   den ikke endnu. Du skal selv oprette et OAuth-klient-ID i Google Cloud Console.

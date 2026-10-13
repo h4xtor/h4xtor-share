@@ -10,8 +10,9 @@ android {
         applicationId 'com.h4xtor.share'
         minSdk 29
         targetSdk 36
-        versionCode 24
-        versionName '1.2.0'
+        // The E2E test builds an older copy (-Ph4xVersionCode/-Ph4xVersionName) to update from.
+        versionCode((project.findProperty('h4xVersionCode') ?: '25') as int)
+        versionName((project.findProperty('h4xVersionName') ?: '1.3.0') as String)
     }
 
     signingConfigs {
@@ -32,6 +33,13 @@ android {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+    }
+
+    // CHANGELOG.md ships inside the APK so "Opdateringslog" works offline.
+    sourceSets.main.assets.srcDir layout.buildDirectory.dir('generated/changelog')
+
+    buildFeatures {
+        buildConfig true
     }
 
     compileOptions {
@@ -64,3 +72,9 @@ dependencies {
     // android.jar only has stubs for org.json; the real thing lets JUnit test the JSON mapping.
     testImplementation 'org.json:json:20231013'
 }
+
+def copyChangelog = tasks.register('copyChangelog', Copy) {
+    from rootProject.file('../CHANGELOG.md')
+    into layout.buildDirectory.dir('generated/changelog')
+}
+tasks.named('preBuild') { dependsOn copyChangelog }

@@ -138,6 +138,7 @@ jobs:
         run: |
           set -o pipefail
           python packaging/smoke_test.py dist/h4xtor-share.exe 2>&1 | tee -a ci-output.log
+          python packaging/update_smoke.py dist/h4xtor-share.exe 2>&1 | tee -a ci-output.log
       - name: Upload executable
         uses: actions/upload-artifact@v4
         with:
@@ -173,6 +174,11 @@ jobs:
         run: |
           set -o pipefail
           gradle -p android testDebugUnitTest lintDebug --stacktrace 2>&1 | tee ci-output.log
+      - name: Build an older copy for the update E2E test
+        run: |
+          set -o pipefail
+          gradle -p android assembleDebug -Ph4xVersionCode=1 -Ph4xVersionName=0.0.1 2>&1 | tee -a ci-output.log
+          cp android/app/build/outputs/apk/debug/app-debug.apk h4xtor-share-android-old.apk
       - name: Build installable APK
         run: |
           set -o pipefail
@@ -182,7 +188,9 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: h4xtor-share-android
-          path: h4xtor-share-android.apk
+          path: |
+            h4xtor-share-android.apk
+            h4xtor-share-android-old.apk
           if-no-files-found: error
       - name: Report failure on the commit
         if: failure()
@@ -222,6 +230,7 @@ jobs:
         run: |
           mkdir -p android/app/build/outputs/apk/debug
           mv h4xtor-share-android.apk android/app/build/outputs/apk/debug/app-debug.apk
+          mv h4xtor-share-android-old.apk android/app/build/outputs/apk/debug/app-old.apk
       - name: Enable KVM
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules

@@ -64,7 +64,7 @@
         android:label="h4xtor share"
         android:supportsRtl="true"
         android:theme="@style/Theme.H4xtorShare"
-        android:usesCleartextTraffic="false">
+        android:networkSecurityConfig="@xml/network_security">
 
         <meta-data
             android:name="com.google.mlkit.vision.DEPENDENCIES"
@@ -172,6 +172,7 @@
             android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
     </application>

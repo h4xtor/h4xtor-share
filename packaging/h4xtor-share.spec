@@ -106,7 +106,10 @@ a = Analysis(
     [str(SRC / "h4xtor_share" / "__main__.py")],
     pathex=[str(SRC)],
     binaries=[],
-    datas=[(str(SRC / "h4xtor_share" / "chrome_extension"), "h4xtor_share/chrome_extension")],
+    datas=[
+        (str(SRC / "h4xtor_share" / "chrome_extension"), "h4xtor_share/chrome_extension"),
+        (str(REPO / "CHANGELOG.md"), "h4xtor_share"),  # the offline "Opdateringslog"
+    ],
     hiddenimports=HIDDEN_IMPORTS,
     hookspath=[str(HERE)],
     hooksconfig={},

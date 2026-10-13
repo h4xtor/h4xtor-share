@@ -70,6 +70,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private LinearLayout content;
     private LinearLayout nav;
     private TextView toastView;
+    private UpdateFlow updates;
     private AlertDialog codeDialog;
     private AlertDialog qrDialog;
     private EditText composerInput;
@@ -82,6 +83,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         ui = new Ui(this);
+        updates = new UpdateFlow(this, ui);
         ui.styleWindow(this);
         if (savedInstanceState != null) {
             page = savedInstanceState.getString("page", PAGE_DEVICES);
@@ -120,6 +122,11 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         if (intent == null) {
             return;
         }
+        if (AppUpdater.ACTION_INSTALL_STATUS.equals(intent.getAction())) {
+            setIntent(new Intent(this, MainActivity.class));  // handle it once, not again on rotation
+            updates.onInstallStatus(intent);
+            return;
+        }
         Uri data = intent.getData();
         if (Intent.ACTION_VIEW.equals(intent.getAction()) && data != null
                 && PairingInvite.SCHEME.equalsIgnoreCase(data.getScheme())) {
@@ -140,6 +147,34 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             service.addListener(this);
             render();
         }
+        updates.onResume();
+    }
+
+    /** Stop sharing cleanly before Android replaces the app with an update. */
+    void stopServiceForUpdate() {
+        if (service != null) {
+            service.removeListener(this);
+            service = null;
+        }
+        stopService(new Intent(this, ShareService.class));
+    }
+
+    /** ShareService was stopped for an update that did not happen: carry on with a fresh one. */
+    void reattachService() {
+        ShareService.with(this, svc -> {
+            if (service != null && service != svc) {
+                service.removeListener(this);
+            }
+            service = svc;
+            if (resumed) {
+                svc.addListener(this);
+            }
+            render();
+        });
+    }
+
+    void showToast(String text, boolean error) {
+        toast(text, error);
     }
 
     @Override
@@ -1520,6 +1555,18 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         }
         about.addView(ui.text("Helt lokalt – ingen konto, ingen sky. Alt krypteres og låses til hver enheds "
                 + "certifikat.\nCertifikat " + fingerprint + "…", 12.5f, ui.muted, false), ui.margins(0, 4, 0, 0));
+        about.addView(ui.divider());
+        about.addView(toggleRow("Søg automatisk efter opdateringer",
+                "Spørger GitHub (h4xtor/h4xtor-share) højst én gang i døgnet. Intet installeres uden dit ja.",
+                identity.flag("update_auto", true), value -> identity.setFlag("update_auto", value)));
+        LinearLayout updateRow = ui.row();
+        TextView checkNow = ui.button("Søg efter opdatering nu", "secondary");
+        checkNow.setOnClickListener(v -> updates.check(true));
+        updateRow.addView(checkNow, ui.weight(1));
+        TextView log = ui.button("Opdateringslog", "ghost");
+        log.setOnClickListener(v -> updates.showChangelog());
+        updateRow.addView(log, ui.wrap(8, 0, 0, 0));
+        about.addView(updateRow, ui.margins(0, 10, 0, 0));
         TextView manual = ui.button("Tilføj enhed via IP-adresse", "ghost");
         manual.setOnClickListener(v -> addByIp());
         about.addView(manual, ui.margins(0, 10, 0, 0));
