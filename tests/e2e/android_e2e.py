@@ -40,6 +40,8 @@ from h4xtor_share.server import ShareServer  # noqa: E402
 
 PKG = "com.h4xtor.share"
 APK = ROOT / "android/app/build/outputs/apk/debug/app-debug.apk"
+# The same app built as an older version (CI: -Ph4xVersionCode/-Ph4xVersionName) to update from.
+OLD_APK = ROOT / "android/app/build/outputs/apk/debug/app-old.apk"
 SHOTS = Path(os.environ.get("E2E_SHOTS", "e2e-shots"))
 SHOTS.mkdir(parents=True, exist_ok=True)
 WORK = Path(tempfile.mkdtemp(prefix="h4x-android-e2e-"))
@@ -264,6 +266,90 @@ def v12_checks(desktop: Desktop, phone: Peer) -> None:
     ok("screenshot on demand arrives on the PC as a PNG")
     desktop.run(desktop.client.set_wallpaper(phone, picture.path))
     ok("wallpaper set from the PC")
+
+
+def update_checks() -> None:
+    """Older version installed → finds the new one on a fake GitHub → updates → reopens."""
+    import hashlib
+    import http.server
+    import json
+
+    from h4xtor_share import __version__ as new_version  # == the APK's versionName (tested)
+
+    apk = APK.read_bytes()
+    prefix = "/h4xtor/h4xtor-share/releases/download/v" + new_version + "/"
+    files = {
+        prefix + "h4xtor-share-android.apk": apk,
+        prefix + "h4xtor-share-android.apk.sha256":
+            f"{hashlib.sha256(apk).hexdigest()}  h4xtor-share-android.apk\n".encode(),
+        prefix + "CHANGELOG.md": (ROOT / "CHANGELOG.md").read_bytes(),
+    }
+    port = 8765
+    base = f"http://127.0.0.1:{port}"
+    files["/repos/h4xtor/h4xtor-share/releases/latest"] = json.dumps({
+        "tag_name": f"v{new_version}",
+        "assets": [{"name": path.rsplit("/", 1)[1], "browser_download_url": base + path}
+                   for path in files if path.startswith(prefix)],
+    }).encode()
+
+    class Fake(http.server.BaseHTTPRequestHandler):
+        def do_GET(self) -> None:  # noqa: N802
+            body = files.get(self.path)
+            self.send_response(200 if body is not None else 404)
+            self.send_header("Content-Length", str(len(body or b"")))
+            self.end_headers()
+            self.wfile.write(body or b"")
+
+        def log_message(self, *_args) -> None:
+            pass
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", port), Fake)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    adb("reverse", f"tcp:{port}", f"tcp:{port}")
+
+    adb("install", "-r", "-d", str(OLD_APK), timeout=240)  # same key, lower version
+    old = shell(f"dumpsys package {PKG} | grep versionName").strip()
+    assert new_version not in old, old
+    shell(f"run-as {PKG} sh -c 'mkdir -p files && echo {base} > files/update_source'")
+    shell(f"appops set {PKG} REQUEST_INSTALL_PACKAGES allow", check=False)
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(4)
+    if not screen_has(rf"Version {re.escape(new_version)} er klar", 4):
+        tap_text("^Indstillinger$")
+        assert scroll_to("Søg efter opdatering nu"), "no update button in Indstillinger"
+        tap_text("Søg efter opdatering nu")
+    assert screen_has(rf"Version {re.escape(new_version)} er klar", 30), "update not offered"
+    assert screen_has("Nyt", 5), "changelog missing in the update dialog"
+    shot("60-update-offered")
+    ok(f"{old} finds {new_version} and shows what is new")
+    tap_text("^Opdatér nu$")
+    assert screen_has("^(Update|Opdater|Opdatér|Install|Installer)$", 60), "no Android confirmation"
+    shot("61-android-asks")
+    tap_text("^(Update|Opdater|Opdatér|Install|Installer)$")
+    deadline = time.time() + 120
+    while new_version not in shell(f"dumpsys package {PKG} | grep versionName", check=False):
+        assert time.time() < deadline, "the new version was not installed"
+        time.sleep(2)
+    ok(f"checksum verified and updated to {new_version} after Android's confirmation")
+    deadline = time.time() + 30
+    reopened = noted = False
+    while time.time() < deadline and not (reopened or noted):
+        resumed = "dumpsys activity activities | grep -E 'mResumedActivity|topResumed'"
+        reopened = PKG in shell(resumed, check=False)
+        noted = "Opdateret" in shell("dumpsys notification --noredact", check=False)
+        time.sleep(2)
+    assert reopened or noted, "neither reopened nor 'Opdateret – tryk for at åbne'"
+    shot("62-after-update")
+    if not reopened:
+        shell("cmd statusbar expand-notifications", check=False)
+        tap_text("Opdateret – tryk for at åbne", 15)  # what the user would tap
+    assert screen_has(rf"Velkommen til version {re.escape(new_version)}", 30), "no welcome"
+    shot("63-welcome")
+    ok("reopened after the update" if reopened else "'Opdateret – tryk for at åbne' reopens it")
+    tap_text("^Fint$")
+    assert shell(f"pidof {PKG}", check=False).strip(), "app not running after the update"
+    shell(f"run-as {PKG} rm files/update_source", check=False)
+    server.shutdown()
 
 
 def main() -> None:
@@ -585,6 +671,8 @@ def main() -> None:
     time.sleep(3)
     assert f"out_token_{desktop.config.device_id}" not in prefs(), "phone kept the pairing"
     ok("unpair from PC removes the pairing on the phone too")
+
+    update_checks()
     (SHOTS / "results.txt").write_text("\n".join(RESULTS) + "\n", encoding="utf-8")
     print("ALL ANDROID E2E CHECKS PASSED", flush=True)
 

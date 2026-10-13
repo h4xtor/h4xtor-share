@@ -12,6 +12,11 @@ desktop app, an Android app and a Chrome extension. Everything is local; nothing
 - When waiting on CI or builds, check back after **at most 10 minutes**, and always report the status.
 - GitHub (`h4xtor/h4xtor-share`, branch `main`) is the source of truth. You may commit, push and tag.
 
+## Working folder
+
+Lennart's local copy lives in `C:\Users\Lenna\Desktop\h4xtorshare` (a clone of `h4xtor/h4xtor-share`).
+Never use the deleted repo `h4xtor/H4xtorShare` or old folders such as `C:\AI\FreeBUFFSHARE`.
+
 ## Layout
 
 | Path | What it is |
@@ -22,6 +27,7 @@ desktop app, an Android app and a Chrome extension. Everything is local; nothing
 | `src/h4xtor_share/local_api.py` | Loopback API on 127.0.0.1:47476, used by the Chrome extension |
 | `src/h4xtor_share/web_share.py` + `web_page.py` | iPhone/browser sharing: plain HTTP on the LAN, port 47478, guarded by a random key in the QR link. Off until switched on (page "iPhone") |
 | `src/h4xtor_share/integration.py` | Windows integration: right-click menu (AllFilesystemObjects, NeverDefault), Send-to, autostart, Chrome |
+| `src/h4xtor_share/updater.py` + `update_pages.py` | Auto-update from GitHub Releases (HTTPS, SHA-256), changelog parsing, the Windows swap helper (`--apply-update`) with rollback |
 | `src/h4xtor_share/openers.py` | Opening and revealing files. Folders are **always** opened through `explorer.exe`, never through `os.startfile` |
 | `src/h4xtor_share/chrome_extension/` | MV3 extension (popup + context menu) |
 | `android/app/src/main/java/com/h4xtor/share/` | Android app (Java, minSdk 29). `MainActivity`, `ShareService`, `ShareTargetActivity`, `SpeedGraph` … |
@@ -43,10 +49,14 @@ gradle -p android testDebugUnitTest lintDebug assembleDebug
 
 ## Releasing
 
-1. Bump the version in **four** places: `pyproject.toml`, `src/h4xtor_share/__init__.py`,
-   `android/app/build.gradle` (versionCode + versionName) and `AppIdentity.VERSION`.
-2. Push to `main` and wait until CI is green, including **android-e2e**.
-3. `git tag vX.Y.Z && git push origin vX.Y.Z`. The Release workflow then attaches the .exe, APK and other builds.
+1. Bump the version in **three** places: `pyproject.toml`, `src/h4xtor_share/__init__.py` and
+   `android/app/build.gradle` (the default versionCode + versionName; `AppIdentity.VERSION` reads it).
+2. Add a `## X.Y.Z – YYYY-MM-DD` entry with `### Nyt / Forbedret / Rettet` at the top of `CHANGELOG.md`.
+   The apps parse it; tests and the release fail without it.
+3. Push to `main` and wait until CI is green, including **android-e2e** (it updates an older APK to this one).
+4. `git tag vX.Y.Z && git push origin vX.Y.Z`. The Release workflow attaches the .exe, APK, other builds,
+   a `.sha256` per binary and `CHANGELOG.md` (fixed names: the in-app updater looks for them), and uses
+   the changelog entry as release notes.
 
 The latest release is **v1.2.0**. Without tag-push rights, start a release from Actions → Release → Run workflow (tag input).
 

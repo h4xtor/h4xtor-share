@@ -31,6 +31,15 @@ jobs:
         run: |
           package_version="$(python -c 'import h4xtor_share; print(h4xtor_share.__version__)')"
           test "v${package_version}" = "${RELEASE_TAG}"
+      - name: Release notes from CHANGELOG.md (fails when this version has no entry)
+        run: python -m h4xtor_share.updater notes "${RELEASE_TAG#v}" CHANGELOG.md > release-notes.md
+      - uses: actions/upload-artifact@v4
+        with:
+          name: notes
+          path: |
+            release-notes.md
+            CHANGELOG.md
+          if-no-files-found: error
       - name: Build wheel and sdist
         run: python -m build
       - uses: actions/upload-artifact@v4
@@ -113,9 +122,22 @@ jobs:
           pattern: release-*
           path: release-dist
           merge-multiple: true
+      - uses: actions/download-artifact@v4
+        with:
+          name: notes
+          path: notes
+      - name: Checksums and changelog for the in-app updater (fixed names)
+        run: |
+          cp notes/CHANGELOG.md release-dist/CHANGELOG.md
+          cd release-dist
+          for file in h4xtor-share-windows.exe h4xtor-share-android.apk h4xtor-share-macos h4xtor-share-linux; do
+            sha256sum "$file" > "$file.sha256"
+          done
+          cat *.sha256
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           target_commitish: ${{ github.sha }}
+          body_path: notes/release-notes.md
           files: release-dist/*
           fail_on_unmatched_files: true

@@ -73,6 +73,9 @@ from h4xtor_share.ui_kit import (
     round_rect,
     set_dark_titlebar,
 )
+from h4xtor_share.update_pages import UpdateMixin
+from h4xtor_share.updater import Updater, is_newer
+from h4xtor_share.updater import run_helper as run_update_helper
 from h4xtor_share.web_share import WEB_PORT_OFFSET, WebShare
 
 APP_TITLE = "h4xtor share"
@@ -153,18 +156,7 @@ def friendly_error(error: BaseException, peers: Any = ()) -> str:
     return str(error) or error.__class__.__name__
 
 
-def is_newer_version(candidate: str, current: str) -> bool:
-    def parts(value: str) -> tuple[int, ...]:
-        numbers = []
-        for piece in value.strip().lstrip("vV").split("."):
-            digits = "".join(ch for ch in piece if ch.isdigit())
-            numbers.append(int(digits or 0))
-        return tuple(numbers)
-
-    try:
-        return parts(candidate) > parts(current)
-    except ValueError:
-        return False
+is_newer_version = is_newer
 
 
 def _sorted_lan_addresses() -> list[str]:
@@ -607,7 +599,7 @@ class TransferRow:
             ).pack(side="left", padx=(theme.px(6), 0))
 
 
-class H4xtorShareApp(PhonePagesMixin, TkinterDnD.Tk):
+class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
     NAV_ITEMS = (
         ("share", "⇄", "Del"),
         ("transfers", "↕", "Overførsler"),
@@ -718,6 +710,7 @@ class H4xtorShareApp(PhonePagesMixin, TkinterDnD.Tk):
         self.protocol("WM_DELETE_WINDOW", self.close_window)
         self._configure_style()
         self.toast = Toast(self, self.theme)
+        self.updater = Updater(self.config_store)
         self._build_ui()
         set_dark_titlebar(self, dark)
 
@@ -737,7 +730,7 @@ class H4xtorShareApp(PhonePagesMixin, TkinterDnD.Tk):
         self.after(600, self._schedule_health_checks)
         self.after(1000, self._schedule_clipboard_watch)
         self.runtime.submit(self._start_services(), "services_started")
-        self.runtime.submit(self._check_for_update(), "update_check")
+        self._start_updates()
         for peer in self.config_store.known_peers():
             if self.config_store.is_trusted(peer.device_id):
                 self._upsert_peer(peer)
@@ -2350,6 +2343,23 @@ class H4xtorShareApp(PhonePagesMixin, TkinterDnD.Tk):
             anchor="w",
             justify="left",
         ).pack(fill="x")
+        self._divider(about.body)
+        self._toggle_row(
+            about.body,
+            "Søg automatisk efter opdateringer",
+            "Spørger GitHub (h4xtor/h4xtor-share) højst én gang i døgnet. "
+            "Intet installeres uden dit ja.",
+            self.updater.auto,
+            lambda value: setattr(self.updater, "auto", value),
+        )
+        update_row = tk.Frame(about.body, bg=c["card"])
+        update_row.pack(fill="x", pady=(px(10), 0))
+        Button(
+            update_row, self.theme, "Søg efter opdatering nu", self.check_for_updates_now, size="sm"
+        ).pack(side="left")
+        Button(
+            update_row, self.theme, "Opdateringslog", self.show_changelog, kind="ghost", size="sm"
+        ).pack(side="left", padx=(px(8), 0))
 
     def _refresh_paired_list(self) -> None:
         if not hasattr(self, "paired_section"):
@@ -2468,27 +2478,6 @@ class H4xtorShareApp(PhonePagesMixin, TkinterDnD.Tk):
         if self.web_share.enabled:
             await self._start_web_share()
 
-    async def _check_for_update(self) -> tuple[str, str] | None:
-        """Ask GitHub (best effort, internet optional) whether a newer release exists."""
-        import aiohttp
-
-        url = "https://api.github.com/repos/h4xtor/h4xtor-share/releases/latest"
-        try:
-            timeout = aiohttp.ClientTimeout(total=8)
-            async with (
-                aiohttp.ClientSession(timeout=timeout, trust_env=True) as session,
-                session.get(url, headers={"Accept": "application/vnd.github+json"}) as response,
-            ):
-                if response.status != 200:
-                    return None
-                payload = await response.json()
-        except Exception:  # noqa: BLE001 - offline is perfectly fine
-            return None
-        tag = str(payload.get("tag_name") or "")
-        if is_newer_version(tag, VERSION):
-            return tag.lstrip("v"), str(payload.get("html_url") or "")
-        return None
-
     async def _stop_services(self) -> None:
         with contextlib.suppress(Exception):
             await self.web_share.stop()
@@ -2528,9 +2517,8 @@ class H4xtorShareApp(PhonePagesMixin, TkinterDnD.Tk):
             self._show_error(value)
         elif tag == "cancelled":
             pass
-        elif tag == "update_check":
-            if value:
-                self._show_update_banner(*value)
+        elif tag in {"update_result", "update_progress"}:
+            self._update_event(tag, value)
         elif tag == "services_started":
             self._set_me_status()
         elif tag == "peer_gone":
@@ -3345,29 +3333,6 @@ class H4xtorShareApp(PhonePagesMixin, TkinterDnD.Tk):
 
         self._previous_wifi = None
         self.runtime.submit(run(), "wifi_restored")
-
-    def _show_update_banner(self, version: str, url: str) -> None:
-        c = self.theme.c
-        px = self.theme.px
-        card = Card(
-            self.banner, self.theme, padding=12, fill=c["accent_soft"], outline=c["accent_soft"]
-        )
-        card.pack(fill="x", pady=(0, px(6)))
-        tk.Label(
-            card.body,
-            text=f"Ny version {version} er klar  ·  du kører {VERSION}",
-            bg=c["accent_soft"],
-            fg=c["accent"],
-            font=self.theme.font(10, "bold"),
-        ).pack(side="left")
-        Button(
-            card.body,
-            self.theme,
-            "Hent opdatering",
-            lambda: webbrowser.open(url),
-            kind="primary",
-            size="sm",
-        ).pack(side="right")
 
     def _show_wifi_banner(self) -> None:
         if not hasattr(self, "wifi_banner"):
@@ -4433,6 +4398,8 @@ def _enable_high_dpi() -> None:
 
 def main(argv: list[str] | None = None) -> None:
     arguments = list(sys.argv[1:] if argv is None else argv)
+    if arguments[:1] == ["--apply-update"]:  # the update helper: no window, no services
+        raise SystemExit(0 if run_update_helper(arguments[1:]) else 1)
     minimized = "--minimized" in arguments
     send_paths: list[Path] = []
     if "--send" in arguments:

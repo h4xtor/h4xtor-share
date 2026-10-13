@@ -808,3 +808,62 @@ def test_target_menu_all_devices(tmp_path, monkeypatch) -> None:
         assert app.target_button._text == "Til: Mobil ▾"
     finally:
         app.close()
+
+
+@pytest.mark.skipif(
+    not _can_build_ui(),
+    reason="Tk/tkdnd display server unavailable",
+)
+def test_update_dialog_flow(tmp_path, monkeypatch) -> None:
+    import time
+
+    from h4xtor_share import update_pages
+    from h4xtor_share.updater import ChangelogEntry, Release
+
+    app = _new_app()
+    try:
+        app.config_store.data.pop("update_skip", None)
+        app.config_store.data.pop("update_later", None)
+        new_exe = tmp_path / "new.exe"
+        new_exe.write_bytes(b"exe")
+        release = Release("9.0.0", "2030-01-01", "https://example.invalid", {})
+        entries = [
+            ChangelogEntry(f"9.0.{n}", "2030-01-01", {"Nyt": [f"punkt {n}"]}) for n in range(5)
+        ]
+
+        # "Senere": closes and is not asked again straight away.
+        app._show_update_dialog(release, entries)
+        app.update()
+        buttons = {b._text: b for b in app._update_buttons.winfo_children()}
+        assert set(buttons) == {"Opdatér nu", "Senere", "Spring denne version over"}
+        buttons["Senere"].command()
+        assert app._update_modal is None
+        assert not app.updater.should_prompt("9.0.0")
+
+        # "Opdatér nu": downloads, verifies the checksum, hands over to the helper.
+        started: list = []
+        monkeypatch.setattr(update_pages, "can_self_install", lambda: True)
+        monkeypatch.setattr(update_pages, "start_helper", lambda path, folder: started.append(path))
+        monkeypatch.setattr(app, "close", lambda: started.append("closed"))
+
+        async def download(_release, _folder, progress):
+            progress(1, 2)
+            return new_exe
+
+        monkeypatch.setattr(app.updater, "download", download)
+        app._show_update_dialog(release, entries)
+        app.update()
+        {b._text: b for b in app._update_buttons.winfo_children()}["Opdatér nu"].command()
+        deadline = time.time() + 10
+        while "closed" not in started and time.time() < deadline:
+            app.update()
+            time.sleep(0.05)
+        assert started == [new_exe, "closed"]
+
+        app.show_changelog()  # the offline log opens from the shipped/cached changelog
+        app.update()
+        app._show_welcome("0.0.1")
+        app.update()
+    finally:
+        monkeypatch.undo()  # the real close() again
+        app.close()
