@@ -4,6 +4,11 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
+## 1.3.1 – 2026-10-13
+### Rettet
+- Skærmbillede fra PC'en: venter nu op til 15 sekunder på det første billede, i stedet for 6.
+  Kunne før fejle på langsommere telefoner lige efter du godkendte optagelsen.
+
 ## 1.3.0 – 2026-10-13
 ### Nyt
 - Automatisk opdatering af PC-appen (Windows) og Android-appen direkte fra GitHub – den spørger altid først.
