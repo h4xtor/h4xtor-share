@@ -25,7 +25,8 @@ final class ScreenshotCapture {
         void done(File file, String error);
     }
 
-    private static final long TIMEOUT_MS = 6_000L;
+    /** The first frame can take several seconds on a slow phone right after the consent dialog. */
+    private static final long TIMEOUT_MS = 15_000L;
 
     private ScreenshotCapture() {
     }
