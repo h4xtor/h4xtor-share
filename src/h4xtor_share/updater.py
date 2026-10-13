@@ -363,7 +363,7 @@ def apply_update(
     pid: int,
     folder: Path,
     launch: Callable[[Path], Any] = _launch,
-    timeout: float = 60.0,
+    timeout: float = 120.0,
 ) -> bool:
     """Swap ``target`` for ``new``, start it, and roll back if it does not come up.
 
@@ -393,26 +393,48 @@ def apply_update(
     except OSError:
         process = None
     end = time.monotonic() + timeout
-    while process is not None and time.monotonic() < end:
-        if marker.exists():
-            break
+    while process is not None and time.monotonic() < end and not marker.exists():
         if process.poll() is not None:
-            process = None  # died before it was up
-            break
+            break  # died before it was up
         time.sleep(0.25)
-    if process is not None:  # up (or still starting): keep the new version
-        with contextlib.suppress(OSError):
-            new.unlink()
-        if marker.exists():
+    if marker.exists():  # only the new app's own "I'm up" counts as success
+        for path in (new, backup):
             with contextlib.suppress(OSError):
-                backup.unlink()
+                path.unlink()
         return True
-    with contextlib.suppress(OSError):
-        target.unlink(missing_ok=True)
-    backup.replace(target)
+    if process is not None and process.poll() is None:  # hung while starting
+        _stop(process)
+    deadline = time.monotonic() + 30
+    while True:  # a just-stopped exe can stay locked for a moment
+        try:
+            target.unlink(missing_ok=True)
+            backup.replace(target)
+            break
+        except OSError:
+            if time.monotonic() > deadline:
+                _note(
+                    folder,
+                    "Den nye version startede ikke. Den tidligere ligger som "
+                    f"{backup.name} ved siden af – omdøb den til {target.name}.",
+                )
+                return False
+            time.sleep(0.5)
     _note(folder, "Den nye version kunne ikke starte – din tidligere version er sat tilbage.")
     launch(target)
     return False
+
+
+def _stop(process: Any) -> None:
+    if os.name == "nt":  # the one-file exe is a launcher plus a child: end both
+        subprocess.run(  # noqa: S603
+            ["taskkill", "/F", "/T", "/PID", str(process.pid)],  # noqa: S607
+            capture_output=True,
+            check=False,
+        )
+    with contextlib.suppress(OSError):
+        process.kill()
+    with contextlib.suppress(Exception):
+        process.wait(timeout=10)
 
 
 def _note(folder: Path, text: str) -> None:

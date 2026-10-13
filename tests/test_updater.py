@@ -208,3 +208,20 @@ def test_pc_update_rolls_back_when_new_version_fails(tmp_path: Path) -> None:
 def test_android_version_matches() -> None:
     gradle = (ROOT / "android" / "app" / "build.gradle").read_text(encoding="utf-8")
     assert f"?: '{__version__}'" in gradle  # versionName == the desktop version
+
+
+def test_pc_update_rolls_back_when_new_version_hangs(tmp_path: Path) -> None:
+    folder = tmp_path / "config"
+    folder.mkdir()
+    target = _script(tmp_path, "app.py", "import sys\n")
+    new = _script(tmp_path, "new.py", "import time\ntime.sleep(60)\n")  # never says "update-ok"
+    started: list = []
+
+    def launch(path: Path):
+        started.append(subprocess.Popen([sys.executable, str(path)]))
+        return started[-1]
+
+    assert not updater.apply_update(new, target, 0, folder, launch=launch, timeout=2)
+    assert started[0].poll() is not None  # the hung new version was stopped
+    assert target.read_text(encoding="utf-8") == "import sys\n"  # old version restored
+    assert "sat tilbage" in (updater.mark_started(folder) or "")
