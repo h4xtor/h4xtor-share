@@ -22,6 +22,7 @@ import java.util.Locale;
  * text toolbar holding "Copy" is a popup window of its own.
  */
 public final class CopyWatchService extends AccessibilityService {
+    private static volatile CopyWatchService instance;
     private final Handler main = new Handler(Looper.getMainLooper());
     private long lastTrigger;
 
@@ -52,11 +53,40 @@ public final class CopyWatchService extends AccessibilityService {
 
     @Override
     protected void onServiceConnected() {
+        instance = this;
         android.util.Log.i("h4xtor", "copy watcher connected");
     }
 
     @Override
+    public boolean onUnbind(Intent intent) {
+        if (instance == this) {
+            instance = null;
+        }
+        return super.onUnbind(intent);
+    }
+
+    @Override
     public void onInterrupt() {
+    }
+
+    /**
+     * Turn the accessibility service off from inside the app (used by Bank-tilstand). Banking apps
+     * refuse to run while an accessibility service that can read other apps is enabled, so this
+     * genuinely removes it – it is not a way to hide it. Returns false when the service is not
+     * running, so the caller can send the user to the system settings instead.
+     */
+    static boolean disableNow() {
+        CopyWatchService self = instance;
+        if (self == null) {
+            return false;
+        }
+        try {
+            self.disableSelf();
+        } catch (Exception ignored) {
+            return false;
+        }
+        instance = null;
+        return true;
     }
 
     /** "Kopiér", "Kopier link", "Copy", "Copy link" … but not long texts that merely mention copying. */

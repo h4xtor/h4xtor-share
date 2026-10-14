@@ -4,6 +4,12 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
+## 1.3.2 – 2026-10-14
+### Nyt
+- "Bank-tilstand" i Indstillinger: ét tryk slukker alt det følsomme (tilgængelighed/"send når du kopierer",
+  notifikationer på PC'en, SMS og skærmoptagelse), så bankapps, der ellers spærrer, åbner igen.
+  Fildeling virker stadig, og du kan tænde funktionerne igen bagefter.
+
 ## 1.3.1 – 2026-10-13
 ### Rettet
 - Skærmbillede fra PC'en: venter nu op til 15 sekunder på det første billede, i stedet for 6.

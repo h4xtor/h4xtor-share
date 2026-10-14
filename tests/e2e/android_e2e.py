@@ -493,6 +493,29 @@ def main() -> None:
     shell("input keyevent BACK", check=False)
     shell("input keyevent BACK", check=False)
 
+    # ---- Bank-tilstand: one tap genuinely switches the accessibility service off ----------
+    # The copy watcher above left the accessibility service enabled, so the card shows.
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(2)
+    for _ in range(3):
+        tap_text("^Indstillinger$")
+        time.sleep(1)
+        if scroll_to("Slå alt følsomt fra"):
+            break
+    else:
+        raise AssertionError("Bank-tilstand card missing while the accessibility service is on")
+    shot("30-bank-mode")
+    tap_text("Slå alt følsomt fra")
+    time.sleep(1)
+    tap_text("^Slå fra$")  # confirm in the dialog
+    time.sleep(4)
+    enabled = shell("settings get secure enabled_accessibility_services", check=False).strip()
+    assert "CopyWatchService" not in enabled, f"accessibility still on: {enabled}"
+    shot("31-bank-mode-done")
+    ok("Bank-tilstand turns the accessibility service off with one tap")
+    if screen_has("Næsten færdig", 5):  # SMS permission can't be revoked from code: finish prompt
+        tap_text("^Senere$")
+
     # Phone -> PC file through the share sheet. The file the phone received above
     # is owned by the app in MediaStore, so the app may read it like a file shared
     # from the gallery or the Files app (which grant read access to the content:// uri).

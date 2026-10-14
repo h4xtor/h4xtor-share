@@ -1422,6 +1422,11 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         AppIdentity identity = service.identity();
         content.addView(header("Indstillinger", null, null));
 
+        if (sensitiveOn(identity)) {
+            content.addView(ui.label("Bank-tilstand"), ui.margins(4, 0, 0, 8));
+            content.addView(bankModeCard(), ui.margins(0, 0, 0, 18));
+        }
+
         content.addView(ui.label("Denne telefon"), ui.margins(4, 0, 0, 8));
         LinearLayout device = ui.card();
         device.addView(ui.text("Navn som andre ser", 12.5f, ui.muted, false));
@@ -1694,6 +1699,100 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         });
         card.addView(reset, ui.margins(0, 10, 0, 0));
         return card;
+    }
+
+    // ------------------------------------------------- Bank-tilstand
+    /** True when a capability banking apps flag is active, so the Bank-tilstand card is worth showing. */
+    private boolean sensitiveOn(AppIdentity identity) {
+        return CopyWatchService.isEnabled(this)
+                || NotificationMirrorService.hasAccess(this)
+                || smsPermitted()
+                || identity.flag("auto_screenshots", false)
+                || identity.flag("mirror_notifications", false)
+                || identity.flag("sms_enabled", false);
+    }
+
+    private boolean smsPermitted() {
+        return checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
+                || checkSelfPermission(Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private View bankModeCard() {
+        LinearLayout card = ui.card();
+        card.addView(ui.text("Skal du bruge din bank?", 15f, ui.text, true));
+        card.addView(ui.text("Bankapps spærrer ofte, når h4xtor share kan læse skærmen, notifikationer "
+                + "eller SMS. Ét tryk slukker alt det følsomme, så banken åbner igen. Fildeling med PC'en "
+                + "virker stadig, og du kan tænde funktionerne igen bagefter.", 12.5f, ui.muted, false),
+                ui.margins(0, 4, 0, 0));
+        TextView go = ui.button("Slå alt følsomt fra", "primary");
+        go.setOnClickListener(v -> confirmBankMode());
+        card.addView(go, ui.margins(0, 12, 0, 0));
+        return card;
+    }
+
+    private void confirmBankMode() {
+        new AlertDialog.Builder(this)
+                .setTitle("Slå alt følsomt fra?")
+                .setMessage("Dette slukker: notifikationer på PC'en, SMS fra PC'en, fjernbetjening, "
+                        + "automatiske skærmbilleder og \"send når du kopierer\".\n\nFildeling med PC'en "
+                        + "virker stadig. Du kan tænde funktionerne igen, når du har brugt banken.")
+                .setNegativeButton("Annullér", null)
+                .setPositiveButton("Slå fra", (dialog, which) -> enterBankMode())
+                .show();
+    }
+
+    private void enterBankMode() {
+        boolean accessibilityOff = service.bankMode();
+        toast("Bank-tilstand slået til ✓", false);
+        render();
+        // The app can disable its own accessibility service and stop everything else, but Android
+        // does not let it revoke notification access or the SMS permission from code – offer those.
+        boolean accessibilityLeft = !accessibilityOff && CopyWatchService.isEnabled(this);
+        boolean notificationsLeft = NotificationMirrorService.hasAccess(this);
+        boolean smsLeft = smsPermitted();
+        if (!accessibilityLeft && !notificationsLeft && !smsLeft) {
+            return;
+        }
+        StringBuilder message = new StringBuilder(
+                "Alt følsomt er slået fra. Disse kan Android kun fjerne via indstillingerne:\n");
+        if (accessibilityLeft) {
+            message.append("\n•  Hjælpefunktioner (så banken ikke ser, at appen kan læse skærmen)");
+        }
+        if (notificationsLeft) {
+            message.append("\n•  Notifikationsadgang");
+        }
+        if (smsLeft) {
+            message.append("\n•  SMS- og kontakt-tilladelsen");
+        }
+        AlertDialog.Builder builder = new AlertDialog.Builder(this)
+                .setTitle("Næsten færdig")
+                .setMessage(message.toString())
+                .setNegativeButton("Senere", null);
+        if (accessibilityLeft) {
+            builder.setPositiveButton("Åbn Hjælpefunktioner", (d, w) -> openAccessibilitySettings());
+        } else if (notificationsLeft) {
+            builder.setPositiveButton("Åbn notifikationsadgang", (d, w) -> openNotificationAccess());
+        } else {
+            builder.setPositiveButton("Åbn app-tilladelser", (d, w) -> openAppDetails());
+        }
+        builder.show();
+    }
+
+    private void openAccessibilitySettings() {
+        try {
+            startActivity(new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS));
+        } catch (Exception error) {
+            toast("Åbn Indstillinger → Hjælpefunktioner og slå h4xtor share fra", true);
+        }
+    }
+
+    private void openAppDetails() {
+        try {
+            startActivity(new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    android.net.Uri.parse("package:" + getPackageName())));
+        } catch (Exception error) {
+            toast("Åbn Indstillinger → Apps → h4xtor share → Tilladelser", true);
+        }
     }
 
     // ------------------------------------------------- "Telefon på PC'en"

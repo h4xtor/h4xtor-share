@@ -135,6 +135,13 @@ og `CHANGELOG.md`. Udgivelsen fejler, hvis `CHANGELOG.md` mangler versionen.
   som almindeligt Wi-Fi.
 - **Notifikationer, SMS og fjernbetjening kræver, at telefonen og PC'en er på samme netværk**
   (eller Wi-Fi Direct). Der er ingen sky-relæ som i Join – det er bevidst.
+- **Bankapps kan spærre, mens de følsomme funktioner er slået til.** Tilgængeligheds-tjenesten
+  ("send når du kopierer"), notifikationsadgang, SMS og skærmoptagelse er præcis de rettigheder,
+  banktrojanere misbruger, så en bankapp kan nægte at køre, når de er aktive. Det er bankens
+  beskyttelse, der virker – og vi omgår den ikke. Brug **Bank-tilstand** (Indstillinger), som
+  *rigtigt* slukker det hele med ét tryk; så er risikoen væk, og banken åbner igen. Notifikations-
+  adgang og SMS-tilladelsen kan Android kun fjerne via systemindstillingerne, så dertil sender
+  appen dig direkte hen.
 - **Skærmbillede på forlangende:** Android 14 og nyere kræver, at du godkender skærmoptagelse
   på telefonen *hver gang*. Det kan ingen app komme udenom. Kan appen ikke vise spørgsmålet
   med det samme, kommer der en notifikation, du skal trykke på.
