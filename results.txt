@@ -1,0 +1,33 @@
+QR pairing (phone -> PC) and mutual trust
+phone shows the paired PC
+clipboard PC -> phone
+3 MB file PC -> phone lands in Downloads/h4xtor-share
+folder with subfolder PC -> phone
+link PC -> phone
+share sheet link phone -> PC (opens in Chrome on the PC)
+'Send til PC' from the text selection menu
+tap 'Copy' in another app -> text on the PC instantly (app in background)
+share sheet file phone -> PC (3 MB, byte-identical)
+second PC paired
+share sheet with two PCs: pick AdminPC, link arrives there
+remembered PC offline: phone sends to the PC that is online
+folder phone -> PC via the system picker (subfolders intact)
+speed test phone -> PC (upload + ping shown)
+new screenshot sent to the PC automatically
+notification mirroring is off by default
+phone notification shows up on the PC (title, text, app)
+notification dismissed from the PC disappears on the phone
+new SMS is pushed to the PC right away
+PC reads SMS threads and messages
+PC sends an SMS through the phone
+find my phone rings and stops from the PC
+remote volume and read-aloud
+screenshot on demand arrives on the PC as a PNG
+wallpaper set from the PC
+Bank-tilstand til turns the accessibility service and remote control off
+Bank-tilstand fra turns the features back on
+Åbn on both received and sent files in Overførsler
+unpair from PC removes the pairing on the phone too
+versionName=0.0.1 finds 1.3.3 and shows what is new
+checksum verified and updated to 1.3.3 after Android's confirmation
+'Opdateret – tryk for at åbne' reopens it
