@@ -1254,6 +1254,25 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         sms.syncObserver();
     }
 
+    /**
+     * Bank-tilstand: switch off every capability a banking app flags as risky – the accessibility
+     * copy-watcher, notification mirroring, SMS and screen capture – so the device is genuinely safe
+     * again and apps like the bank's open. File sharing (PC ⇄ phone) keeps working. Returns true when
+     * the accessibility service was disabled from here; false means the user must do it in settings.
+     */
+    public boolean bankMode() {
+        identity.setFlag("mirror_notifications", false);
+        identity.setFlag("sms_enabled", false);
+        identity.setFlag("remote_control", false);
+        setAutoScreenshots(false);
+        refreshSms();
+        remote.stopFind();
+        NotificationMirrorService.unbindNow();
+        boolean accessibilityOff = CopyWatchService.disableNow();
+        changed();
+        return accessibilityOff;
+    }
+
     private static JSONObject ok() throws Exception {
         return new JSONObject().put("ok", true);
     }

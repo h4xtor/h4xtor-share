@@ -59,6 +59,18 @@ public final class NotificationMirrorService extends NotificationListenerService
         return false;
     }
 
+    /** Stop mirroring now (used by Bank-tilstand); the listener rebinds when the user re-enables it. */
+    static void unbindNow() {
+        NotificationMirrorService self = instance;
+        if (self != null) {
+            try {
+                self.requestUnbind();
+            } catch (Exception ignored) {
+                // Already unbinding or not bound.
+            }
+        }
+    }
+
     @Override
     public void onListenerConnected() {
         instance = this;
