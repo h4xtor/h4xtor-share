@@ -1422,9 +1422,9 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         AppIdentity identity = service.identity();
         content.addView(header("Indstillinger", null, null));
 
-        if (sensitiveOn(identity)) {
+        if (sensitiveOn(identity) || identity.flag("bank_mode", false)) {
             content.addView(ui.label("Bank-tilstand"), ui.margins(4, 0, 0, 8));
-            content.addView(bankModeCard(), ui.margins(0, 0, 0, 18));
+            content.addView(bankModeCard(identity), ui.margins(0, 0, 0, 18));
         }
 
         content.addView(ui.label("Denne telefon"), ui.margins(4, 0, 0, 8));
@@ -1717,16 +1717,26 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                 || checkSelfPermission(Manifest.permission.SEND_SMS) == PackageManager.PERMISSION_GRANTED;
     }
 
-    private View bankModeCard() {
+    private View bankModeCard(AppIdentity identity) {
         LinearLayout card = ui.card();
-        card.addView(ui.text("Skal du bruge din bank?", 15f, ui.text, true));
-        card.addView(ui.text("Bankapps spærrer ofte, når h4xtor share kan læse skærmen, notifikationer "
-                + "eller SMS. Ét tryk slukker alt det følsomme, så banken åbner igen. Fildeling med PC'en "
-                + "virker stadig, og du kan tænde funktionerne igen bagefter.", 12.5f, ui.muted, false),
-                ui.margins(0, 4, 0, 0));
-        TextView go = ui.button("Slå alt følsomt fra", "primary");
-        go.setOnClickListener(v -> confirmBankMode());
-        card.addView(go, ui.margins(0, 12, 0, 0));
+        if (identity.flag("bank_mode", false)) {
+            card.addView(ui.text("Bank-tilstand er slået til", 15f, ui.text, true));
+            card.addView(ui.text("Alt følsomt er slukket, så din bank kan åbne. Tryk for at tænde "
+                    + "funktionerne igen, præcis som de var.", 12.5f, ui.muted, false),
+                    ui.margins(0, 4, 0, 0));
+            TextView off = ui.button("Bank-tilstand fra", "soft");
+            off.setOnClickListener(v -> leaveBankMode());
+            card.addView(off, ui.margins(0, 12, 0, 0));
+        } else {
+            card.addView(ui.text("Skal du bruge din bank?", 15f, ui.text, true));
+            card.addView(ui.text("Bankapps spærrer ofte, når h4xtor share kan læse skærmen, notifikationer "
+                    + "eller SMS. Ét tryk slukker alt det følsomme, så banken åbner igen. Fildeling med "
+                    + "PC'en virker stadig, og du kan tænde funktionerne igen bagefter.",
+                    12.5f, ui.muted, false), ui.margins(0, 4, 0, 0));
+            TextView go = ui.button("Bank-tilstand til", "primary");
+            go.setOnClickListener(v -> confirmBankMode());
+            card.addView(go, ui.margins(0, 12, 0, 0));
+        }
         return card;
     }
 
@@ -1776,6 +1786,22 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             builder.setPositiveButton("Åbn app-tilladelser", (d, w) -> openAppDetails());
         }
         builder.show();
+    }
+
+    private void leaveBankMode() {
+        boolean needsAccessibility = service.exitBankMode();
+        toast("Bank-tilstand slået fra – funktionerne er tændt igen", false);
+        render();
+        if (needsAccessibility) {
+            // Android does not let the app switch its own accessibility service back on.
+            new AlertDialog.Builder(this)
+                    .setTitle("Tænd \"send når du kopierer\" igen")
+                    .setMessage("Alt andet er tændt igen. Denne ene funktion kan Android kun tænde via "
+                            + "indstillingerne – vil du gøre det nu?")
+                    .setNegativeButton("Senere", null)
+                    .setPositiveButton("Åbn Hjælpefunktioner", (d, w) -> openAccessibilitySettings())
+                    .show();
+        }
     }
 
     private void openAccessibilitySettings() {

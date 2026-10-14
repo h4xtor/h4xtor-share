@@ -4,6 +4,12 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
+## 1.3.3 – 2026-10-14
+### Nyt
+- Bank-tilstand er nu en knap med til/fra: "Bank-tilstand til" slukker alt det følsomme, og
+  "Bank-tilstand fra" tænder præcis de funktioner igen, som var slået til før. (Hjælpefunktionen
+  "send når du kopierer" skal du selv tænde igen i Android – appen viser vej.)
+
 ## 1.3.2 – 2026-10-14
 ### Nyt
 - "Bank-tilstand" i Indstillinger: ét tryk slukker alt det følsomme (tilgængelighed/"send når du kopierer",

@@ -1261,6 +1261,14 @@ public final class ShareService extends Service implements H4xtorServer.Listener
      * the accessibility service was disabled from here; false means the user must do it in settings.
      */
     public boolean bankMode() {
+        // Remember what was on, so "Bank-tilstand fra" can put it back exactly as it was.
+        identity.setFlag("pre_mirror", identity.flag("mirror_notifications", false));
+        identity.setFlag("pre_sms", identity.flag("sms_enabled", false));
+        identity.setFlag("pre_remote", identity.flag("remote_control", true));
+        identity.setFlag("pre_screens", identity.flag("auto_screenshots", false));
+        identity.setFlag("pre_copywatch", CopyWatchService.isEnabled(this));
+        identity.setFlag("bank_mode", true);
+
         identity.setFlag("mirror_notifications", false);
         identity.setFlag("sms_enabled", false);
         identity.setFlag("remote_control", false);
@@ -1271,6 +1279,36 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         boolean accessibilityOff = CopyWatchService.disableNow();
         changed();
         return accessibilityOff;
+    }
+
+    /**
+     * Bank-tilstand fra: put every feature back the way it was before Bank-tilstand. The app flags,
+     * notification mirroring and screen capture come back from here; the accessibility service
+     * ("send når du kopierer") can only be switched back on by the user in system settings, so this
+     * returns true when it was on before and the caller should send the user there.
+     */
+    public boolean exitBankMode() {
+        identity.setFlag("mirror_notifications", identity.flag("pre_mirror", false));
+        identity.setFlag("sms_enabled", identity.flag("pre_sms", false));
+        identity.setFlag("remote_control", identity.flag("pre_remote", true));
+        boolean screens = identity.flag("pre_screens", false);
+        identity.setFlag("bank_mode", false);
+        refreshSms();
+        NotificationMirrorService.rebind(this);
+        if (screens && hasMediaPermission()) {
+            setAutoScreenshots(true);
+        }
+        changed();
+        return identity.flag("pre_copywatch", false) && !CopyWatchService.isEnabled(this);
+    }
+
+    private boolean hasMediaPermission() {
+        for (String permission : mediaPermissions()) {
+            if (checkSelfPermission(permission) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static JSONObject ok() throws Exception {

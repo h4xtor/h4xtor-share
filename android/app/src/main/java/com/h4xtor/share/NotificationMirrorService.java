@@ -71,6 +71,17 @@ public final class NotificationMirrorService extends NotificationListenerService
         }
     }
 
+    /** Re-bind after Bank-tilstand (works while the user still has notification access granted). */
+    static void rebind(Context context) {
+        if (hasAccess(context)) {
+            try {
+                requestRebind(new ComponentName(context, NotificationMirrorService.class));
+            } catch (Exception ignored) {
+                // Access removed or not available; the per-feature hint tells the user.
+            }
+        }
+    }
+
     @Override
     public void onListenerConnected() {
         instance = this;

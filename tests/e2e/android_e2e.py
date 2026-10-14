@@ -648,20 +648,37 @@ def main() -> None:
     for _ in range(3):
         tap_text("^Indstillinger$")
         time.sleep(1)
-        if scroll_to("Slå alt følsomt fra"):
+        if scroll_to("^Bank-tilstand til$"):
             break
     else:
         raise AssertionError("Bank-tilstand card missing while the accessibility service is on")
     shot("30-bank-mode")
-    tap_text("Slå alt følsomt fra")
+    tap_text("^Bank-tilstand til$")
     time.sleep(1)
     tap_text("^Slå fra$")  # confirm in the dialog
     time.sleep(4)
     enabled = shell("settings get secure enabled_accessibility_services", check=False).strip()
     assert "CopyWatchService" not in enabled, f"accessibility still on: {enabled}"
+    assert 'flag_remote_control" value="false"' in prefs(), "remote control not switched off"
     shot("31-bank-mode-done")
-    ok("Bank-tilstand turns the accessibility service off with one tap")
+    ok("Bank-tilstand til turns the accessibility service and remote control off")
     if screen_has("Næsten færdig", 5):  # SMS permission can't be revoked from code: finish prompt
+        tap_text("^Senere$")
+
+    # ---- Bank-tilstand fra restores the features it switched off --------------------------
+    for _ in range(3):
+        if scroll_to("^Bank-tilstand fra$"):
+            break
+        tap_text("^Indstillinger$")
+        time.sleep(1)
+    else:
+        raise AssertionError("Bank-tilstand fra button missing while bank mode is on")
+    tap_text("^Bank-tilstand fra$")
+    time.sleep(3)
+    assert 'flag_remote_control" value="true"' in prefs(), "remote control not restored"
+    shot("32-bank-mode-off")
+    ok("Bank-tilstand fra turns the features back on")
+    if screen_has("send når du kopierer", 5):  # the accessibility re-enable prompt
         tap_text("^Senere$")
 
     # ---- Screens for design review ---------------------------------------------
