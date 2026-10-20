@@ -21,6 +21,7 @@ CHANGELOG = """# Opdateringslog
 - Ti
 ### Rettet
 - Fejl B
+  fortsat
 
 ## 9.9.9 – 2030-01-01
 ### Forbedret
@@ -43,7 +44,7 @@ def test_versions_compare_numerically() -> None:
 def test_changelog_parse_and_aggregate() -> None:
     entries = updater.parse_changelog(CHANGELOG)
     assert [entry.version for entry in entries] == ["9.10.0", "9.9.9", "0.0.1"]
-    assert entries[0].sections == {"Nyt": ["Ti"], "Rettet": ["Fejl B"]}
+    assert entries[0].sections == {"Nyt": ["Ti"], "Rettet": ["Fejl B fortsat"]}
     skipped = updater.entries_between(entries, "0.0.1", "9.10.0")
     assert [entry.version for entry in skipped] == ["9.10.0", "9.9.9"]  # newest first
     assert "Version 9.10.0  ·  2030-02-01" in skipped[0].text()

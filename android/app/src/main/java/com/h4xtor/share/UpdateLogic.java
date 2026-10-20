@@ -122,6 +122,12 @@ final class UpdateLogic {
                     entry.sections.put(section, items);
                 }
                 items.add(line.substring(2).trim());
+            } else if (section != null && !line.isEmpty() && Character.isWhitespace(raw.charAt(0))) {
+                // Wrapped bullet: an indented line continues the previous item.
+                List<String> items = entries.get(entries.size() - 1).sections.get(section);
+                if (items != null && !items.isEmpty()) {
+                    items.set(items.size() - 1, items.get(items.size() - 1) + " " + line);
+                }
             }
         }
         entries.sort((a, b) -> compare(b.version, a.version));
