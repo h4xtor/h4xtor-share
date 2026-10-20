@@ -94,6 +94,10 @@ def parse_changelog(text: str) -> list[ChangelogEntry]:
             section = match.group(1) if match.group(1) in SECTIONS else None
         elif entries and section and line.startswith(("- ", "* ")):
             entries[-1].sections.setdefault(section, []).append(line[2:].strip())
+        elif entries and section and line and raw[:1].isspace():
+            # Wrapped bullet: an indented line continues the previous item.
+            if items := entries[-1].sections.get(section):
+                items[-1] += " " + line
     entries.sort(key=lambda entry: version_tuple(entry.version), reverse=True)
     return entries
 

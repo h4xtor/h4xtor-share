@@ -6,20 +6,15 @@ Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
 ## 1.3.3 – 2026-10-14
 ### Nyt
-- Bank-tilstand er nu en knap med til/fra: "Bank-tilstand til" slukker alt det følsomme, og
-  "Bank-tilstand fra" tænder præcis de funktioner igen, som var slået til før. (Hjælpefunktionen
-  "send når du kopierer" skal du selv tænde igen i Android – appen viser vej.)
+- Bank-tilstand er nu en knap med til/fra: "Bank-tilstand til" slukker alt det følsomme, og "Bank-tilstand fra" tænder præcis de funktioner igen, som var slået til før. (Hjælpefunktionen "send når du kopierer" skal du selv tænde igen i Android – appen viser vej.)
 
 ## 1.3.2 – 2026-10-14
 ### Nyt
-- "Bank-tilstand" i Indstillinger: ét tryk slukker alt det følsomme (tilgængelighed/"send når du kopierer",
-  notifikationer på PC'en, SMS og skærmoptagelse), så bankapps, der ellers spærrer, åbner igen.
-  Fildeling virker stadig, og du kan tænde funktionerne igen bagefter.
+- "Bank-tilstand" i Indstillinger: ét tryk slukker alt det følsomme (tilgængelighed/"send når du kopierer", notifikationer på PC'en, SMS og skærmoptagelse), så bankapps, der ellers spærrer, åbner igen. Fildeling virker stadig, og du kan tænde funktionerne igen bagefter.
 
 ## 1.3.1 – 2026-10-13
 ### Rettet
-- Skærmbillede fra PC'en: venter nu op til 15 sekunder på det første billede, i stedet for 6.
-  Kunne før fejle på langsommere telefoner lige efter du godkendte optagelsen.
+- Skærmbillede fra PC'en: venter nu op til 15 sekunder på det første billede, i stedet for 6. Kunne før fejle på langsommere telefoner lige efter du godkendte optagelsen.
 
 ## 1.3.0 – 2026-10-13
 ### Nyt

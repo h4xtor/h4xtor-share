@@ -17,7 +17,7 @@ import org.junit.Test;
 
 public class UpdateLogicTest {
     private static final String LOG = "# Opdateringslog\n\n"
-            + "## 9.10.0 – 2030-02-01\n### Nyt\n- Ti\n### Rettet\n- Fejl B\n\n"
+            + "## 9.10.0 – 2030-02-01\n### Nyt\n- Ti\n### Rettet\n- Fejl B\n  fortsat\n\n"
             + "## 9.9.9 – 2030-01-01\n### Forbedret\n- Ni\n### Andet\n- ignoreres\n\n"
             + "## 0.0.1 – 2020-01-01\n### Nyt\n- Gammel\n";
 
@@ -35,7 +35,7 @@ public class UpdateLogicTest {
         List<UpdateLogic.Entry> entries = UpdateLogic.parseChangelog(LOG);
         assertEquals(3, entries.size());
         assertEquals("9.10.0", entries.get(0).version);
-        assertEquals(List.of("Fejl B"), entries.get(0).sections.get("Rettet"));
+        assertEquals(List.of("Fejl B fortsat"), entries.get(0).sections.get("Rettet"));
         assertNull(entries.get(1).sections.get("Andet"));
         List<UpdateLogic.Entry> skipped = UpdateLogic.between(entries, "0.0.1", "9.10.0");
         assertEquals(2, skipped.size());
