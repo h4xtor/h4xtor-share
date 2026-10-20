@@ -279,7 +279,7 @@ async def test_client_capability_guards(phone) -> None:
 async def test_push_helpers_reach_desktop(desktop, tmp_path: Path) -> None:
     config, events = desktop
     phone_config = Config(tmp_path / "emu" / "config.json")
-    pinned = certificate_fingerprint(next(config.path.parent.glob("*.pem")))
+    pinned = certificate_fingerprint(config.path.parent / "certificate.pem")
     phone_config.trust_outbound_peer("d" * 32, "secret-token", pinned, "PC")
     phone_config.data["device_id"] = "p" * 32
     emulator = PeerClient(phone_config)
