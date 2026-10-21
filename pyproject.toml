@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "h4xtor-share"
-version = "1.3.5"
+version = "1.3.6"
 description = "Offline-first cross-platform clipboard and file sharing over local peer-to-peer links."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -25,9 +25,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-bluetooth = [
-    "bleak>=0.22,<2"
-]
 dev = [
     "build>=1.2,<2",
     "pyinstaller>=6.11,<7",

@@ -166,6 +166,9 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     private DiscoveryController discovery;
     private UdpDiscovery udp;
     private WifiDirectController wifiDirect;
+    private BluetoothController bluetooth;
+    /** The Wi-Fi route of a PC while it is reached over Bluetooth, to switch back afterwards. */
+    private final Map<String, Peer> beforeBluetooth = new ConcurrentHashMap<>();
     private SmsBridge sms;
     private RemoteTools remote;
     private volatile String screenshotPeerId;
@@ -216,6 +219,10 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         discovery = new DiscoveryController(this, identity, this);
         udp = new UdpDiscovery(identity, this, this::knownAddresses);
         wifiDirect = new WifiDirectController(this, identity);
+        bluetooth = new BluetoothController(this, identity, new BluetoothController.Listener() {
+            @Override public void onBridgeUp(BluetoothBridge bridge, String pcId) { useBluetooth(bridge, pcId); }
+            @Override public void onBridgeDown(BluetoothBridge bridge) { leaveBluetooth(bridge); }
+        });
         notifications = getSystemService(NotificationManager.class);
         remote = new RemoteTools(this, main);
         sms = new SmsBridge(this, identity, main, network);
@@ -242,6 +249,9 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         });
         registerClipboard();
         sms.syncObserver();
+        if (identity.flag("bluetooth", false) && hasBluetoothPermission()) {
+            bluetooth.start();
+        }
         try {
             startScreenshotWatcher();
         } catch (Exception ignored) {
@@ -297,6 +307,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
                 // Already removed.
             }
         }
+        bluetooth.stop();
         discovery.stop();
         udp.stop();
         server.stop();
@@ -814,11 +825,12 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         }
         Peer existing = peers.get(peer.deviceId);
         final Peer merged = existing != null && !existing.address.equals(peer.address)
-                && isOnline(peer.deviceId) && "wifi-direct".equals(existing.transport)
+                && isOnline(peer.deviceId)
+                && ("wifi-direct".equals(existing.transport) || "bluetooth".equals(existing.transport))
                 ? existing
                 : existing == null ? peer : existing.mergedWith(peer);
         peers.put(peer.deviceId, merged);
-        if (identity.isOutboundTrusted(peer.deviceId)) {
+        if (identity.isOutboundTrusted(peer.deviceId) && !"bluetooth".equals(merged.transport)) {
             identity.remember(merged);
         }
         if (existing == null || !existing.address.equals(merged.address)) {
@@ -1999,6 +2011,92 @@ public final class ShareService extends Service implements H4xtorServer.Listener
                 message("Kunne ikke sende til " + peer.name + ": " + H4xtorClient.safeMessage(error), true);
             }
         });
+    }
+
+    // ------------------------------------------------------------ Bluetooth
+    public boolean hasBluetoothPermission() {
+        return android.os.Build.VERSION.SDK_INT < 31
+                || checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+
+    public boolean bluetoothEnabled() {
+        return identity.flag("bluetooth", false);
+    }
+
+    /** Let paired PCs connect over Bluetooth (they do so by themselves when Wi-Fi can't reach). */
+    public void setBluetoothEnabled(boolean enabled) {
+        identity.setFlag("bluetooth", enabled);
+        if (enabled) {
+            String problem = bluetooth.start();
+            if (problem != null) {
+                message(problem, true);
+            }
+        } else {
+            bluetooth.stop();
+        }
+        changed();
+    }
+
+    /** The PC currently reached over Bluetooth, or null. */
+    public Peer bluetoothPeer() {
+        for (Peer peer : peers.values()) {
+            if ("bluetooth".equals(peer.transport)) {
+                return peer;
+            }
+        }
+        return null;
+    }
+
+    private void useBluetooth(BluetoothBridge bridge, String pcId) {
+        Peer known = peers.get(pcId);
+        if (known == null) {
+            bridge.close();
+            return;
+        }
+        if (!"bluetooth".equals(known.transport)) {
+            beforeBluetooth.put(pcId, known);
+        }
+        Peer routed = new Peer(known.deviceId, known.name, "127.0.0.1", bridge.port(), known.fingerprint,
+                known.platform, "bluetooth", known.capabilities);
+        peers.put(pcId, routed);
+        online.put(pcId, true);
+        message("Forbundet med " + known.name + " via Bluetooth", false);
+        changed();
+    }
+
+    private void leaveBluetooth(BluetoothBridge bridge) {
+        for (Peer peer : new ArrayList<>(peers.values())) {
+            if (!"bluetooth".equals(peer.transport) || peer.port != bridge.port()) {
+                continue;
+            }
+            Peer before = beforeBluetooth.remove(peer.deviceId);
+            if (before == null) { // fall back to the address remembered from Wi-Fi
+                for (Peer stored : identity.knownPeers()) {
+                    if (stored.deviceId.equals(peer.deviceId)) {
+                        before = stored;
+                    }
+                }
+            }
+            if (before == null) {
+                peers.remove(peer.deviceId);
+                continue;
+            }
+            final Peer restored = before;
+            peers.put(peer.deviceId, restored);
+            online.put(peer.deviceId, false);
+            network.execute(() -> {
+                try {
+                    rtt.put(restored.deviceId, client.ping(restored, 2_000));
+                    online.put(restored.deviceId, true);
+                } catch (Exception ignored) {
+                    online.put(restored.deviceId, false);
+                }
+                changed();
+            });
+            message("Bluetooth-forbindelsen til " + peer.name + " er slut", false);
+        }
+        changed();
     }
 
     public void renameDevice(String name) {

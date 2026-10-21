@@ -867,3 +867,59 @@ def test_update_dialog_flow(tmp_path, monkeypatch) -> None:
     finally:
         monkeypatch.undo()  # the real close() again
         app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_bluetooth_fallback_switches_route_and_back(tmp_path, monkeypatch) -> None:
+    import socket
+
+    from h4xtor_share import bluetooth
+    from h4xtor_share.models import Peer
+
+    app, peers = _paired_app(1, tmp_path, monkeypatch, ("bluetooth",))
+    phone = peers[0]
+    opened: list[tuple[str, str]] = []
+    phone_ends: list[bluetooth.Bridge] = []
+
+    def fake_open_bridge(address, device_id, local_port, expected_id=None, on_closed=None):
+        # The "phone" end runs the real bridge too, over a socket pair instead of RFCOMM.
+        opened.append((address, expected_id))
+        left, right = socket.socketpair()
+        phone_ends.append(bluetooth.Bridge(right, phone.device_id, 1, odd=False).start())
+        pc = bluetooth.Bridge(left, device_id, local_port, odd=True, on_closed=on_closed).start()
+        assert pc.wait_hello(5) == expected_id
+        return pc
+
+    monkeypatch.setattr(bluetooth, "supported", lambda: True)
+    monkeypatch.setattr(bluetooth, "paired_devices", lambda: [("AA:BB:CC:DD:EE:FF", "Mobil")])
+    monkeypatch.setattr(bluetooth, "open_bridge", fake_open_bridge)
+    try:
+        # Wi-Fi can't reach the phone: the health check asks for Bluetooth by itself.
+        app.event_queue.put(("bt_maybe", phone))
+        _pump(app, lambda: app.peers[phone.device_id].transport == "bluetooth")
+        routed = app.peers[phone.device_id]
+        bridge = app._bt_bridges[phone.device_id]
+        assert (routed.address, routed.port) == ("127.0.0.1", bridge.port)
+        assert opened == [("AA:BB:CC:DD:EE:FF", phone.device_id)]
+        assert app.config_store.data["bt_addresses"][phone.device_id] == "AA:BB:CC:DD:EE:FF"
+        # The temporary bridge address is never saved as the phone's address.
+        assert app.config_store.data["known_peers"][phone.device_id]["address"] == "192.168.1.50"
+
+        # At most one automatic attempt a minute.
+        app._maybe_bluetooth(app._bt_before[phone.device_id])
+        assert len(opened) == 1
+
+        # The phone shows up on Wi-Fi again: stay on Bluetooth until that address answers…
+        newer = Peer(phone.device_id, phone.name, "192.168.1.77", 47474, phone.fingerprint,
+                     "android", capabilities=phone.capabilities)
+        app._upsert_peer(newer)
+        assert app.peers[phone.device_id].transport == "bluetooth"
+        assert app._bt_before[phone.device_id].address == "192.168.1.77"
+        # …then switch back to it and close the bridge.
+        app.event_queue.put(("bt_wifi_back", phone.device_id))
+        _pump(app, lambda: app.peers[phone.device_id].transport != "bluetooth")
+        assert app.peers[phone.device_id].address == "192.168.1.77"
+        assert phone.device_id not in app._bt_bridges and bridge.closed
+        _pump(app, lambda: phone_ends[0].closed)  # the phone notices the link is gone
+    finally:
+        app.close()

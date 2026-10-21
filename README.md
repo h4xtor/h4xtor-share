@@ -19,6 +19,7 @@ ingen upload til nogen server, ingen størrelsesgrænse.
 | Links åbner direkte i browseren | ✓ | ✓ |
 | Udklipsholder-synk begge veje | ✓ | ✓ (når appen er åben, via notifikation eller kvikfelt) |
 | Wi-Fi Direct (uden router) | Kobler på telefonens gruppe | Starter gruppen |
+| Bluetooth (uden Wi-Fi) | Forbinder selv, når Wi-Fi ikke kan | *Tillad forbindelse via Bluetooth* |
 | Automatisk enhedssøgning (mDNS + UDP) | ✓ | ✓ |
 | Netværksscanning / manuel IP | ✓ | ✓ |
 | "Del"-menuen | "Send til" i Stifinder | Androids Del-ark |
@@ -48,6 +49,15 @@ Derefter:
 - **Telefon → PC:** tryk *Del* i en hvilken som helst app og vælg *h4xtor share* – eller brug knapperne i appen.
 - **Links:** del et link fra telefonen, så åbner det i PC'ens browser med det samme (og omvendt).
 - **Udklipsholder:** kopiér på den ene – sæt ind på den anden.
+
+### Bluetooth – når der hverken er Wi-Fi eller Wi-Fi Direct
+
+1. Par telefonen og PC'en én gang i Bluetooth-indstillingerne (Windows: Indstillinger →
+   Bluetooth og enheder → Tilføj enhed).
+2. Slå **Tillad forbindelse via Bluetooth** til på telefonen (fanen *Del*).
+3. Når PC'en ikke kan nå telefonen over Wi-Fi, skifter den selv til Bluetooth – eller vælg
+   **Forbind via Bluetooth** i telefonens menu på PC'en. Alt virker som før, bare langsommere,
+   og PC'en skifter selv tilbage, så snart Wi-Fi virker igen.
 
 ### Wi-Fi Direct – når der ikke er nogen router
 
@@ -129,8 +139,10 @@ og `CHANGELOG.md`. Udgivelsen fejler, hvis `CHANGELOG.md` mangler versionen.
 
 ## Ærlige begrænsninger
 
-- **Bluetooth-overførsel** er ikke med: Wi-Fi Direct er 10–50× hurtigere og dækker det
-  samme behov ("ingen router").
+- **Bluetooth** er 10–50× langsommere end Wi-Fi: fint til tekst, links, notifikationer og
+  billeder, men store filer tager tid. Det virker på Windows og Linux; macOS kan ikke
+  (Python har ingen Bluetooth-sockets der). PC'en og telefonen skal være parret i
+  Bluetooth-indstillingerne først.
 - Android tillader kun apps at læse udklipsholderen, når de er i forgrunden. Derfor
   synkroniseres telefonens udklipsholder, når appen åbnes, via notifikationsknappen eller
   via kvikfeltet *Send udklip*. Den anden vej (PC → telefon) virker altid.
