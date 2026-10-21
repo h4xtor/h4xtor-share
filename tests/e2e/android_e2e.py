@@ -341,9 +341,11 @@ def bluetooth_checks(desktop: Desktop, phone: Peer) -> None:
 
     # Link lost: the phone goes back to its Wi-Fi route by itself.
     bridge.close()
-    assert screen_has("^Tillad forbindelse via Bluetooth$", 15)
-    time.sleep(2)
-    assert not screen_has("^Forbundet via Bluetooth$", 3), "phone still shows the Bluetooth link"
+    time.sleep(4)
+    # The card sits below the fold: scroll to it, then its title is plain "Bluetooth" again.
+    assert scroll_to("^Bluetooth$"), "phone still shows the Bluetooth link"
+    assert not screen_has("^Forbundet via Bluetooth$", 2), "phone still shows the Bluetooth link"
+    shot("28-bluetooth-ended")
     ok("Bluetooth: link lost, the phone switches back to Wi-Fi")
 
 
