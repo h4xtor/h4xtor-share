@@ -1521,6 +1521,9 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         content.addView(ui.label("Telefon på PC'en"), ui.margins(4, 0, 0, 8));
         content.addView(phoneOnPcCard(identity), ui.margins(0, 0, 0, 18));
 
+        content.addView(ui.label("Wi-Fi + 5G"), ui.margins(4, 0, 0, 8));
+        content.addView(netShareCard(identity), ui.margins(0, 0, 0, 18));
+
         content.addView(ui.label("Nørd-panel"), ui.margins(4, 0, 0, 8));
         content.addView(nerdPanel(), ui.margins(0, 0, 0, 18));
 
@@ -1892,6 +1895,27 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                 "PC'en kan få telefonen til at ringe, skifte lydstyrke, læse tekst højt og skifte baggrund. "
                         + "Skærmbilleder fra PC'en spørger altid dig først.",
                 identity.flag("remote_control", true), value -> identity.setFlag("remote_control", value)));
+        return card;
+    }
+
+    // ------------------------------------------------- Wi-Fi + 5G
+    private View netShareCard(AppIdentity identity) {
+        LinearLayout card = ui.card();
+        boolean on = identity.flag("net_share", false);
+        String state;
+        if (!on) {
+            state = "Forbundne PC'er på samme Wi-Fi kan låne din 5G/4G, så I får mere fart sammen. "
+                    + "Det bruger din mobildata, mens det er slået til.";
+        } else if (service.netShareReady()) {
+            state = "Deler nu · " + Ui.formatBytes(service.netSharedBytes()) + " delt · "
+                    + service.netActiveTunnels() + " aktive forbindelser. Slå “Wi-Fi + 5G” til på PC'en.";
+        } else {
+            state = "Venter på mobildata … Tjek at mobildata er slået til på telefonen.";
+        }
+        card.addView(toggleRow("Del mobildata med PC'en", state, on, value -> {
+            service.setNetShare(value);
+            content.postDelayed(this::render, 1500);
+        }));
         return card;
     }
 

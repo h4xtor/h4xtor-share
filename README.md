@@ -60,7 +60,23 @@ Derefter:
 Mens PC'en er på telefonens Wi-Fi Direct-netværk, har den normalt ikke internet via
 Wi-Fi. Knappen **Tilbage til <dit Wi-Fi>** skifter tilbage med ét klik.
 
-## Sikkerhed
+### Wi-Fi + 5G – mere fart, når I er flere
+
+Inspireret af [net-merge](https://github.com/rohit267/net-merge): brug Wi-Fi og telefoners
+mobildata på samme tid.
+
+1. Vennen installerer h4xtor share på sin Android, går på samme Wi-Fi og parrer med PC'en
+   (**Forbind ny enhed** → scan QR-koden).
+2. På telefonen: **Indstillinger → Del mobildata med PC'en**.
+3. På PC'en: siden **Wi-Fi + 5G** → **Kombinér forbindelser**.
+
+PC'en sætter systemets proxy (via en PAC-fil) til en lille lokal proxy på `127.0.0.1:47480`
+(HTTP og SOCKS5), som giver hver ny forbindelse til et link med internet: PC'ens egne netkort
+eller en parret telefon. Hurtige links får flest forbindelser, og et link uden internet får
+ingen. Telefonen tager imod `CONNECT` over den samme krypterede, parrede forbindelse som resten
+af appen og sender trafikken ud over mobildata. Lukker appen, forsvinder PAC-filen, og browseren
+går direkte på nettet igen – internettet går aldrig i stykker.
+
 
 - Hver enhed har sit eget RSA-certifikat. Al trafik er TLS-krypteret.
 - Ved parring låses forbindelsen til den anden enheds certifikat-fingeraftryk
@@ -102,6 +118,7 @@ Wi-Fi. Knappen **Tilbage til <dit Wi-Fi>** skifter tilbage med ét klik.
 | `POST /api/v1/notification`, `/sms/incoming` | Telefon → PC: notifikationer og nye SMS |
 | `POST /api/v1/notification/action`, `/sms/threads`, `/sms/messages`, `/sms/send` | PC → telefon: svar/afvis, læs og send SMS |
 | `POST /api/v1/screenshot`, `/find`, `/remote/volume`, `/remote/speak`, `PUT /remote/wallpaper` | PC → telefon: skærmbillede, find telefon, fjernbetjening |
+| `POST /api/v1/net/status`, `CONNECT host:port` | Wi-Fi + 5G: deler telefonen mobildata, og tunnel ud over den |
 
 Nye funktioner annonceres som *capabilities*, så ældre versioner aldrig bliver kaldt med dem.
 Detaljer: [docs/protocol-v1.2.md](docs/protocol-v1.2.md).
@@ -126,6 +143,16 @@ samt APK'en ved hvert push. Et `v*`-tag laver en release med alle filer, en `.sh
 og `CHANGELOG.md`. Udgivelsen fejler, hvis `CHANGELOG.md` mangler versionen.
 
 ## Ærlige begrænsninger
+
+- **Wi-Fi + 5G fordeler forbindelser, ikke enkelte downloads.** Én forbindelse bruger altid ét
+  link, så én stor fil bliver ikke hurtigere (Chrome/Edge kan slå *parallel downloading* til,
+  og download-programmer som aria2 deler filer op). Websider, apps og opdateringer, der bruger
+  mange forbindelser, bliver hurtigere. Programmer, der ignorerer systemets proxy, og UDP
+  (fx spil og videoopkald) kører som før. Sider, der binder login til én IP-adresse, kan bede
+  dig logge ind igen. Telefonen bruger sin mobildata, mens deling er slået til. Telefoner kan
+  dele, men selv bruge det samlede net kan de ikke endnu. På Linux sættes proxyen automatisk i
+  GNOME; andre skriveborde skal pege på `127.0.0.1:47480` selv. macOS kan bede om
+  administratoradgang til at skifte proxy.
 
 - **Bluetooth-overførsel** er ikke med: Wi-Fi Direct er 10–50× hurtigere og dækker det
   samme behov ("ingen router").

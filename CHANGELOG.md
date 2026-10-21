@@ -4,6 +4,14 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
+## 1.4.0 – 2026-10-21
+### Nyt
+- "Wi-Fi + 5G" på PC'en: brug Wi-Fi og telefoners mobildata på én gang, så I får mere fart, når I er flere. Nye forbindelser fordeles på alle links med internet, og hurtige links får flest. Siden viser hver forbindelse med fart, svartid og hvor meget den har båret.
+- "Del mobildata med PC'en" på Android: forbundne PC'er på samme Wi-Fi kan låne telefonens 5G/4G. Trafikken går krypteret til telefonen og kun fra PC'er, du har parret med.
+- Har PC'en selv to netkort (fx Wi-Fi + USB-deling fra en telefon), bruges begge.
+- Godt at vide: én forbindelse bruger altid ét link, så en enkelt stor download bliver ikke hurtigere. Websider, apps, opdateringer og downloads med flere forbindelser bliver.
+- Lukker du appen, kører internettet helt normalt videre uden den.
+
 ## 1.3.4 – 2026-10-21
 ### Forbedret
 - Wi-Fi Direct har nu et kort netværksnavn (fx "DIRECT-h4-427") og en kort adgangskode på 8 tegn med små bogstaver og tal, uden tegn der ligner hinanden. Det er meget nemmere at taste ind på PC'en. Telefonen laver den nye kode første gang, du starter Wi-Fi Direct efter opdateringen.

@@ -867,3 +867,53 @@ def test_update_dialog_flow(tmp_path, monkeypatch) -> None:
     finally:
         monkeypatch.undo()  # the real close() again
         app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_wifi_5g_page_switches_proxy_and_finds_sharing_phone(tmp_path, monkeypatch) -> None:
+    import socket
+
+    from h4xtor_share import sysproxy
+
+    calls: list[str] = []
+    monkeypatch.setattr(sysproxy, "apply", lambda url: calls.append(f"apply {url}") or {"x": 1})
+    monkeypatch.setattr(sysproxy, "restore", lambda saved, url: calls.append(f"restore {saved}"))
+    app, peers = _paired_app(1, tmp_path, monkeypatch, ("net-gateway",))
+    try:
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            app.netmerge.port = sock.getsockname()[1]
+        app.netmerge.adapters = lambda: [("Wi-Fi", "127.0.0.1")]
+
+        async def healthy(link) -> None:
+            link.healthy, link.latency = True, 0.02
+
+        async def status(peer):
+            return {"enabled": True, "network": "5G"}
+
+        monkeypatch.setattr(app.netmerge, "probe", healthy)
+        monkeypatch.setattr(app.client, "net_share_status", status)
+        app.show_page("netmerge")
+        assert app.netmerge_status.cget("text") == "Slået fra"
+
+        app.set_netmerge_enabled(True)
+        _pump(app, lambda: app.config_store.data.get("netmerge_proxy_saved") == {"x": 1})
+        assert app.netmerge.running and calls == [f"apply {app.netmerge.pac_url}"]
+        _pump(app, lambda: f"phone:{peers[0].device_id}" in app.netmerge.links)
+        app._refresh_netmerge()
+        texts = " ".join(_texts(app.netmerge_list))
+        assert "Mobil" in texts and "Telefon · 5G" in texts and "Wi-Fi" in texts
+        assert app.netmerge_status.cget("text").startswith("Kører · 2 links")
+
+        app.set_netmerge_enabled(False)
+        _pump(app, lambda: "netmerge_proxy_saved" not in app.config_store.data)
+        assert not app.netmerge.running and calls[-1] == "restore {'x': 1}"
+        assert not app.netmerge_toggle.value
+
+        # On at quit: the system proxy is put back, but it switches on again next start.
+        app.set_netmerge_enabled(True)
+        _pump(app, lambda: app.config_store.data.get("netmerge_proxy_saved") == {"x": 1})
+    finally:
+        app.close()
+    assert calls[-1] == "restore {'x': 1}"
+    assert app.config_store.data["netmerge_enabled"] is True

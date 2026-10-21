@@ -69,6 +69,10 @@ public final class H4xtorServer {
          */
         JSONObject onCommand(String peerId, String peerName, String route, JSONObject body)
                 throws Exception;
+
+        /** Wi-Fi + 5G: "CONNECT host:port" from a paired PC; tunnel over mobile data. */
+        void onTunnel(String peerId, String target, Socket socket, InputStream input, OutputStream output)
+                throws Exception;
     }
 
     private static final long PAIRING_TTL_MS = 120_000L;
@@ -199,6 +203,7 @@ public final class H4xtorServer {
             BufferedOutputStream output = new BufferedOutputStream(socket.getOutputStream());
             Request request = readRequest(input);
             request.remote = remoteAddress(socket.getInetAddress());
+            request.socket = socket;
             if (request.remote.startsWith("192.168.49.")) {
                 lastWifiDirectRequestAt = android.os.SystemClock.elapsedRealtime();
             }
@@ -316,6 +321,10 @@ public final class H4xtorServer {
         if (auth == null) {
             throw new HttpError(401, "Peer is not trusted.");
         }
+        if ("CONNECT".equals(method)) {
+            listener.onTunnel(auth.peerId, path, request.socket, input, output);
+            return;
+        }
 
         switch (method + " " + (path.startsWith("/api/v1/files/") && !path.endsWith("/init")
                 ? "/api/v1/files/*"
@@ -356,7 +365,8 @@ public final class H4xtorServer {
             case "POST /api/v1/screenshot":
             case "POST /api/v1/find":
             case "POST /api/v1/remote/volume":
-            case "POST /api/v1/remote/speak": {
+            case "POST /api/v1/remote/speak":
+            case "POST /api/v1/net/status": {
                 JSONObject body = readJsonBody(request, input);
                 sendJson(output, 200, command(auth, path, body));
                 return;
@@ -1128,6 +1138,7 @@ public final class H4xtorServer {
         final String path;
         final Map<String, String> headers;
         String remote = "";
+        Socket socket;
 
         Request(String method, String path, Map<String, String> headers) {
             this.method = method;

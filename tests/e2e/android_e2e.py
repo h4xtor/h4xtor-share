@@ -35,6 +35,7 @@ from h4xtor_share.models import (  # noqa: E402
     PeerPaired,
     SmsReceived,
 )
+from h4xtor_share.netmerge import NetMerge  # noqa: E402
 from h4xtor_share.pairing import PairingInvite  # noqa: E402
 from h4xtor_share.server import ShareServer  # noqa: E402
 
@@ -352,6 +353,60 @@ def update_checks() -> None:
     server.shutdown()
 
 
+def netshare_checks(desktop: Desktop, phone: Peer) -> None:
+    """Wi-Fi + 5G: the PC tunnels real web traffic out over the emulator's mobile data."""
+    assert phone.supports("net-gateway"), "phone does not advertise net-gateway"
+    status = desktop.run(desktop.client.net_share_status(phone))
+    assert status["enabled"] is False, status
+    merge = NetMerge(47490, adapters=lambda: [])
+    desktop.run(merge.start())
+    merge.set_phone(phone.device_id, phone.name, desktop.client.net_route(phone))
+    link = merge.links[f"phone:{phone.device_id}"]
+    desktop.run(merge.probe(link))
+    assert not link.healthy, "phone tunnelled while sharing was off"
+    ok("mobile data sharing is off by default and the phone refuses tunnels")
+
+    open_settings_row("^Del mobildata med PC'en$")
+    assert "flag_net_share\" value=\"true" in prefs(), "share toggle not saved"
+    deadline = time.time() + 60
+    while not desktop.run(desktop.client.net_share_status(phone))["enabled"]:
+        assert time.time() < deadline, "mobile data never became ready on the phone"
+        time.sleep(2)
+    desktop.run(merge.probe(link))
+    assert link.healthy, "probe through the phone's mobile data failed"
+    ok("phone shares its mobile data; the PC's probe through it succeeds")
+
+    async def fetch(url: str) -> str:
+        import aiohttp
+
+        proxy = f"http://127.0.0.1:{merge.port}"
+        async with aiohttp.ClientSession(trust_env=False) as session, session.get(
+            url, proxy=proxy, timeout=aiohttp.ClientTimeout(total=30)
+        ) as response:
+            assert response.status == 200, (url, response.status)
+            return await response.text()
+
+    before = link.received
+    assert "Example Domain" in desktop.run(fetch("https://example.com/"))
+    assert "Example Domain" in desktop.run(fetch("http://example.com/"))
+    assert link.received > before and link.connections >= 2, link
+    ok("HTTPS (CONNECT) and HTTP web pages load through the phone's 5G")
+    shell(f"am start -W -n {PKG}/.MainActivity")  # re-render: the card shows the counter
+    time.sleep(2)
+    tap_text("^Indstillinger$")
+    time.sleep(1)
+    assert scroll_to("^Del mobildata med PC'en$")
+    shell("input swipe 540 1300 540 1000 400")  # the status line sits under the title
+    time.sleep(1)
+    assert screen_has("Deler nu", 5), "phone does not show that it is sharing"
+    shot("24-mobile-data-shared")
+    tap_text("^Del mobildata med PC'en$")  # switch it off again
+    time.sleep(2)
+    assert desktop.run(desktop.client.net_share_status(phone))["enabled"] is False
+    desktop.run(merge.stop())
+    ok("switching sharing off on the phone stops it")
+
+
 def main() -> None:
     adb("wait-for-device")
     adb("install", "-r", "-g", str(APK), timeout=240)
@@ -638,6 +693,7 @@ def main() -> None:
     ok("new screenshot sent to the PC automatically")
 
     v12_checks(desktop, phone)
+    netshare_checks(desktop, phone)
 
     # ---- Bank-tilstand: one tap genuinely switches the accessibility service off ----------
     # Runs after v12_checks (which needs remote control on), while the copy watcher above has
