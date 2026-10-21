@@ -65,9 +65,41 @@ public final class WifiDirectController {
                 .replace(":", "\\:").replace("\"", "\\\"");
     }
 
+    /** True when the user picked the name and code (Wi-Fi Direct → "Vælg navn og kode"). */
+    public boolean isCustom() {
+        return identity.flag("p2p_custom", false);
+    }
+
+    /** The name and code the next start uses (also while stopped, for the edit dialog). */
+    public String chosenName() {
+        return stableName();
+    }
+
+    public String chosenPassphrase() {
+        return stablePassphrase();
+    }
+
+    /** Keep the user's own name part (after "DIRECT-h4-") and code. Both must be validated first. */
+    public void choose(String nameSuffix, String pass) {
+        identity.setString("p2p_ssid", ShareLogic.P2P_PREFIX + nameSuffix.trim());
+        identity.setString("p2p_pass", pass);
+        identity.setFlag("p2p_custom", true);
+    }
+
+    /** Back to the short automatic name and code. */
+    public void useAutomatic() {
+        identity.setFlag("p2p_custom", false);
+        identity.setString("p2p_ssid", "");
+        identity.setString("p2p_pass", "");
+    }
+
     /** Short network name like "DIRECT-h4-427" (Android requires the "DIRECT-xy" start). */
     private String stableName() {
         String stored = identity.string("p2p_ssid", "");
+        if (isCustom() && stored.startsWith(ShareLogic.P2P_PREFIX)
+                && ShareLogic.p2pNameError(stored.substring(ShareLogic.P2P_PREFIX.length())) == null) {
+            return stored;
+        }
         if (stored.matches("DIRECT-h4-[0-9]{3}")) {
             return stored;
         }
@@ -80,6 +112,9 @@ public final class WifiDirectController {
     /** Short, easy code: 8 lowercase letters/digits without look-alikes (the WPA2 minimum length). */
     private String stablePassphrase() {
         String stored = identity.string("p2p_pass", "");
+        if (isCustom() && ShareLogic.p2pPassError(stored) == null) {
+            return stored;
+        }
         if (stored.matches("[a-z2-9]{" + PASSPHRASE_LENGTH + "}")) {
             return stored;
         }

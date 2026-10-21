@@ -55,6 +55,8 @@ Derefter:
 2. Er PC'en allerede parret, så tryk **Forbind <din PC> automatisk** – PC'en spørger og kobler selv på.
    Ellers: skriv netværksnavn og kode under *Indstillinger → Wi-Fi Direct* på PC'en.
    Navnet er kort (fx `DIRECT-h4-427`), og koden er 8 tegn: små bogstaver og tal, uden tegn der ligner hinanden.
+   Vil du selv bestemme? Tryk **Vælg navn og kode** på telefonen: navnet bliver `DIRECT-h4-` + det, du skriver
+   (fx `DIRECT-h4-Lennart`, Android kræver den start), og koden skal være 8–63 tegn.
 3. Del som normalt – direkte mellem enhederne, uden internet.
 
 Mens PC'en er på telefonens Wi-Fi Direct-netværk, har den normalt ikke internet via

@@ -4,6 +4,10 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
+## 1.3.5 – 2026-10-21
+### Nyt
+- Wi-Fi Direct: vælg selv netværksnavn og kode under "Vælg navn og kode" på telefonen. Navnet bliver "DIRECT-h4-" + det, du skriver (fx "DIRECT-h4-Lennart" – Android kræver den start), og koden skal være 8–63 tegn. "Brug automatisk" giver den korte automatiske kode tilbage.
+
 ## 1.3.4 – 2026-10-21
 ### Nyt
 - Højreklik på et billede i Chrome: "Send billede til S24 Ultra" (eller en anden enhed eller alle enheder) sender selve billedet direkte til telefonen – ligesom Join.

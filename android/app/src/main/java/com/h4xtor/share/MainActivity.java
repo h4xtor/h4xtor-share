@@ -1047,6 +1047,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                 }
             });
             card.addView(start, ui.margins(0, 14, 0, 0));
+            card.addView(wifiDirectChooseButton(direct), ui.margins(0, 10, 0, 0));
             return card;
         }
         LinearLayout info = ui.column();
@@ -1086,6 +1087,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         stopParams.setMargins(ui.dp(10), 0, 0, 0);
         buttons.addView(stop, stopParams);
         card.addView(buttons, ui.margins(0, 10, 0, 0));
+        card.addView(wifiDirectChooseButton(direct), ui.margins(0, 10, 0, 0));
         card.addView(ui.text("Slukker af sig selv efter 10 minutter uden brug, så din normale Wi-Fi "
                 + "derhjemme ikke bliver forstyrret.", 12.5f, ui.muted, false), ui.margins(0, 10, 0, 0));
         if (desktops.isEmpty()) {
@@ -1093,6 +1095,78 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                     12.5f, ui.muted, false), ui.margins(0, 10, 0, 0));
         }
         return card;
+    }
+
+    private View wifiDirectChooseButton(WifiDirectController direct) {
+        TextView choose = ui.button(direct.isCustom() ? "Skift navn og kode" : "Vælg navn og kode", "ghost");
+        choose.setOnClickListener(v -> showWifiDirectChooser(direct));
+        return choose;
+    }
+
+    /** Lets the user pick the network name (after the fixed "DIRECT-h4-") and the code. */
+    private void showWifiDirectChooser(WifiDirectController direct) {
+        LinearLayout layout = ui.column();
+        layout.setPadding(ui.dp(22), ui.dp(8), ui.dp(22), 0);
+        layout.addView(ui.text("Netværksnavn", 12.5f, ui.muted, false));
+        LinearLayout nameRow = ui.row();
+        nameRow.addView(ui.text(ShareLogic.P2P_PREFIX, 15.5f, ui.muted, false));
+        EditText name = new EditText(this);
+        String current = direct.chosenName();
+        name.setText(current.startsWith(ShareLogic.P2P_PREFIX)
+                ? current.substring(ShareLogic.P2P_PREFIX.length()) : "");
+        name.setSingleLine(true);
+        name.setHint("fx Lennart");
+        name.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+        name.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(22)});
+        nameRow.addView(name, ui.weight(1));
+        layout.addView(nameRow);
+        layout.addView(ui.text("Kode (mindst 8 tegn)", 12.5f, ui.muted, false), ui.margins(0, 10, 0, 0));
+        EditText pass = new EditText(this);
+        pass.setText(direct.chosenPassphrase());
+        pass.setSingleLine(true);
+        pass.setTypeface(android.graphics.Typeface.MONOSPACE);
+        pass.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
+        pass.setFilters(new android.text.InputFilter[]{new android.text.InputFilter.LengthFilter(63)});
+        layout.addView(pass);
+        TextView error = ui.text("", 12.5f, ui.danger, false);
+        layout.addView(error, ui.margins(0, 6, 0, 0));
+        layout.addView(ui.text(direct.isActive()
+                ? "Wi-Fi Direct genstarter med det nye navn og den nye kode. PC'er, der var forbundet, "
+                        + "skal forbinde igen."
+                : "Bruges næste gang du starter Wi-Fi Direct.", 12.5f, ui.muted, false),
+                ui.margins(0, 6, 0, 0));
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this)
+                .setTitle("Wi-Fi Direct: navn og kode")
+                .setView(layout)
+                .setNegativeButton("Annullér", null)
+                .setPositiveButton("Gem", null);
+        if (direct.isCustom()) {
+            builder.setNeutralButton("Brug automatisk", (dialog, which) -> {
+                service.automaticWifiDirect();
+                toast("Wi-Fi Direct bruger igen automatisk navn og kode", false);
+                render();
+            });
+        }
+        AlertDialog dialog = builder.create();
+        // Validate before closing, so a wrong entry can be fixed in place.
+        dialog.setOnShowListener(shown -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
+            String suffix = name.getText().toString().trim();
+            String code = pass.getText().toString();
+            String problem = ShareLogic.p2pNameError(suffix);
+            if (problem == null) {
+                problem = ShareLogic.p2pPassError(code);
+            }
+            if (problem != null) {
+                error.setText(problem);
+                return;
+            }
+            service.chooseWifiDirect(suffix, code);
+            toast("Gemt: " + ShareLogic.P2P_PREFIX + suffix, false);
+            dialog.dismiss();
+            render();
+        }));
+        dialog.show();
     }
 
     // --------------------------------------------------------------- transfers

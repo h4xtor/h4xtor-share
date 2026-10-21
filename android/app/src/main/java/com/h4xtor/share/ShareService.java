@@ -1953,6 +1953,25 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         });
     }
 
+    /** Use the user's own name and code; a running group restarts with them right away. */
+    public void chooseWifiDirect(String nameSuffix, String pass) {
+        wifiDirect.choose(nameSuffix, pass);
+        restartWifiDirectIfActive();
+    }
+
+    public void automaticWifiDirect() {
+        wifiDirect.useAutomatic();
+        restartWifiDirectIfActive();
+    }
+
+    private void restartWifiDirectIfActive() {
+        if (wifiDirect.isActive()) {
+            startWifiDirect(); // start() removes the old group first
+        } else {
+            changed();
+        }
+    }
+
     public void stopWifiDirect() {
         wifiDirect.stop(new WifiDirectController.Callback() {
             @Override public void onGroupStarted(String ssid, String passphrase) { }
