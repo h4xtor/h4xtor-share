@@ -5,8 +5,14 @@ Appen læser denne fil, så formatet er fast:
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
 ## 1.3.4 – 2026-10-21
+### Nyt
+- Højreklik på et billede i Chrome: "Send billede til S24 Ultra" (eller en anden enhed eller alle enheder) sender selve billedet direkte til telefonen – ligesom Join.
 ### Forbedret
 - Wi-Fi Direct har nu et kort netværksnavn (fx "DIRECT-h4-427") og en kort adgangskode på 8 tegn med små bogstaver og tal, uden tegn der ligner hinanden. Det er meget nemmere at taste ind på PC'en. Telefonen laver den nye kode første gang, du starter Wi-Fi Direct efter opdateringen.
+- Billeder fra Google Fotos sendes i fuld størrelse og får et pænt navn som "Billede-20261021-120000.jpg".
+- Chrome-udvidelsen opdaterer sig selv, når PC-appen bliver opdateret (næste gang Chrome starter).
+### Rettet
+- Opdateringsloggen viser hele teksten i stedet for at stoppe midt i en sætning.
 
 ## 1.3.3 – 2026-10-14
 ### Nyt

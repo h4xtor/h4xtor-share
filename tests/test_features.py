@@ -279,3 +279,43 @@ def test_version_comparison() -> None:
     assert is_newer_version("1.1.0", "1.0.9")
     assert not is_newer_version("v1.0.2", "1.0.2")
     assert not is_newer_version("v0.9.9", "1.0.0")
+
+
+def test_web_picture_gets_full_size_and_a_clean_name() -> None:
+    from h4xtor_share.app import download_name, full_size_image_url
+
+    shown = "https://lh3.googleusercontent.com/pw/AP1GczN-abc=w1280-h960-no?authuser=0"
+    assert full_size_image_url(shown) == (
+        "https://lh3.googleusercontent.com/pw/AP1GczN-abc=s0?authuser=0"
+    )
+    assert full_size_image_url("https://example.com/kat.png") == "https://example.com/kat.png"
+    assert full_size_image_url("https://lh3.googleusercontent.com/a/b") == (
+        "https://lh3.googleusercontent.com/a/b"
+    )
+    assert download_name("https://example.com/kat.png", "image/png", "S") == "kat.png"
+    assert download_name(shown, "image/jpeg", "20261021-120000") == "Billede-20261021-120000.jpg"
+    assert download_name("https://example.com/fil", "application/pdf", "S") == "fil.pdf"
+
+
+def test_installed_chrome_extension_copy_is_refreshed(tmp_path: Path) -> None:
+    from h4xtor_share.app import refresh_chrome_extension
+
+    target = tmp_path / "chrome-extension"
+    assert not refresh_chrome_extension(target)  # never installed: leave it alone
+    assert not target.exists()
+    (target / "icons").mkdir(parents=True)
+    (target / "manifest.json").write_text('{"version": "1.1.0"}')
+    (target / "background.js").write_text("old")
+    assert refresh_chrome_extension(target)
+    assert '"1.2.0"' in (target / "manifest.json").read_text()
+    assert "Send billede til" in (target / "background.js").read_text()
+    assert not refresh_chrome_extension(target)  # already current
+
+    # A copy that stopped halfway keeps the old manifest, so the next start finishes it.
+    (target / "manifest.json").write_text('{"version": "1.1.0"}')
+    (target / "background.js").write_text("old")
+    with mock.patch("shutil.copy2", side_effect=OSError("locked")):
+        assert not refresh_chrome_extension(target)
+    assert '"1.1.0"' in (target / "manifest.json").read_text()
+    assert refresh_chrome_extension(target)
+    assert '"1.2.0"' in (target / "manifest.json").read_text()

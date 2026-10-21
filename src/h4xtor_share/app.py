@@ -131,6 +131,57 @@ def _format_eta(seconds: float) -> str:
     return f"{hours} t {minutes} min tilbage"
 
 
+def full_size_image_url(url: str) -> str:
+    """Google Photos shows a scaled copy ("…=w1280-h960"); "=s0" asks for full size."""
+    import urllib.parse
+
+    parts = urllib.parse.urlsplit(url)
+    if not parts.hostname or not parts.hostname.endswith("googleusercontent.com"):
+        return url
+    head, sep, _size = parts.path.rpartition("=")
+    if not sep or "/" in _size:
+        return url
+    return urllib.parse.urlunsplit(parts._replace(path=f"{head}=s0"))
+
+
+def download_name(url: str, content_type: str, stamp: str) -> str:
+    """File name for a picture sent from the web: keep a real name, else "Billede-<tid>.jpg"."""
+    import mimetypes
+    import urllib.parse
+
+    name = Path(urllib.parse.urlsplit(url).path).name[:120]
+    suffix = Path(name).suffix
+    if suffix and len(suffix) <= 6 and "=" not in name:
+        return name
+    extension = mimetypes.guess_extension(content_type.split(";")[0].strip()) or ""
+    extension = {".jpe": ".jpg", ".jpeg": ".jpg"}.get(extension, extension)
+    if content_type.startswith("image/"):
+        return f"Billede-{stamp}{extension}"
+    return f"{name or 'download'}{extension}"
+
+
+def refresh_chrome_extension(target: Path) -> bool:
+    """Chrome loads the extension from a copy; after an app update, bring the copy up to date.
+
+    Chrome picks up the new files the next time it starts. Nothing happens until the
+    user has installed the extension once ("Installér" copies it there).
+    """
+    source = Path(__file__).with_name("chrome_extension")
+    try:
+        if not (target / "manifest.json").is_file() or not source.is_dir():
+            return False
+        if (target / "manifest.json").read_bytes() == (source / "manifest.json").read_bytes():
+            return False
+        # The manifest goes last: if copying stops halfway it still differs, so the
+        # next start tries again instead of leaving a half-updated extension.
+        ignore = shutil.ignore_patterns("manifest.json")
+        shutil.copytree(source, target, dirs_exist_ok=True, ignore=ignore)
+        shutil.copy2(source / "manifest.json", target / "manifest.json")
+        return True
+    except OSError:
+        return False
+
+
 def friendly_error(error: BaseException, peers: Any = ()) -> str:
     """Turn low-level network errors into a short, actionable Danish sentence."""
     import aiohttp
@@ -665,6 +716,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         # main() may have started the listener early; launches held meanwhile replay now.
         instance.set_handler(lambda message: self.event_queue.put(("ipc", message)))
         self.instance = instance
+        refresh_chrome_extension(self.config_store.path.parent / "chrome-extension")
         self.local_api = LocalApi(
             self.config_store,
             self.config_store.port + LOCAL_API_PORT_OFFSET,
@@ -4167,26 +4219,24 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
     async def _send_download(self, peer: Peer, url: str) -> None:
         """Download a file from the web (e.g. an image) and send it as a real file."""
         import tempfile
-        import urllib.parse
 
         import aiohttp
 
-        name = Path(urllib.parse.urlsplit(url).path).name or "download"
         directory = Path(tempfile.mkdtemp(prefix="h4xtor-web-"))
-        target = directory / name[:120]
+        stamp = time.strftime("%Y%m%d-%H%M%S")
         timeout = aiohttp.ClientTimeout(total=120)
-        async with (
-            aiohttp.ClientSession(timeout=timeout, trust_env=True) as session,
-            session.get(url) as response,
-        ):
-            response.raise_for_status()
-            if "." not in target.name:
-                subtype = (response.content_type or "").split("/")[-1]
-                if subtype and len(subtype) < 8:
-                    target = target.with_name(f"{target.name}.{subtype}")
-            with target.open("wb") as output:
-                async for chunk in response.content.iter_chunked(256 * 1024):
-                    output.write(chunk)
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+            # Full size first (Google Photos); the shown copy if that is refused.
+            for attempt in dict.fromkeys([full_size_image_url(url), url]):
+                async with session.get(attempt) as response:
+                    if not response.ok and attempt != url:
+                        continue
+                    response.raise_for_status()
+                    target = directory / download_name(url, response.content_type or "", stamp)
+                    with target.open("wb") as output:
+                        async for chunk in response.content.iter_chunked(256 * 1024):
+                            output.write(chunk)
+                    break
 
         def progress(event: TransferProgress) -> None:
             self.event_queue.put(("core_event", ("", peer.name, event)))

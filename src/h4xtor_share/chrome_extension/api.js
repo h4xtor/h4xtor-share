@@ -95,6 +95,23 @@ export function summarize(results, list = []) {
   return { sent, total: results.length, failed: failed.length, text };
 }
 
+// What a context-menu click sends: [kind, value]. "Send billede til …" (asImage) sends
+// the picture itself; the plain device items send the selection, link or page.
+export function payloadFor(info, tab, asImage = false) {
+  if (asImage) {
+    return info.srcUrl && /^https?:/i.test(info.srcUrl) ? ["file-url", info.srcUrl] : ["file-url", ""];
+  }
+  if (info.selectionText) {
+    const text = info.selectionText.trim();
+    return /^https?:\/\/\S+$/i.test(text) ? ["link", text] : ["text", text];
+  }
+  if (info.linkUrl) return ["link", info.linkUrl];
+  if (info.mediaType !== "image" && info.srcUrl && /^https?:/i.test(info.srcUrl)) {
+    return ["link", info.srcUrl]; // video/audio: the media link
+  }
+  return ["link", info.pageUrl || (tab && tab.url) || ""];
+}
+
 export async function chosenDevice(list) {
   const { deviceId } = await chrome.storage.local.get("deviceId");
   if (deviceId === ALL.id && list.length >= 2) return ALL;
