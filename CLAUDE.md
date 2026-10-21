@@ -26,6 +26,7 @@ Never use the deleted repo `h4xtor/H4xtorShare` or old folders such as `C:\AI\Fr
 | `src/h4xtor_share/server.py` / `client.py` | Protocol v1 (HTTPS on port 47474, pinned TLS fingerprints) |
 | `src/h4xtor_share/local_api.py` | Loopback API on 127.0.0.1:47476, used by the Chrome extension |
 | `src/h4xtor_share/web_share.py` + `web_page.py` | iPhone/browser sharing: plain HTTP on the LAN, port 47478, guarded by a random key in the QR link. Off until switched on (page "iPhone") |
+| `src/h4xtor_share/bluetooth.py` | Bluetooth bridge ("h4xtor-bt/1"): multiplexes the normal HTTPS connections over one RFCOMM link. Android side: `BluetoothBridge.java` + `BluetoothController.java` (same frame bytes, tested on both sides). The PC connects; the phone listens |
 | `src/h4xtor_share/integration.py` | Windows integration: right-click menu (AllFilesystemObjects, NeverDefault), Send-to, autostart, Chrome |
 | `src/h4xtor_share/updater.py` + `update_pages.py` | Auto-update from GitHub Releases (HTTPS, SHA-256), changelog parsing, the Windows swap helper (`--apply-update`) with rollback |
 | `src/h4xtor_share/openers.py` | Opening and revealing files. Folders are **always** opened through `explorer.exe`, never through `os.startfile` |
@@ -69,4 +70,9 @@ The latest release is **v1.3.5**. Without tag-push rights, start a release from 
   (Indstillinger → "Send med det samme, når du kopierer"); sideloaded APKs on Android 13+ first need
   App-info → ⋮ → "Tillad begrænsede indstillinger". Copies via keyboard shortcuts are not caught;
   then the app/notification/tile/"Send til PC" paths still work. PC → phone always works.
+- Bluetooth needs the phone and PC paired in the OS Bluetooth settings first, works on Windows and
+  Linux only (no RFCOMM sockets in Python on macOS) and is 10–50× slower than Wi-Fi. CI tests the
+  bridge over TCP (the emulator has no Bluetooth: `files/bt_debug_port`), so the radio part
+  (Windows SDP lookup by UUID, Android `listenUsingRfcommWithServiceRecord`) is only proven on
+  real hardware.
 - The status dashboard (Claude artifact) only updates when Claude writes to it.

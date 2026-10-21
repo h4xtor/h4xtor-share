@@ -44,6 +44,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private static final int REQUEST_WIFI_PERMISSION = 2004;
     private static final int REQUEST_MEDIA_PERMISSION = 2005;
     private static final int REQUEST_SMS_PERMISSION = 2006;
+    private static final int REQUEST_BLUETOOTH_PERMISSION = 2007;
     /** pendingPeerId value meaning "every paired, online device". */
     private static final String ALL_ID = "*";
 
@@ -245,6 +246,15 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             } else {
                 toast("Wi-Fi Direct kræver tilladelse til enheder i nærheden", true);
             }
+        }
+        if (requestCode == REQUEST_BLUETOOTH_PERMISSION && service != null) {
+            boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
+            if (granted) {
+                service.setBluetoothEnabled(true);
+            } else {
+                toast("Bluetooth kræver tilladelse til enheder i nærheden", true);
+            }
+            render();
         }
         if (requestCode == REQUEST_SMS_PERMISSION && service != null) {
             boolean granted = checkSelfPermission(Manifest.permission.READ_SMS) == PackageManager.PERMISSION_GRANTED
@@ -522,6 +532,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         }
 
         content.addView(wifiDirectCard(), ui.margins(0, 20, 0, 0));
+        content.addView(bluetoothCard(), ui.margins(0, 14, 0, 0));
     }
 
     /** "Overfører nu" with live progress, right on the home screen. */
@@ -927,7 +938,8 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         name.setSingleLine(true);
         name.setEllipsize(TextUtils.TruncateAt.END);
         texts.addView(name);
-        String transport = "wifi-direct".equals(peer.transport) ? "Wi-Fi Direct" : "Wi-Fi";
+        String transport = "wifi-direct".equals(peer.transport) ? "Wi-Fi Direct"
+                : "bluetooth".equals(peer.transport) ? "Bluetooth" : "Wi-Fi";
         String meta = paired
                 ? (online ? "Online" : "Offline") + " · " + Ui.platformLabel(peer.platform) + " · " + transport
                 : "Fundet på " + transport + " · " + peer.address;
@@ -1093,6 +1105,50 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         if (desktops.isEmpty()) {
             card.addView(ui.text("På PC'en: Indstillinger → Wi-Fi Direct → skriv netværk og kode.",
                     12.5f, ui.muted, false), ui.margins(0, 10, 0, 0));
+        }
+        return card;
+    }
+
+    private View bluetoothCard() {
+        boolean enabled = service.bluetoothEnabled() && service.hasBluetoothPermission();
+        Peer linked = service.bluetoothPeer();
+        LinearLayout card = ui.card();
+        LinearLayout top = ui.row();
+        top.addView(ui.iconBadge(R.drawable.ic_bluetooth, 40, linked != null ? ui.successSoft : ui.accentSoft,
+                linked != null ? ui.success : ui.accent));
+        LinearLayout texts = ui.column();
+        texts.addView(ui.text(linked != null ? "Forbundet via Bluetooth" : "Bluetooth", 15.5f, ui.text, true));
+        texts.addView(ui.text(linked != null ? linked.name + " bruger Bluetooth lige nu."
+                : enabled ? "Klar. PC'en skifter selv til Bluetooth, når Wi-Fi ikke kan nå telefonen."
+                : "Når der hverken er Wi-Fi eller Wi-Fi Direct. Langsommere – fint til tekst, links og billeder.",
+                12.5f, ui.muted, false));
+        LinearLayout.LayoutParams params = ui.weight(1);
+        params.setMargins(ui.dp(14), 0, 0, 0);
+        top.addView(texts, params);
+        card.addView(top);
+        card.addView(toggleRow("Tillad forbindelse via Bluetooth",
+                "Kun PC'er, du har parret med i både Bluetooth og h4xtor share.", enabled, checked -> {
+                    if (checked && !service.hasBluetoothPermission()) {
+                        requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT},
+                                REQUEST_BLUETOOTH_PERMISSION);
+                        return;
+                    }
+                    service.setBluetoothEnabled(checked);
+                    render();
+                }), ui.margins(0, 14, 0, 0));
+        if (enabled && linked == null) {
+            card.addView(ui.text("Første gang: par telefonen med PC'en i Bluetooth-indstillingerne "
+                    + "(på PC'en: Indstillinger → Bluetooth → Tilføj enhed).", 12.5f, ui.muted, false),
+                    ui.margins(0, 10, 0, 0));
+            TextView settings = ui.button("Åbn Bluetooth-indstillinger", "ghost");
+            settings.setOnClickListener(v -> {
+                try {
+                    startActivity(new Intent(android.provider.Settings.ACTION_BLUETOOTH_SETTINGS));
+                } catch (Exception error) {
+                    toast("Åbn Indstillinger → Forbindelser → Bluetooth", true);
+                }
+            });
+            card.addView(settings, ui.margins(0, 8, 0, 0));
         }
         return card;
     }

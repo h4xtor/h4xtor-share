@@ -268,6 +268,85 @@ def v12_checks(desktop: Desktop, phone: Peer) -> None:
     ok("wallpaper set from the PC")
 
 
+def bluetooth_checks(desktop: Desktop, phone: Peer) -> None:
+    """The real app's Bluetooth bridge against the PC's bridge (bluetooth.py).
+
+    The emulator has no usable Bluetooth, so the app also serves the bridge on a test
+    port (files/bt_debug_port). Everything above RFCOMM is the real code on both sides.
+    """
+    import socket
+
+    from h4xtor_share import bluetooth
+
+    shell(f"pm grant {PKG} android.permission.BLUETOOTH_CONNECT", check=False)
+    shell(f"run-as {PKG} sh -c 'echo 47495 > files/bt_debug_port'")
+    adb("forward", "tcp:47496", "tcp:47495")
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(2)
+    tap_text("^Del$")
+    time.sleep(1)
+    assert scroll_to("^Tillad forbindelse via Bluetooth$"), "Bluetooth card missing"
+    tap_text("^Tillad forbindelse via Bluetooth$")
+    time.sleep(2)
+    if screen_has("(?i)^(allow|tillad)$", 3):  # permission dialog if pm grant was not enough
+        tap_text("(?i)^(allow|tillad)$")
+    bridge = None
+    for _ in range(10):
+        try:
+            link = socket.create_connection(("127.0.0.1", 47496), timeout=5)
+            link.settimeout(None)
+            candidate = bluetooth.Bridge(link, desktop.config.device_id, desktop.port).start()
+            if candidate.wait_hello(5) == phone.device_id:
+                bridge = candidate
+                break
+        except (OSError, ConnectionError):
+            pass
+        time.sleep(1.5)
+    assert bridge is not None, "the phone's Bluetooth bridge never answered"
+    ok("Bluetooth bridge: PC and phone say hello")
+
+    # PC -> phone through the bridge
+    over_bt = Peer(phone.device_id, phone.name, "127.0.0.1", bridge.port, phone.fingerprint,
+                   "android", "bluetooth", phone.capabilities)
+    desktop.run(desktop.client.send_clipboard(over_bt, "Hej via Bluetooth"))
+    time.sleep(2)
+    assert "Hej via Bluetooth" in prefs(), "text over Bluetooth did not reach the phone"
+    ok("Bluetooth: text PC -> phone")
+
+    # phone -> PC: the phone now routes this PC over the bridge
+    assert screen_has("^Forbundet via Bluetooth$", 15), "phone does not show the Bluetooth link"
+    shot("27-bluetooth-linked")
+    before = bridge.opened
+    desktop.events.clear()
+    for attempt in range(2):
+        tap_text("^Del$")
+        time.sleep(1)
+        box = next(n for n in ui_nodes() if n.get("class") == "android.widget.EditText")
+        x1, y1, x2, y2 = map(int, re.findall(r"\d+", box.get("bounds")))
+        shell(f"input tap {(x1 + x2) // 2} {(y1 + y2) // 2}")
+        shell("input keyevent KEYCODE_MOVE_END " + " ".join(["KEYCODE_DEL"] * 40))
+        shell(f"input text viabluetooth{attempt}")
+        time.sleep(1.5)
+        tap_text("^Send$")
+        try:
+            desktop.wait_for(ClipboardReceived, timeout=25,
+                             match=lambda e: e.text.startswith("viabluetooth"))
+            break
+        except AssertionError:
+            if attempt:
+                raise
+    assert bridge.opened > before, "phone -> PC did not use the Bluetooth bridge"
+    ok("Bluetooth: text phone -> PC through the bridge")
+    shell("input keyevent BACK", check=False)  # hide the keyboard
+
+    # Link lost: the phone goes back to its Wi-Fi route by itself.
+    bridge.close()
+    assert screen_has("^Tillad forbindelse via Bluetooth$", 15)
+    time.sleep(2)
+    assert not screen_has("^Forbundet via Bluetooth$", 3), "phone still shows the Bluetooth link"
+    ok("Bluetooth: link lost, the phone switches back to Wi-Fi")
+
+
 def update_checks() -> None:
     """Older version installed → finds the new one on a fake GitHub → updates → reopens."""
     import hashlib
@@ -680,6 +759,8 @@ def main() -> None:
     assert 'flag_p2p_custom" value="true"' in stored
     assert scroll_to("^Skift navn og kode$"), "button did not change to 'Skift navn og kode'"
     ok("Wi-Fi Direct: own network name and code are checked and stored")
+
+    bluetooth_checks(desktop, phone)
 
     v12_checks(desktop, phone)
 

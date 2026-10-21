@@ -4,6 +4,12 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
+## 1.3.6 – 2026-10-21
+### Nyt
+- Bluetooth: PC og telefon kan nu forbinde via Bluetooth, når der hverken er Wi-Fi eller Wi-Fi Direct. Slå "Tillad forbindelse via Bluetooth" til på telefonen (fanen Del), og par telefonen med PC'en i Bluetooth-indstillingerne én gang. PC'en skifter selv til Bluetooth, når Wi-Fi ikke kan nå telefonen, og tilbage igen, når Wi-Fi virker. Alt virker – bare langsommere. Kræver Windows eller Linux på PC'en.
+### Rettet
+- Wi-Fi Direct: fejlteksten i "Vælg navn og kode" forsvinder, så snart du retter.
+
 ## 1.3.5 – 2026-10-21
 ### Nyt
 - Wi-Fi Direct: vælg selv netværksnavn og kode under "Vælg navn og kode" på telefonen. Navnet bliver "DIRECT-h4-" + det, du skriver (fx "DIRECT-h4-Lennart" – Android kræver den start), og koden skal være 8–63 tegn. "Brug automatisk" giver den korte automatiske kode tilbage.
