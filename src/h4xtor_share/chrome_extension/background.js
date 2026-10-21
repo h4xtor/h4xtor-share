@@ -1,4 +1,4 @@
-import { ALL, chosenDevice, devices, send, sendAll, summarize } from "./api.js";
+import { ALL, chosenDevice, devices, payloadFor, send, sendAll, summarize } from "./api.js";
 
 const ROOT = "h4xtor-root";
 const CONTEXTS = ["page", "link", "selection", "image", "video", "audio"];
@@ -22,6 +22,21 @@ async function rebuildMenus() {
     });
     return;
   }
+  // Right-click on a picture: "Send billede til <enhed>" first, like Join's "Download Image on …".
+  for (const device of list.length >= 2 ? [...list, ALL] : list) {
+    chrome.contextMenus.create({
+      id: `image:${device.id}`,
+      parentId: ROOT,
+      title: `Send billede til ${device.all ? "alle enheder" : device.name}${device.online ? "" : "  (offline)"}`,
+      contexts: ["image"],
+    });
+  }
+  chrome.contextMenus.create({
+    id: "h4xtor-image-separator",
+    parentId: ROOT,
+    type: "separator",
+    contexts: ["image"],
+  });
   if (list.length >= 2) {
     chrome.contextMenus.create({
       id: `device:${ALL.id}`,
@@ -46,19 +61,6 @@ async function rebuildMenus() {
   }
 }
 
-function payloadFor(info, tab) {
-  if (info.selectionText) {
-    const text = info.selectionText.trim();
-    return /^https?:\/\/\S+$/i.test(text) ? ["link", text] : ["text", text];
-  }
-  if (info.mediaType === "image" && info.srcUrl && /^https?:/i.test(info.srcUrl)) {
-    return ["file-url", info.srcUrl];
-  }
-  if (info.linkUrl) return ["link", info.linkUrl];
-  if (info.srcUrl && /^https?:/i.test(info.srcUrl)) return ["link", info.srcUrl];
-  return ["link", info.pageUrl || (tab && tab.url) || ""];
-}
-
 function describe(kind) {
   return { link: "Link", text: "Tekst", "file-url": "Billede" }[kind] || "Indhold";
 }
@@ -79,7 +81,12 @@ async function notify(title, message) {
 
 async function deliver(deviceId, deviceName, kind, value) {
   if (!value || (kind !== "text" && !/^https?:\/\//i.test(value))) {
-    await notify("Kan ikke sendes", "Kun almindelige web-links kan sendes.");
+    await notify(
+      "Kan ikke sendes",
+      kind === "file-url"
+        ? "Billedet kan ikke hentes herfra. Åbn det på en ny fane, og prøv igen."
+        : "Kun almindelige web-links kan sendes.",
+    );
     return;
   }
   try {
@@ -109,9 +116,10 @@ async function deliver(deviceId, deviceName, kind, value) {
 }
 
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
-  if (!String(info.menuItemId).startsWith("device:")) return;
-  const deviceId = String(info.menuItemId).slice("device:".length);
-  const [kind, value] = payloadFor(info, tab);
+  const [prefix, ...rest] = String(info.menuItemId).split(":");
+  if (prefix !== "device" && prefix !== "image") return;
+  const deviceId = rest.join(":");
+  const [kind, value] = payloadFor(info, tab, prefix === "image");
   let name = deviceId === ALL.id ? ALL.name : "enheden";
   try {
     const list = await devices();

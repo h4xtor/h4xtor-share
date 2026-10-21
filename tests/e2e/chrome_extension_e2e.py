@@ -233,6 +233,37 @@ def main() -> None:
         phone.wait_for(LinkReceived)
         print("OK image downloaded and sent as a real file")
 
+        # Right-click menu on a picture: "Send billede til …" sends the picture itself, while
+        # the plain device item on a linked picture sends the link (as in Join).
+        (web_root / "foto=w100-h100.png").write_bytes((EXT / "icons" / "icon48.png").read_bytes())
+        picture = "http://127.0.0.1:47499/foto=w100-h100.png"
+        outcome = popup.evaluate(
+            """async (picture) => {
+                const api = await import('./api.js');
+                const info = { mediaType: 'image', srcUrl: picture,
+                               linkUrl: 'https://photos.example/album',
+                               pageUrl: 'https://p.example/' };
+                const menus = await chrome.runtime.sendMessage({ type: 'rebuild-menus' });
+                const asImage = api.payloadFor(info, null, true);
+                const plain = api.payloadFor(info, null, false);
+                const bare = api.payloadFor({ ...info, linkUrl: undefined }, null, false);
+                const list = await api.devices();
+                await api.send(list[0].id, asImage[0], asImage[1]);
+                return { menus, asImage, plain, bare };
+            }""",
+            picture,
+        )
+        assert outcome["menus"] == {"ok": True}, outcome
+        assert outcome["asImage"] == ["file-url", picture], outcome
+        assert outcome["plain"] == ["link", "https://photos.example/album"], outcome
+        assert outcome["bare"] == ["link", "https://p.example/"], outcome
+        received = phone.wait_for(FileReceived, timeout=30)
+        assert received.path.read_bytes() == (web_root / "foto=w100-h100.png").read_bytes()
+        assert received.path.name.startswith("Billede-") and received.path.suffix == ".png", (
+            received.path.name
+        )
+        print("OK 'Send billede til' sends the picture with a clean file name")
+
         # "Alle enheder": a second phone joins; the popup offers the all-row and fans out.
         phone2 = Phone("Testtelefon 2", 47491, "phone2")
         peer2 = asyncio.run_coroutine_threadsafe(

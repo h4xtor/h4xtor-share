@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "h4xtor share",
   "short_name": "h4xtor",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Send faner, links, tekst og billeder fra Chrome direkte til din telefon via h4xtor share – helt lokalt.",
   "action": {
     "default_title": "Send med h4xtor share",
