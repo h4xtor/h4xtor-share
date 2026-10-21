@@ -670,6 +670,7 @@ def main() -> None:
     tap_text("^Gem$")
     assert screen_has("Koden skal være mindst 8 tegn", 5), "too short code was not refused"
     fill(1, "hemmelig123")
+    assert not screen_has("Koden skal være mindst 8 tegn", 2), "old error stays while fixing"
     shot("26-wifi-direct-choose")
     tap_text("^Gem$")
     time.sleep(2)
