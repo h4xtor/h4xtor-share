@@ -172,7 +172,11 @@ def refresh_chrome_extension(target: Path) -> bool:
             return False
         if (target / "manifest.json").read_bytes() == (source / "manifest.json").read_bytes():
             return False
-        shutil.copytree(source, target, dirs_exist_ok=True)
+        # The manifest goes last: if copying stops halfway it still differs, so the
+        # next start tries again instead of leaving a half-updated extension.
+        ignore = shutil.ignore_patterns("manifest.json")
+        shutil.copytree(source, target, dirs_exist_ok=True, ignore=ignore)
+        shutil.copy2(source / "manifest.json", target / "manifest.json")
         return True
     except OSError:
         return False

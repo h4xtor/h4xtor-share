@@ -310,3 +310,12 @@ def test_installed_chrome_extension_copy_is_refreshed(tmp_path: Path) -> None:
     assert '"1.2.0"' in (target / "manifest.json").read_text()
     assert "Send billede til" in (target / "background.js").read_text()
     assert not refresh_chrome_extension(target)  # already current
+
+    # A copy that stopped halfway keeps the old manifest, so the next start finishes it.
+    (target / "manifest.json").write_text('{"version": "1.1.0"}')
+    (target / "background.js").write_text("old")
+    with mock.patch("shutil.copy2", side_effect=OSError("locked")):
+        assert not refresh_chrome_extension(target)
+    assert '"1.1.0"' in (target / "manifest.json").read_text()
+    assert refresh_chrome_extension(target)
+    assert '"1.2.0"' in (target / "manifest.json").read_text()
