@@ -168,6 +168,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     private WifiDirectController wifiDirect;
     private SmsBridge sms;
     private RemoteTools remote;
+    private NetGateway gateway;
     private volatile String screenshotPeerId;
     private volatile long screenshotRequestedAt;
     private NotificationManager notifications;
@@ -218,6 +219,8 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         wifiDirect = new WifiDirectController(this, identity);
         notifications = getSystemService(NotificationManager.class);
         remote = new RemoteTools(this, main);
+        gateway = new NetGateway(this);
+        gateway.setEnabled(identity.flag("net_share", false));
         sms = new SmsBridge(this, identity, main, network);
         clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
         createChannels();
@@ -287,6 +290,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         main.removeCallbacksAndMessages(null);
         sms.stop();
         remote.shutdown();
+        gateway.setEnabled(false);
         if (screenshotObserver != null) {
             getContentResolver().unregisterContentObserver(screenshotObserver);
         }
@@ -1373,9 +1377,39 @@ public final class ShareService extends Service implements H4xtorServer.Listener
                 requireRemote();
                 remote.setWallpaper(new File(body.getString("file")));
                 return ok();
+            case "/api/v1/net/status":
+                return gateway.status(identity.flag("net_share", false));
             default:
                 throw new H4xtorServer.HttpError(404, "Not found.");
         }
+    }
+
+    @Override
+    public void onTunnel(String peerId, String target, java.net.Socket socket, java.io.InputStream input,
+            java.io.OutputStream output) throws Exception {
+        if (!identity.flag("net_share", false)) {
+            throw new H4xtorServer.HttpError(403, "Deling af mobildata er slået fra på telefonen.");
+        }
+        gateway.tunnel(target, socket, input, output);
+    }
+
+    // ------------------------------------------------- Wi-Fi + 5G
+    public void setNetShare(boolean enabled) {
+        identity.setFlag("net_share", enabled);
+        gateway.setEnabled(enabled);
+        changed();
+    }
+
+    public boolean netShareReady() {
+        return gateway.ready();
+    }
+
+    public long netSharedBytes() {
+        return gateway.sharedBytes();
+    }
+
+    public long netActiveTunnels() {
+        return gateway.activeTunnels();
     }
 
     // ------------------------------------------------- screenshot on demand

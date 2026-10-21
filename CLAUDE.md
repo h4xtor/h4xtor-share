@@ -28,9 +28,10 @@ Never use the deleted repo `h4xtor/H4xtorShare` or old folders such as `C:\AI\Fr
 | `src/h4xtor_share/web_share.py` + `web_page.py` | iPhone/browser sharing: plain HTTP on the LAN, port 47478, guarded by a random key in the QR link. Off until switched on (page "iPhone") |
 | `src/h4xtor_share/integration.py` | Windows integration: right-click menu (AllFilesystemObjects, NeverDefault), Send-to, autostart, Chrome |
 | `src/h4xtor_share/updater.py` + `update_pages.py` | Auto-update from GitHub Releases (HTTPS, SHA-256), changelog parsing, the Windows swap helper (`--apply-update`) with rollback |
+| `src/h4xtor_share/netmerge.py` + `netmerge_page.py` + `sysproxy.py` | "Wi-Fi + 5G" (net-merge style): local HTTP/SOCKS5 proxy on 127.0.0.1:47480 spreading connections over the PC's adapters and paired phones (pinned-TLS `CONNECT` to the phone's port 47474); system proxy via a PAC file so a crash never breaks the internet |
 | `src/h4xtor_share/openers.py` | Opening and revealing files. Folders are **always** opened through `explorer.exe`, never through `os.startfile` |
 | `src/h4xtor_share/chrome_extension/` | MV3 extension (popup + context menu) |
-| `android/app/src/main/java/com/h4xtor/share/` | Android app (Java, minSdk 29). `MainActivity`, `ShareService`, `ShareTargetActivity`, `SpeedGraph` … |
+| `android/app/src/main/java/com/h4xtor/share/` | Android app (Java, minSdk 29). `MainActivity`, `ShareService`, `ShareTargetActivity`, `SpeedGraph`, `NetGateway` (shares mobile data) … |
 | `tests/` | pytest suite |
 | `tests/e2e/chrome_extension_e2e.py` | Real desktop app + Chrome extension + simulated phone |
 | `tests/e2e/iphone_web_e2e.py` | Real desktop app + its iPhone web page in Chromium posing as an iPhone |

@@ -49,6 +49,7 @@ from h4xtor_share.models import (
     TransferProgress,
     WifiDirectOffer,
 )
+from h4xtor_share.netmerge_page import NetMergePageMixin
 from h4xtor_share.openers import open_path, reveal_in_folder
 from h4xtor_share.pairing import PairingInvite, parse_invite, qr_matrix
 from h4xtor_share.phone_pages import PhonePagesMixin
@@ -599,7 +600,7 @@ class TransferRow:
             ).pack(side="left", padx=(theme.px(6), 0))
 
 
-class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
+class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD.Tk):
     NAV_ITEMS = (
         ("share", "⇄", "Del"),
         ("transfers", "↕", "Overførsler"),
@@ -609,6 +610,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         ("remote", "◎", "Fjernbetjening"),
         ("history", "◷", "Historik"),
         ("iphone", "▯", "iPhone"),
+        ("netmerge", "⇶", "Wi-Fi + 5G"),
         ("settings", "⚙", "Indstillinger"),
     )
 
@@ -688,6 +690,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         self.selected_id: str | None = None
         self.target_all = False  # "Til: Alle enheder" chosen in the target menu
         self._init_phone_state()
+        self._init_netmerge()
         self.transfers: dict[str, TransferState] = {}
         self.transfer_rows: dict[str, TransferRow] = {}
         self.batches: dict[str, Future[Any]] = {}
@@ -826,6 +829,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         self._build_remote_page()
         self._build_history_page()
         self._build_iphone_page()
+        self._build_netmerge_page()
         self._build_settings_page()
         self.after(60000, self._notif_tick)
         for frame in self.pages.values():
@@ -2477,8 +2481,14 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
             )
         if self.web_share.enabled:
             await self._start_web_share()
+        try:
+            await self._netmerge_resume()
+        except Exception as error:  # noqa: BLE001 - never block the rest of the app
+            self.event_queue.put(("status", f"Wi-Fi + 5G kunne ikke starte: {error}"))
 
     async def _stop_services(self) -> None:
+        with contextlib.suppress(Exception):
+            await self._netmerge_shutdown()
         with contextlib.suppress(Exception):
             await self.web_share.stop()
         with contextlib.suppress(Exception):
