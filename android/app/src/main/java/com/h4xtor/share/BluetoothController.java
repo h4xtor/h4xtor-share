@@ -36,6 +36,7 @@ final class BluetoothController {
     private final AppIdentity identity;
     private final Listener listener;
     private volatile boolean running;
+    private volatile int generation; // a stopped-and-restarted controller ends the old loop
     private volatile Closeable acceptor;
     private volatile ServerSocket debugAcceptor;
     private volatile BluetoothBridge current;
@@ -66,13 +67,17 @@ final class BluetoothController {
         running = true;
         startDebugListener();
         if (adapter == null) {
-            return debugAcceptor != null ? null : "Telefonen har ikke Bluetooth.";
+            if (debugAcceptor == null) {
+                running = false; // nothing to wait for; a later start() may try again
+                return "Telefonen har ikke Bluetooth.";
+            }
+            return null;
         }
-        if (!adapter.isEnabled()) {
-            return debugAcceptor != null ? null : "Slå Bluetooth til på telefonen.";
-        }
-        thread(() -> acceptLoop(adapter), "h4x-bt-listen");
-        return null;
+        // The loop retries every few seconds, so it also starts once Bluetooth is switched on.
+        int mine = ++generation;
+        thread(() -> acceptLoop(adapter, mine), "h4x-bt-listen");
+        return adapter.isEnabled() || debugAcceptor != null ? null
+                : "Slå Bluetooth til på telefonen – forbindelsen starter af sig selv bagefter.";
     }
 
     void stop() {
@@ -86,8 +91,8 @@ final class BluetoothController {
     }
 
     @SuppressLint("MissingPermission")
-    private void acceptLoop(BluetoothAdapter adapter) {
-        while (running) {
+    private void acceptLoop(BluetoothAdapter adapter, int mine) {
+        while (running && mine == generation) {
             try {
                 // Secure RFCOMM: only devices paired with this phone can connect.
                 BluetoothServerSocket server =
@@ -97,10 +102,10 @@ final class BluetoothController {
                 quietly(server);
                 serve(socket.getInputStream(), socket.getOutputStream(), socket);
             } catch (Exception error) {
-                if (!running) {
+                if (!running || mine != generation) {
                     return;
                 }
-                sleep(3_000); // Bluetooth switched off for a moment; try again.
+                sleep(3_000); // Bluetooth is off (or was switched off); try again.
             }
         }
     }
