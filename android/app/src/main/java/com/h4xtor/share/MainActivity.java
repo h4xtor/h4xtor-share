@@ -1130,6 +1130,16 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         layout.addView(pass);
         TextView error = ui.text("", 12.5f, ui.danger, false);
         layout.addView(error, ui.margins(0, 6, 0, 0));
+        // The message goes away as soon as the user starts fixing the entry.
+        android.text.TextWatcher clearError = new android.text.TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                error.setText("");
+            }
+            @Override public void afterTextChanged(android.text.Editable s) { }
+        };
+        name.addTextChangedListener(clearError);
+        pass.addTextChangedListener(clearError);
         layout.addView(ui.text(direct.isActive()
                 ? "Wi-Fi Direct genstarter med det nye navn og den nye kode. PC'er, der var forbundet, "
                         + "skal forbinde igen."
