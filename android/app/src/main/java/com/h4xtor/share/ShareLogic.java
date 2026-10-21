@@ -34,6 +34,34 @@ final class ShareLogic {
         return value.length() > max ? value.substring(0, max) : value;
     }
 
+    // ------------------------------------------------------- Wi-Fi Direct names
+    /** Android only hosts groups named "DIRECT-xy…"; the user picks what comes after it. */
+    static final String P2P_PREFIX = "DIRECT-h4-";
+    private static final Pattern P2P_NAME = Pattern.compile("[A-Za-z0-9 _-]{1,22}");
+    private static final Pattern P2P_PASS = Pattern.compile("[\\x20-\\x7E]{8,63}");
+
+    /** Why the chosen name part cannot be used, or null when it is fine (max 32 bytes in total). */
+    static String p2pNameError(String suffix) {
+        if (suffix == null || suffix.trim().isEmpty()) {
+            return "Skriv et navn.";
+        }
+        if (!P2P_NAME.matcher(suffix.trim()).matches()) {
+            return "Navnet må højst være 22 tegn: bogstaver a–z, tal, mellemrum, - og _.";
+        }
+        return null;
+    }
+
+    /** Why the chosen code cannot be used, or null when it is a valid WPA2 passphrase. */
+    static String p2pPassError(String pass) {
+        if (pass == null || pass.length() < 8) {
+            return "Koden skal være mindst 8 tegn.";
+        }
+        if (!P2P_PASS.matcher(pass).matches()) {
+            return "Koden må højst være 63 tegn og kun bruge tegn fra et almindeligt tastatur (ikke æ, ø, å).";
+        }
+        return null;
+    }
+
     // ----------------------------------------------------------- remote control
     static int clampPercent(int value) {
         return Math.max(0, Math.min(100, value));

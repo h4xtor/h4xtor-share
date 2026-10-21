@@ -6,6 +6,7 @@ Run under a display (Xvfb):  python tests/e2e/chrome_extension_e2e.py
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import os
 import sys
 import tempfile
@@ -21,6 +22,7 @@ WORK = Path(tempfile.mkdtemp(prefix="h4x-e2e-"))
 os.environ["XDG_CONFIG_HOME"] = str(WORK / "desktop-config")
 os.environ["XDG_DOWNLOAD_DIR"] = str(WORK / "downloads")
 
+from playwright.sync_api import TimeoutError as PlaywrightTimeout  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: E402
 
 import h4xtor_share.config as _config_module  # noqa: E402
@@ -159,11 +161,14 @@ def main() -> None:
             executable_path=os.environ.get("CHROME_PATH") or None,
             args=[f"--disable-extensions-except={EXT}", f"--load-extension={EXT}"],
         )
-        worker = (
-            context.service_workers[0]
-            if context.service_workers
-            else context.wait_for_event("serviceworker", timeout=15000)
-        )
+        # Poll instead of check-then-wait: a worker that starts between the two is never
+        # reported as a new event, and a slow runner can take a while to start it.
+        deadline = time.time() + 45
+        while not context.service_workers:
+            assert time.time() < deadline, "the extension's service worker never started"
+            with contextlib.suppress(PlaywrightTimeout):
+                context.wait_for_event("serviceworker", timeout=1000)
+        worker = context.service_workers[0]
         ext_id = worker.url.split("/")[2]
         page = context.new_page()
 

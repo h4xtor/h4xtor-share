@@ -2,6 +2,8 @@ package com.h4xtor.share;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import org.json.JSONObject;
@@ -167,5 +169,21 @@ public final class ShareLogicTest {
                 ShareLogic.allSummary(3, List.of("Bærbar"), List.of("timeout")));
         assertEquals("Sendt til 1 af 3 – A fejlede; B fejlede: nej",
                 ShareLogic.allSummary(3, List.of("A", "B"), List.of("", "nej")));
+    }
+
+    @Test
+    public void wifiDirectNameAndCodeFollowAndroidRules() {
+        assertNull(ShareLogic.p2pNameError("Lennart"));
+        assertNull(ShareLogic.p2pNameError("S24 Ultra_2-hjem"));
+        assertNotNull(ShareLogic.p2pNameError(""));
+        assertNotNull(ShareLogic.p2pNameError("Lennart\u00f8"));          // not ASCII
+        assertNotNull(ShareLogic.p2pNameError("abcdefghijklmnopqrstuvw")); // 23 > 22
+        assertTrue((ShareLogic.P2P_PREFIX + "abcdefghijklmnopqrstuv").length() <= 32);
+        assertNull(ShareLogic.p2pPassError("hemmelig"));
+        assertNull(ShareLogic.p2pPassError("Min kode; med tegn!"));
+        assertNotNull(ShareLogic.p2pPassError("kort"));
+        assertNotNull(ShareLogic.p2pPassError("bl\u00e5b\u00e6rgr\u00f8d"));
+        assertNotNull(ShareLogic.p2pPassError(new String(new char[64]).replace('\0', 'a')));
+        assertNotNull(ShareLogic.p2pPassError(null));
     }
 }

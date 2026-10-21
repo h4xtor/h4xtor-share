@@ -637,6 +637,49 @@ def main() -> None:
     assert got_shot is not None, "new screenshot was not sent to the PC"
     ok("new screenshot sent to the PC automatically")
 
+    # ---- Wi-Fi Direct: the user picks the network name and code ---------------
+    # Needs no Wi-Fi Direct hardware: the choice is stored and used at the next start.
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(2)
+    tap_text("^Del$")
+    time.sleep(1)
+    assert scroll_to("^Vælg navn og kode$"), "Wi-Fi Direct 'Vælg navn og kode' missing"
+    tap_text("^Vælg navn og kode$")
+    time.sleep(1.5)
+
+    def fill(index: int, value: str) -> None:
+        # The dialog's fields: the EditTexts at or below its fixed "DIRECT-h4-" label.
+        nodes = ui_nodes()
+        label = next(n for n in nodes if (n.get("text") or "") == "DIRECT-h4-")
+        top = int(re.findall(r"\d+", label.get("bounds"))[1])
+        boxes = [
+            n for n in nodes
+            if n.get("class") == "android.widget.EditText"
+            and int(re.findall(r"\d+", n.get("bounds"))[3]) > top
+        ]
+        boxes.sort(key=lambda n: int(re.findall(r"\d+", n.get("bounds"))[1]))
+        box = boxes[index]
+        x1, y1, x2, y2 = map(int, re.findall(r"\d+", box.get("bounds")))
+        shell(f"input tap {(x1 + x2) // 2} {(y1 + y2) // 2}")
+        shell("input keyevent KEYCODE_MOVE_END " + " ".join(["KEYCODE_DEL"] * 70))
+        shell(f"input text {value}")
+        time.sleep(0.8)
+
+    fill(0, "Lennart")
+    fill(1, "kort")
+    tap_text("^Gem$")
+    assert screen_has("Koden skal være mindst 8 tegn", 5), "too short code was not refused"
+    fill(1, "hemmelig123")
+    shot("26-wifi-direct-choose")
+    tap_text("^Gem$")
+    time.sleep(2)
+    stored = prefs()
+    assert '"str_p2p_ssid">DIRECT-h4-Lennart<' in stored, "chosen network name not stored"
+    assert '"str_p2p_pass">hemmelig123<' in stored, "chosen code not stored"
+    assert 'flag_p2p_custom" value="true"' in stored
+    assert scroll_to("^Skift navn og kode$"), "button did not change to 'Skift navn og kode'"
+    ok("Wi-Fi Direct: own network name and code are checked and stored")
+
     v12_checks(desktop, phone)
 
     # ---- Bank-tilstand: one tap genuinely switches the accessibility service off ----------
