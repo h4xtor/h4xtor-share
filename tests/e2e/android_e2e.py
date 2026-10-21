@@ -349,11 +349,14 @@ def bluetooth_checks(desktop: Desktop, phone: Peer) -> None:
                 raise
     assert bridge.opened > before, "phone -> PC did not use the Bluetooth bridge"
     ok("Bluetooth: text phone -> PC through the bridge")
-    shell("input keyevent BACK", check=False)  # hide the keyboard
-
     # Link lost: the phone goes back to its Wi-Fi route by itself.
     bridge.close()
     time.sleep(4)
+    # Not BACK to hide the keyboard: with the keyboard already gone it closes the app.
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(1)
+    tap_text("^Del$")
+    time.sleep(1)
     # The card sits below the fold: scroll to it, then its title is plain "Bluetooth" again.
     assert scroll_to("^Bluetooth$"), "phone still shows the Bluetooth link"
     assert not screen_has("^Forbundet via Bluetooth$", 2), "phone still shows the Bluetooth link"
