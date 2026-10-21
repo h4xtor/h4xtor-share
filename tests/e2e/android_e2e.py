@@ -285,11 +285,23 @@ def bluetooth_checks(desktop: Desktop, phone: Peer) -> None:
     time.sleep(2)
     tap_text("^Del$")
     time.sleep(1)
-    assert scroll_to("^Tillad forbindelse via Bluetooth$"), "Bluetooth card missing"
-    tap_text("^Tillad forbindelse via Bluetooth$")
-    time.sleep(2)
-    if screen_has("(?i)^(allow|tillad)$", 3):  # permission dialog if pm grant was not enough
-        tap_text("(?i)^(allow|tillad)$")
+    # The card is the last one on the page, right above the bottom navigation: check that
+    # the switch really turned on, and nudge the page up before trying again.
+    for _ in range(3):
+        tap_text("^Del$")  # a stray tap may have opened another tab
+        time.sleep(1)
+        assert scroll_to("^Tillad forbindelse via Bluetooth$"), "Bluetooth card missing"
+        tap_text("^Tillad forbindelse via Bluetooth$")
+        time.sleep(2)
+        if screen_has("(?i)^(allow|tillad)$", 3):  # permission dialog if pm grant was not enough
+            tap_text("(?i)^(allow|tillad)$")
+            time.sleep(1)
+        if 'flag_bluetooth" value="true"' in prefs():
+            break
+        shell("input swipe 540 1500 540 1000 400")
+        time.sleep(1)
+    shot("26b-bluetooth-on")
+    assert 'flag_bluetooth" value="true"' in prefs(), "could not switch Bluetooth on in the app"
     bridge = None
     for _ in range(10):
         try:
