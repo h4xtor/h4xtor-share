@@ -30,9 +30,19 @@ def _server(tag: bytes) -> socketserver.ThreadingTCPServer:
     return server
 
 
+def _recv_exact(conn: socket.socket, size: int) -> bytes:
+    # Not MSG_WAITALL: Windows refuses it on sockets with a timeout (WinError 10045).
+    data = b""
+    while len(data) < size:
+        chunk = conn.recv(size - len(data))
+        assert chunk, "stream closed early"
+        data += chunk
+    return data
+
+
 def _roundtrip(port: int, payload: bytes, tag: bytes) -> bytes:
     with socket.create_connection(("127.0.0.1", port), timeout=10) as conn:
-        assert conn.recv(len(tag), socket.MSG_WAITALL) == tag
+        assert _recv_exact(conn, len(tag)) == tag
         sender = threading.Thread(target=conn.sendall, args=(payload,))
         sender.start()
         received = bytearray()
@@ -93,7 +103,7 @@ def test_many_streams_at_once(pair) -> None:
 def test_link_loss_closes_everything(pair) -> None:
     pc, phone, closed = pair
     conn = socket.create_connection(("127.0.0.1", pc.port), timeout=5)
-    assert conn.recv(6, socket.MSG_WAITALL) == b"PHONE:"
+    assert _recv_exact(conn, 6) == b"PHONE:"
     phone.close()  # e.g. the phone walks out of Bluetooth range
     deadline = time.time() + 5
     while not closed and time.time() < deadline:
