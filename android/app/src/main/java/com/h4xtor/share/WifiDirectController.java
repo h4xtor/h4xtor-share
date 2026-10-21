@@ -6,7 +6,6 @@ import android.net.wifi.WifiManager;
 import android.net.wifi.p2p.WifiP2pConfig;
 import android.net.wifi.p2p.WifiP2pGroup;
 import android.net.wifi.p2p.WifiP2pManager;
-import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 
@@ -26,7 +25,9 @@ public final class WifiDirectController {
     }
 
     public static final String GROUP_OWNER_ADDRESS = "192.168.49.1";
-    private static final String ALPHABET = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+    private static final int PASSPHRASE_LENGTH = 8;
+    // Lowercase only, no 0/1/i/l/o, so the code is easy to read out and type on a PC.
+    private static final String ALPHABET = "abcdefghjkmnpqrstuvwxyz23456789";
 
     private final Context context;
     private final AppIdentity identity;
@@ -64,32 +65,28 @@ public final class WifiDirectController {
                 .replace(":", "\\:").replace("\"", "\\\"");
     }
 
+    /** Short network name like "DIRECT-h4-427" (Android requires the "DIRECT-xy" start). */
     private String stableName() {
         String stored = identity.string("p2p_ssid", "");
-        if (stored.startsWith("DIRECT-h4-")) {
+        if (stored.matches("DIRECT-h4-[0-9]{3}")) {
             return stored;
         }
-        String model = Build.MODEL == null ? "Android" : Build.MODEL;
-        String clean = model.replaceAll("[^A-Za-z0-9]", "");
-        if (clean.isEmpty()) {
-            clean = "Android";
-        }
-        String name = "DIRECT-h4-" + clean;
-        if (name.length() > 28) {
-            name = name.substring(0, 28);
-        }
+        // Older versions used a long name built from the phone model: replace it once.
+        String name = "DIRECT-h4-" + (100 + new SecureRandom().nextInt(900));
         identity.setString("p2p_ssid", name);
         return name;
     }
 
+    /** Short, easy code: 8 lowercase letters/digits without look-alikes (the WPA2 minimum length). */
     private String stablePassphrase() {
         String stored = identity.string("p2p_pass", "");
-        if (stored.length() >= 8) {
+        if (stored.matches("[a-z2-9]{" + PASSPHRASE_LENGTH + "}")) {
             return stored;
         }
+        // Older versions made a long 12-character code with mixed case: replace it once.
         SecureRandom random = new SecureRandom();
         StringBuilder builder = new StringBuilder();
-        for (int index = 0; index < 12; index++) {
+        for (int index = 0; index < PASSPHRASE_LENGTH; index++) {
             builder.append(ALPHABET.charAt(random.nextInt(ALPHABET.length())));
         }
         String value = builder.toString();

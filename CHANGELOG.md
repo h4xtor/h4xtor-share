@@ -4,6 +4,10 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
+## 1.3.4 – 2026-10-21
+### Forbedret
+- Wi-Fi Direct har nu et kort netværksnavn (fx "DIRECT-h4-427") og en kort adgangskode på 8 tegn med små bogstaver og tal, uden tegn der ligner hinanden. Det er meget nemmere at taste ind på PC'en. Telefonen laver den nye kode første gang, du starter Wi-Fi Direct efter opdateringen.
+
 ## 1.3.3 – 2026-10-14
 ### Nyt
 - Bank-tilstand er nu en knap med til/fra: "Bank-tilstand til" slukker alt det følsomme, og "Bank-tilstand fra" tænder præcis de funktioner igen, som var slået til før. (Hjælpefunktionen "send når du kopierer" skal du selv tænde igen i Android – appen viser vej.)

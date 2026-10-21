@@ -54,6 +54,7 @@ Derefter:
 1. Tryk **Start Wi-Fi Direct** i appen på telefonen.
 2. Er PC'en allerede parret, så tryk **Forbind <din PC> automatisk** – PC'en spørger og kobler selv på.
    Ellers: skriv netværksnavn og kode under *Indstillinger → Wi-Fi Direct* på PC'en.
+   Navnet er kort (fx `DIRECT-h4-427`), og koden er 8 tegn: små bogstaver og tal, uden tegn der ligner hinanden.
 3. Del som normalt – direkte mellem enhederne, uden internet.
 
 Mens PC'en er på telefonens Wi-Fi Direct-netværk, har den normalt ikke internet via
