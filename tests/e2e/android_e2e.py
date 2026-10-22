@@ -324,9 +324,48 @@ def bluetooth_checks(desktop: Desktop, phone: Peer) -> None:
     time.sleep(2)
     assert "Hej via Bluetooth" in prefs(), "text over Bluetooth did not reach the phone"
     ok("Bluetooth: text PC -> phone")
+    desktop.run(desktop.client.send_link(over_bt, "https://example.com/via-bluetooth"))
+    time.sleep(3)
+    assert "via-bluetooth" in prefs(), "link over Bluetooth did not reach the phone"
+    ok("Bluetooth: link PC -> phone")
+    movie = WORK / "bt-film.bin"
+    movie.write_bytes(os.urandom(2 * 1024 * 1024 + 123))  # not a whole number of pieces
+    ids: set[str] = set()
+    desktop.run(desktop.client.send_file(over_bt, movie, lambda p: ids.add(p.transfer_id)),
+                timeout=180)
+    time.sleep(2)
+    listing = shell("ls -l /sdcard/Download/h4xtor-share/", check=False)
+    assert "bt-film.bin" in listing and str(movie.stat().st_size) in listing, listing
+    ok("Bluetooth: 2 MB file PC -> phone (in pieces), complete")
+    # The PC lost the phone's last answer and tries again with the same id: no second copy.
+    desktop.client._resumable[(phone.device_id, str(movie.resolve()))] = ids.pop()
+    desktop.run(desktop.client.send_file(over_bt, movie, lambda _p: None), timeout=60)
+    time.sleep(2)
+    listing = shell("ls /sdcard/Download/h4xtor-share/", check=False)
+    assert listing.count("bt-film") == 1, listing
+    ok("Bluetooth: a retry after a lost answer does not save the file twice on the phone")
+    album = WORK / "BTMappe"
+    (album / "sub").mkdir(parents=True)
+    (album / "sub" / "c.bin").write_bytes(os.urandom(300_000))
+    (album / "d.txt").write_text("d")
+    desktop.run(desktop.client.send_folder(over_bt, album, lambda _p: None), timeout=180)
+    time.sleep(2)
+    listing = shell("ls -lR /sdcard/Download/h4xtor-share/BTMappe", check=False)
+    assert "c.bin" in listing and "300000" in listing and "d.txt" in listing, listing
+    ok("Bluetooth: folder PC -> phone")
 
     # phone -> PC: the phone now routes this PC over the bridge
-    assert screen_has("^Forbundet via Bluetooth$", 15), "phone does not show the Bluetooth link"
+    # The files above may have moved the app to Overførsler: go back to the Del tab first.
+    linked = False
+    for _ in range(3):
+        shell(f"am start -W -n {PKG}/.MainActivity")
+        time.sleep(2)
+        tap_text("^Del$")
+        time.sleep(1)
+        if scroll_to("^Forbundet via Bluetooth$"):
+            linked = True
+            break
+    assert linked, "phone does not show the Bluetooth link"
     shot("27-bluetooth-linked")
     before = bridge.opened
     desktop.events.clear()
@@ -349,6 +388,41 @@ def bluetooth_checks(desktop: Desktop, phone: Peer) -> None:
                 raise
     assert bridge.opened > before, "phone -> PC did not use the Bluetooth bridge"
     ok("Bluetooth: text phone -> PC through the bridge")
+
+    # File phone -> PC over the bridge (sent in small pieces), then reopening must not resend.
+    shell("input keyevent KEYCODE_BACK", check=False)  # hide the keyboard
+    out = shell("content query --uri content://media/external/downloads --projection _id "
+                "--where \"_display_name='ferie.jpg'\"", check=False)
+    found = re.search(r"_id=(\d+)", out)
+    assert found, out
+    uri = f"content://media/external/downloads/{found.group(1)}"
+    share = (f"am start -W -a android.intent.action.SEND -t image/jpeg "
+             f"--eu android.intent.extra.STREAM {uri} -n {PKG}/.ShareTargetActivity")
+    desktop.events.clear()
+    shell(share)
+    tap_text("^AdminPC$", timeout=20)  # two PCs are paired: the sheet asks
+    time.sleep(2)
+    shot("27b-bluetooth-file-progress")
+    assert bridge.busy, "the file did not go over the Bluetooth bridge"
+    received: FileReceived = desktop.wait_for(FileReceived, timeout=120)
+    assert received.path.read_bytes() == (WORK / "ferie.jpg").read_bytes(), "file changed"
+    deadline = time.time() + 20  # the sheet shows "✓ Sendt" and closes by itself
+    while "ShareTargetActivity" in shell("dumpsys activity activities | grep -i resumed",
+                                         check=False) and time.time() < deadline:
+        time.sleep(1)
+    shot("27c-bluetooth-file-sent")
+    assert time.time() < deadline, "the share sheet hangs after the file arrived"
+    ok("Bluetooth: 3 MB file phone -> PC through the bridge, the sheet finishes by itself")
+    time.sleep(3)
+    desktop.events.clear()
+    shell(f"am start -W -f 0x00100000 {share[len('am start -W '):]}")  # reopened from history
+    time.sleep(3)
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(12)
+    again = [e for e in desktop.events if isinstance(e, FileReceived)]
+    assert not again, f"the file was sent again when the app was reopened: {again}"
+    assert len(list((WORK / "AdminPC-in").glob("ferie*"))) == 2, "unexpected copies on the PC"
+    ok("Bluetooth: reopening the app does not send the file again")
     # Link lost: the phone goes back to its Wi-Fi route by itself.
     bridge.close()
     time.sleep(4)

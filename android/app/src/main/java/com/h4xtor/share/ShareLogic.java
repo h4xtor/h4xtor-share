@@ -27,6 +27,14 @@ final class ShareLogic {
     private ShareLogic() {
     }
 
+    /** Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY (plain value: this class runs in JUnit). */
+    static final int LAUNCHED_FROM_HISTORY = 0x00100000;
+
+    /** False for a share Android hands over again: reopened from history, or rebuilt after it was sent. */
+    static boolean shouldHandleShare(int intentFlags, boolean alreadyStarted) {
+        return !alreadyStarted && (intentFlags & LAUNCHED_FROM_HISTORY) == 0;
+    }
+
     static String clip(String value, int max) {
         if (value == null) {
             return "";

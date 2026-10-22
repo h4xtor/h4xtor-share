@@ -158,6 +158,13 @@ public final class ShareLogicTest {
     }
 
     @Test
+    public void aShareIsSentOnlyOnce() {
+        assertTrue(ShareLogic.shouldHandleShare(0x10000000, false)); // fresh from the share sheet
+        assertFalse(ShareLogic.shouldHandleShare(0, true)); // rebuilt after the send started
+        assertFalse(ShareLogic.shouldHandleShare(0x10000000 | ShareLogic.LAUNCHED_FROM_HISTORY, false));
+    }
+
+    @Test
     public void screenshotNameFollowsTheProtocol() {
         assertTrue(ShareLogic.screenshotName(1760090000000L).matches("Skaermbillede-\\d{8}-\\d{6}\\.png"));
     }

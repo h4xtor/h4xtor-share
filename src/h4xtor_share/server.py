@@ -148,6 +148,9 @@ class ShareServer:
         self.pending_pairings: dict[str, dict[str, Any]] = {}
         self.pairing_failures: list[float] = []
         self.transfers: dict[str, dict[str, Any]] = {}
+        # Finished file transfers (id -> size): a sender that lost our last answer (slow
+        # Bluetooth, Wi-Fi switch) and tries again gets "complete", not a second copy.
+        self.finished: dict[str, int] = {}
         self.folders: dict[str, dict[str, Any]] = {}
         self.qr_secrets: dict[str, float] = {}
         self.capabilities: tuple[str, ...] = DESKTOP_CAPABILITIES
@@ -593,6 +596,8 @@ class ShareServer:
         if total_size < 0:
             raise web.HTTPBadRequest(text="Invalid file size.")
 
+        if self.finished.get(transfer_id) == total_size:
+            return web.json_response({"transfer_id": transfer_id, "offset": total_size})
         incoming = self.config.incoming_directory
         incoming.mkdir(parents=True, exist_ok=True)
         part_path = incoming / f".h4xtor-{transfer_id}.part"
@@ -618,12 +623,16 @@ class ShareServer:
         self.authenticate(request)
         transfer_id = request.match_info["transfer_id"]
         transfer = self.transfers.get(transfer_id)
-        if not transfer:
-            raise web.HTTPNotFound(text="Transfer was not initialized.")
         try:
             requested_offset = int(request.headers.get("X-H4xtor-Offset", "-1"))
         except ValueError as error:
             raise web.HTTPBadRequest(text="Invalid transfer offset.") from error
+        if not transfer and self.finished.get(transfer_id) == requested_offset:
+            return web.json_response(
+                {"transfer_id": transfer_id, "offset": requested_offset, "complete": True}
+            )
+        if not transfer:
+            raise web.HTTPNotFound(text="Transfer was not initialized.")
 
         part_path: Path = transfer["part_path"]
         actual_offset = part_path.stat().st_size if part_path.exists() else 0
@@ -668,6 +677,7 @@ class ShareServer:
                 )
             )
             del self.transfers[transfer_id]
+            self.finished[transfer_id] = transfer["size"]
 
         return web.json_response(
             {

@@ -2697,7 +2697,8 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
             self._bluetooth_scanned(value)
         elif tag == "bt_wifi_back":
             bridge = self._bt_bridges.get(value)
-            if bridge is not None:
+            # Not mid-transfer: that would break the file; switch at the next health check.
+            if bridge is not None and not bridge.busy:
                 bridge.close()  # bt_down puts the Wi-Fi route back
         elif tag == "wifi_restored":
             self._show_wifi_banner()

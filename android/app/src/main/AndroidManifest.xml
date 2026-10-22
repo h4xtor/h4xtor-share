@@ -99,6 +99,7 @@
 
         <activity
             android:name=".ShareTargetActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density"
             android:excludeFromRecents="true"
             android:exported="true"
             android:label="h4xtor share"

@@ -86,6 +86,8 @@ public final class H4xtorServer {
     private final Map<String, PendingPairing> pairings = new ConcurrentHashMap<>();
     private final Map<String, Long> qrSecrets = new ConcurrentHashMap<>();
     private final Map<String, Transfer> transfers = new ConcurrentHashMap<>();
+    /** Finished files (id -> size): a sender that lost our last answer gets "complete", not a copy. */
+    private final Map<String, Long> finished = new ConcurrentHashMap<>();
     private final Map<String, FolderState> folders = new ConcurrentHashMap<>();
     private final ExecutorService clients = Executors.newCachedThreadPool();
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -506,6 +508,11 @@ public final class H4xtorServer {
         if (size < 0) {
             throw new HttpError(400, "Invalid file size.");
         }
+        Long done = finished.get(transferId);
+        if (done != null && done == size) {
+            sendJson(output, 200, new JSONObject().put("transfer_id", transferId).put("offset", size));
+            return;
+        }
         File directory = incomingDirectory();
         //noinspection ResultOfMethodCallIgnored
         directory.mkdirs();
@@ -523,6 +530,12 @@ public final class H4xtorServer {
     private void fileUpload(Request request, InputStream input, OutputStream output) throws Exception {
         String transferId = request.path.substring("/api/v1/files/".length());
         Transfer transfer = transfers.get(transferId);
+        Long finishedSize = finished.get(transferId);
+        if (transfer == null && finishedSize != null && finishedSize == requestedOffset(request)) {
+            sendJson(output, 200, new JSONObject().put("transfer_id", transferId)
+                    .put("offset", finishedSize).put("complete", true));
+            return;
+        }
         if (transfer == null) {
             throw new HttpError(404, "Transfer was not initialized.");
         }
@@ -550,6 +563,7 @@ public final class H4xtorServer {
             //noinspection ResultOfMethodCallIgnored
             transfer.part.delete();
             transfers.remove(transferId);
+            finished.put(transferId, transfer.size);
             listener.onFileReceived(transferId, transfer.peerName, transfer.name,
                     uri == null ? "" : uri.toString(), transfer.size);
         }
