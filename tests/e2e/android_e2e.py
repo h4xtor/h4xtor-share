@@ -355,7 +355,17 @@ def bluetooth_checks(desktop: Desktop, phone: Peer) -> None:
     ok("Bluetooth: folder PC -> phone")
 
     # phone -> PC: the phone now routes this PC over the bridge
-    assert screen_has("^Forbundet via Bluetooth$", 15), "phone does not show the Bluetooth link"
+    # The files above may have moved the app to Overførsler: go back to the Del tab first.
+    linked = False
+    for _ in range(3):
+        shell(f"am start -W -n {PKG}/.MainActivity")
+        time.sleep(2)
+        tap_text("^Del$")
+        time.sleep(1)
+        if scroll_to("^Forbundet via Bluetooth$"):
+            linked = True
+            break
+    assert linked, "phone does not show the Bluetooth link"
     shot("27-bluetooth-linked")
     before = bridge.opened
     desktop.events.clear()
