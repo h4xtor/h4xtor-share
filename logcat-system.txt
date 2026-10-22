@@ -1,0 +1,70 @@
+--------- beginning of main
+10-22 21:08:20.552  2662  2662 I h4xtor  : copy watcher connected
+--------- beginning of system
+10-22 21:08:23.238   521  2147 W ActivityTaskManager: callingPackage for (uid=2000, pid=9021) has no WPC
+10-22 21:08:23.243   521  2147 I ActivityTaskManager: START u0 {act=android.intent.action.SEND typ=image/jpeg flg=0x10000000 cmp=com.h4xtor.share/.ShareTargetActivity (has extras)} with LAUNCH_MULTIPLE from uid 2000 (BAL_ALLOW_PERMISSION) result code=0
+10-22 21:08:23.444   521   540 I ActivityTaskManager: Displayed com.h4xtor.share/.ShareTargetActivity for user 0: +146ms
+10-22 21:08:25.950  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:08:35.820   521  2249 W ActivityTaskManager: callingPackage for (uid=2000, pid=9099) has no WPC
+10-22 21:08:35.823   521  2249 I ActivityTaskManager: START u0 {act=android.intent.action.SEND typ=image/jpeg flg=0x10100000 cmp=com.h4xtor.share/.ShareTargetActivity (has extras)} with LAUNCH_MULTIPLE from uid 2000 (BAL_ALLOW_PERMISSION) result code=0
+10-22 21:08:38.864   521  2247 W ActivityTaskManager: callingPackage for (uid=2000, pid=9105) has no WPC
+10-22 21:08:38.868   521  2247 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.h4xtor.share/.MainActivity} with LAUNCH_SINGLE_TASK from uid 2000 (BAL_ALLOW_PERMISSION) result code=0
+10-22 21:08:39.118   521  1709 E ClipboardService: Denying clipboard access to com.h4xtor.share, application is not in focus nor is it a system service for user 0
+10-22 21:08:39.382   521   540 I ActivityTaskManager: Displayed com.h4xtor.share/.MainActivity for user 0: +516ms
+10-22 21:08:55.409   521  2227 W ActivityTaskManager: callingPackage for (uid=2000, pid=9123) has no WPC
+10-22 21:08:55.411   521  2227 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.h4xtor.share/.MainActivity} with LAUNCH_SINGLE_TASK from uid 2000 (BAL_ALLOW_PERMISSION) result code=3
+10-22 21:08:57.700  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:00.927  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:04.765  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:06.875  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:12.392   521  2242 W ActivityTaskManager: callingPackage for (uid=2000, pid=9230) has no WPC
+10-22 21:09:12.394   521  2242 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.h4xtor.share/.MainActivity} with LAUNCH_SINGLE_TASK from uid 2000 (BAL_ALLOW_PERMISSION) result code=3
+10-22 21:09:16.081  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:20.086  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:21.415   521  2249 E ClipboardService: Denying clipboard access to com.android.chrome, application is not in focus nor is it a system service for user 0
+10-22 21:09:21.417   521   813 E ClipboardService: Denying clipboard access to com.android.chrome, application is not in focus nor is it a system service for user 0
+10-22 21:09:23.901   521   541 I ActivityTaskManager: START u0 {act=android.intent.action.MAIN cat=[android.intent.category.HOME] flg=0x10000100 cmp=com.google.android.apps.nexuslauncher/.NexusLauncherActivity (has extras)} with LAUNCH_SINGLE_TASK from uid 0 (BAL_ALLOW_ALLOWLISTED_UID) result code=2
+10-22 21:09:29.349   521   753 W ActivityTaskManager: callingPackage for (uid=2000, pid=9339) has no WPC
+10-22 21:09:29.353   521   753 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.h4xtor.share/.MainActivity} with LAUNCH_SINGLE_TASK from uid 2000 (BAL_ALLOW_PERMISSION) result code=0
+10-22 21:09:29.737   521   534 E ClipboardService: Denying clipboard access to com.h4xtor.share, application is not in focus nor is it a system service for user 0
+10-22 21:09:30.069   521   540 I ActivityTaskManager: Displayed com.h4xtor.share/.MainActivity for user 0: +717ms
+10-22 21:09:33.483  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:36.628  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:40.043  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:44.436   521  2242 W ActivityTaskManager: callingPackage for (uid=2000, pid=9437) has no WPC
+10-22 21:09:44.443   521  2242 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.h4xtor.share/.MainActivity} with LAUNCH_SINGLE_TASK from uid 2000 (BAL_ALLOW_PERMISSION) result code=3
+10-22 21:09:47.729  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:50.927  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:54.234  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:57.768  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:01.762  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:05.760  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:09.764  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:13.766  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:17.775  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:21.778  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:25.750  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:29.756  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:33.763  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:37.796  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:41.784  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:45.782  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:49.785  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:53.777  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:57.785  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:01.780  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:05.776  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:09.810  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:13.760  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:17.775  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:21.781  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:23.828  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:24.731   521  2226 I ActivityTaskManager: START u0 {act=android.settings.ACTION_NOTIFICATION_LISTENER_SETTINGS cmp=com.android.settings/.Settings$NotificationAccessSettingsActivity} with LAUNCH_MULTIPLE from uid 10192 (BAL_ALLOW_VISIBLE_WINDOW) result code=0
+10-22 21:11:25.898   521   540 I ActivityTaskManager: Displayed com.android.settings/.Settings$NotificationAccessSettingsActivity for user 0: +1s145ms
+10-22 21:11:33.036   521   534 W ActivityTaskManager: callingPackage for (uid=2000, pid=10171) has no WPC
+10-22 21:11:33.038   521   534 I ActivityTaskManager: START u0 {flg=0x10000000 cmp=com.h4xtor.share/.MainActivity} with LAUNCH_SINGLE_TASK from uid 2000 (BAL_ALLOW_PERMISSION) result code=3
+10-22 21:11:36.283  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:39.374  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:42.697  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:46.430  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:48.476  2662  2662 I h4xtor  : copy watcher connected

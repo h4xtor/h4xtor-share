@@ -1,0 +1,43 @@
+OK QR pairing (phone -> PC) and mutual trust
+OK phone shows the paired PC
+OK clipboard PC -> phone
+OK 3 MB file PC -> phone lands in Downloads/h4xtor-share
+OK folder with subfolder PC -> phone
+OK link PC -> phone
+OK share sheet link phone -> PC (opens in Chrome on the PC)
+OK 'Send til PC' from the text selection menu
+OK tap 'Copy' in another app -> text on the PC instantly (app in background)
+OK share sheet file phone -> PC (3 MB, byte-identical)
+OK second PC paired
+OK share sheet with two PCs: pick AdminPC, link arrives there
+OK remembered PC offline: phone sends to the PC that is online
+OK folder phone -> PC via the system picker (subfolders intact)
+OK speed test phone -> PC (upload + ping shown)
+OK new screenshot sent to the PC automatically
+OK Wi-Fi Direct: own network name and code are checked and stored
+OK Bluetooth bridge: PC and phone say hello
+OK Bluetooth: text PC -> phone
+OK Bluetooth: link PC -> phone
+OK Bluetooth: 2 MB file PC -> phone (in pieces), complete
+OK Bluetooth: a retry after a lost answer does not save the file twice on the phone
+OK Bluetooth: folder PC -> phone
+OK Bluetooth: text phone -> PC through the bridge
+OK Bluetooth: 3 MB file phone -> PC through the bridge, the sheet finishes by itself
+OK Bluetooth: reopening the app does not send the file again
+OK Bluetooth: link lost, the phone switches back to Wi-Fi
+OK Bluetooth: a new PC finds the phone and pairs with a code over Bluetooth
+OK Bluetooth: the phone keeps using the link for the PC it just paired with
+OK notification mirroring is off by default
+OK phone notification shows up on the PC (title, text, app)
+OK notification dismissed from the PC disappears on the phone
+Traceback (most recent call last):
+  File "/home/runner/work/h4xtor-share/h4xtor-share/tests/e2e/android_e2e.py", line 1018, in <module>
+    main()
+  File "/home/runner/work/h4xtor-share/h4xtor-share/tests/e2e/android_e2e.py", line 934, in main
+    v12_checks(desktop, phone)
+  File "/home/runner/work/h4xtor-share/h4xtor-share/tests/e2e/android_e2e.py", line 225, in v12_checks
+    sms: SmsReceived = desktop.wait_for(SmsReceived, timeout=60,
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/h4xtor-share/h4xtor-share/tests/e2e/android_e2e.py", line 164, in wait_for
+    raise AssertionError(f"desktop never received {kind.__name__}")
+AssertionError: desktop never received SmsReceived

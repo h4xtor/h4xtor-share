@@ -1,0 +1,1594 @@
+--------- beginning of main
+10-22 21:01:51.530  2662  2662 I om.h4xtor.share: Late-enabling -Xcheck:jni
+10-22 21:01:51.541  2662  2662 I om.h4xtor.share: Using CollectorTypeCC GC.
+10-22 21:01:51.542  2662  2662 W om.h4xtor.share: Unexpected CPU variant for x86: x86_64.
+10-22 21:01:51.542  2662  2662 W om.h4xtor.share: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, tremont, kabylake, default
+10-22 21:01:51.773  2662  2662 D CompatibilityChangeReporter: Compat change id reported: 171979766; UID 10192; state: ENABLED
+10-22 21:01:51.774  2662  2662 D CompatibilityChangeReporter: Compat change id reported: 242716250; UID 10192; state: ENABLED
+10-22 21:01:51.829  2662  2662 W ziparchive: Unable to open '/data/app/~~x5L3hDpKxj761KHYpo93lQ==/com.h4xtor.share-gvtOcvnQcZaiSuT-0L_z4w==/base.dm': No such file or directory
+10-22 21:01:51.829  2662  2662 W ziparchive: Unable to open '/data/app/~~x5L3hDpKxj761KHYpo93lQ==/com.h4xtor.share-gvtOcvnQcZaiSuT-0L_z4w==/base.dm': No such file or directory
+10-22 21:01:51.867  2662  2662 D nativeloader: Configuring clns-6 for other apk /data/app/~~x5L3hDpKxj761KHYpo93lQ==/com.h4xtor.share-gvtOcvnQcZaiSuT-0L_z4w==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~x5L3hDpKxj761KHYpo93lQ==/com.h4xtor.share-gvtOcvnQcZaiSuT-0L_z4w==/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.h4xtor.share
+10-22 21:01:51.899  2662  2662 V GraphicsEnvironment: Currently set values for:
+10-22 21:01:51.899  2662  2662 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+10-22 21:01:51.899  2662  2662 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+10-22 21:01:51.906  2662  2662 V GraphicsEnvironment: ANGLE GameManagerService for com.h4xtor.share: false
+10-22 21:01:51.906  2662  2662 V GraphicsEnvironment: com.h4xtor.share is not listed in per-application setting
+10-22 21:01:51.906  2662  2662 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+10-22 21:01:52.142  2662  2712 D libEGL  : loaded /vendor/lib64/egl/libEGL_emulation.so
+10-22 21:01:52.144  2662  2712 D libEGL  : loaded /vendor/lib64/egl/libGLESv1_CM_emulation.so
+10-22 21:01:52.152  2662  2712 D libEGL  : loaded /vendor/lib64/egl/libGLESv2_emulation.so
+10-22 21:01:52.413  2662  2662 D CompatibilityChangeReporter: Compat change id reported: 171228096; UID 10192; state: ENABLED
+10-22 21:01:52.424  2662  2662 D CompatibilityChangeReporter: Compat change id reported: 210923482; UID 10192; state: ENABLED
+10-22 21:01:52.660  2662  2662 D CompatibilityChangeReporter: Compat change id reported: 237531167; UID 10192; state: DISABLED
+10-22 21:01:52.661  2662  2662 W OpenGLRenderer: Unknown dataspace 0
+10-22 21:01:52.748  2662  2662 D CompatibilityChangeReporter: Compat change id reported: 270306772; UID 10192; state: ENABLED
+10-22 21:01:52.842  2662  2662 D CompatibilityChangeReporter: Compat change id reported: 235355681; UID 10192; state: ENABLED
+10-22 21:01:52.843  2662  2662 D CompatibilityChangeReporter: Compat change id reported: 263076149; UID 10192; state: ENABLED
+10-22 21:01:52.859  2662  2662 D CompatibilityChangeReporter: Compat change id reported: 160794467; UID 10192; state: ENABLED
+10-22 21:01:52.885  2662  2816 D TrafficStats: tagSocket(87) with statsTag=0xffffffff, statsUid=-1
+10-22 21:01:52.946  2662  2711 W OpenGLRenderer: Failed to initialize 101010-2 format, error = EGL_SUCCESS
+10-22 21:01:53.008  2662  2711 I Gralloc4: mapper 4.x is not supported
+10-22 21:01:53.616  2662  2689 I OpenGLRenderer: Davey! duration=916ms; Flags=1, FrameTimelineVsyncId=2670, IntendedVsync=43415493690, Vsync=43582160350, InputEventId=0, HandleInputStart=43604710374, AnimationStart=43604714471, PerformTraversalsStart=43604716625, DrawStart=43765881196, FrameDeadline=43432160356, FrameInterval=43597939123, FrameStartTime=16666666, SyncQueued=43769727751, SyncStart=43769935752, IssueDrawCommandsStart=43771028768, SwapBuffers=44118356581, FrameCompleted=44332146214, DequeueBufferDuration=3826, QueueBufferDuration=7669577, GpuCompleted=44332027863, SwapBuffersCompleted=44332146214, DisplayPresentTime=0, CommandSubmissionCompleted=44118356581, 
+10-22 21:01:53.853  2662  2662 W NsdServiceInfo: Key lengths > 9 are discouraged: fingerprint
+10-22 21:01:53.853  2662  2662 W NsdServiceInfo: Key lengths > 9 are discouraged: capabilities
+10-22 21:01:53.869  2662  2662 D TrafficStats: tagSocket(107) with statsTag=0xffffffff, statsUid=-1
+10-22 21:01:54.118  2662  2662 I Choreographer: Skipped 69 frames!  The application may be doing too much work on its main thread.
+10-22 21:01:54.590  2662  2696 I OpenGLRenderer: Davey! duration=1611ms; Flags=0, FrameTimelineVsyncId=2716, IntendedVsync=43682160346, Vsync=44832160300, InputEventId=0, HandleInputStart=44847518701, AnimationStart=44847522007, PerformTraversalsStart=44847730316, DrawStart=44982640615, FrameDeadline=44348826986, FrameInterval=44847254940, FrameStartTime=16666666, SyncQueued=45001394717, SyncStart=45001416367, IssueDrawCommandsStart=45001537543, SwapBuffers=45167698465, FrameCompleted=45293713842, DequeueBufferDuration=4589, QueueBufferDuration=24582494, GpuCompleted=45291882556, SwapBuffersCompleted=45293713842, DisplayPresentTime=0, CommandSubmissionCompleted=45167698465, 
+10-22 21:02:02.154  2662  3699 D TrafficStats: tagSocket(115) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:02.306  2662  3699 D TrafficStats: tagSocket(123) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:02.373  2662  3728 D TrafficStats: tagSocket(126) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:02.414  2662  2711 D EGL_emulation: app_time_stats: avg=2202.74ms min=52.35ms max=7565.69ms count=4
+10-22 21:02:02.842  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:02.842  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:05.210  2662  2711 D EGL_emulation: app_time_stats: avg=559.16ms min=53.48ms max=2031.58ms count=5
+10-22 21:02:06.072  2662  4071 D TrafficStats: tagSocket(104) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:06.215  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:06.216  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:06.248  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:06.248  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:06.444  2662  2711 D EGL_emulation: app_time_stats: avg=1229.62ms min=1229.62ms max=1229.62ms count=1
+10-22 21:02:10.073  2662  4472 D TrafficStats: tagSocket(114) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:10.218  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:10.218  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:10.244  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:10.244  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:10.453  2662  2711 D EGL_emulation: app_time_stats: avg=2000.38ms min=40.54ms max=3960.22ms count=2
+10-22 21:02:12.854  2662  2818 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:12.963  2662  2711 D EGL_emulation: app_time_stats: avg=1255.10ms min=54.57ms max=2455.63ms count=2
+10-22 21:02:13.060  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:13.063  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:13.092  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:13.092  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:14.079  2662  4566 D TrafficStats: tagSocket(134) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:14.293  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:14.295  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:14.349  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:14.354  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:14.565  2662  2711 D EGL_emulation: app_time_stats: avg=533.76ms min=38.46ms max=1138.68ms count=3
+10-22 21:02:15.084  2662  2818 D TrafficStats: tagSocket(112) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:15.108  2662  2818 D TrafficStats: tagSocket(112) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:15.572  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:15.572  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:15.738  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:15.739  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:16.404  2662  2711 D EGL_emulation: app_time_stats: avg=919.38ms min=58.76ms max=1780.00ms count=2
+10-22 21:02:16.466  2662  2966 I OpenGLRenderer: Davey! duration=867ms; Flags=0, FrameTimelineVsyncId=4225, IntendedVsync=66265492776, Vsync=66632159428, InputEventId=0, HandleInputStart=66647644697, AnimationStart=66647649696, PerformTraversalsStart=66647653393, DrawStart=66802700473, FrameDeadline=66282159442, FrameInterval=66647443161, FrameStartTime=16666666, SyncQueued=66909343285, SyncStart=66909365456, IssueDrawCommandsStart=66909724385, SwapBuffers=66957843633, FrameCompleted=67133033345, DequeueBufferDuration=3506, QueueBufferDuration=251168, GpuCompleted=67132682931, SwapBuffersCompleted=67133033345, DisplayPresentTime=72904454231491076, CommandSubmissionCompleted=66957843633, 
+10-22 21:02:16.525  2662  2684 I om.h4xtor.share: Background concurrent copying GC freed 21889(1009KB) AllocSpace objects, 33(2916KB) LOS objects, 49% free, 4026KB/8053KB, paused 12.269ms,14us total 649.133ms
+10-22 21:02:17.142  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:17.143  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:17.206  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:17.206  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:17.409  2662  2711 D EGL_emulation: app_time_stats: avg=497.12ms min=51.20ms max=943.03ms count=2
+10-22 21:02:18.082  2662  4605 D TrafficStats: tagSocket(6) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:18.268  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:18.269  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:18.305  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:18.305  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:18.492  2662  2711 D EGL_emulation: app_time_stats: avg=541.29ms min=42.88ms max=1039.70ms count=2
+10-22 21:02:19.037  2662  2818 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:19.063  2662  2818 D TrafficStats: tagSocket(144) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:19.064  2662  2818 D TrafficStats: tagSocket(154) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:19.125  2662  2818 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:19.259  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:19.261  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:19.336  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:19.337  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:20.041  2662  2684 I om.h4xtor.share: Background young concurrent copying GC freed 3301(181KB) AllocSpace objects, 31(4652KB) LOS objects, 37% free, 6413KB/10204KB, paused 28.625ms,14us total 125.083ms
+10-22 21:02:20.213  2662  2711 D EGL_emulation: app_time_stats: avg=820.30ms min=75.16ms max=1565.43ms count=2
+10-22 21:02:20.258  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:20.262  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:20.411  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:20.411  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:20.463  2662  2966 I OpenGLRenderer: Davey! duration=951ms; Flags=0, FrameTimelineVsyncId=4756, IntendedVsync=69982159294, Vsync=70348825946, InputEventId=0, HandleInputStart=70428616496, AnimationStart=70428622057, PerformTraversalsStart=70428625563, DrawStart=70703835654, FrameDeadline=69998825960, FrameInterval=70363801598, FrameStartTime=16666666, SyncQueued=70765319180, SyncStart=70777853801, IssueDrawCommandsStart=70778264487, SwapBuffers=70902805565, FrameCompleted=70946523362, DequeueBufferDuration=4008, QueueBufferDuration=209370, GpuCompleted=70941778683, SwapBuffersCompleted=70946523362, DisplayPresentTime=0, CommandSubmissionCompleted=70902805565, 
+10-22 21:02:20.582  2662  2662 I Choreographer: Skipped 35 frames!  The application may be doing too much work on its main thread.
+10-22 21:02:20.888  2662  2689 I OpenGLRenderer: Davey! duration=867ms; Flags=0, FrameTimelineVsyncId=4905, IntendedVsync=70715492598, Vsync=71298825908, InputEventId=0, HandleInputStart=71317482413, AnimationStart=71317487122, PerformTraversalsStart=71328696581, DrawStart=71446116797, FrameDeadline=70965492588, FrameInterval=71310717614, FrameStartTime=16666666, SyncQueued=71488880815, SyncStart=71488902666, IssueDrawCommandsStart=71489262377, SwapBuffers=71542476386, FrameCompleted=71583213643, DequeueBufferDuration=2966, QueueBufferDuration=294750, GpuCompleted=71583213643, SwapBuffersCompleted=71577867571, DisplayPresentTime=0, CommandSubmissionCompleted=71542476386, 
+10-22 21:02:21.064  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:21.064  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:21.134  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:21.134  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:21.340  2662  2711 D EGL_emulation: app_time_stats: avg=561.18ms min=491.02ms max=631.34ms count=2
+10-22 21:02:22.100  2662  4680 D TrafficStats: tagSocket(110) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:22.457  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:22.457  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:22.481  2662  2818 D TrafficStats: tagSocket(126) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:22.570  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:22.570  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:23.056  2662  2711 D EGL_emulation: app_time_stats: avg=857.90ms min=82.62ms max=1633.18ms count=2
+10-22 21:02:24.300  2662  2711 D EGL_emulation: app_time_stats: avg=404.82ms min=261.70ms max=585.09ms count=3
+10-22 21:02:25.984  2662  2711 D EGL_emulation: app_time_stats: avg=1684.07ms min=1684.07ms max=1684.07ms count=1
+10-22 21:02:26.268  2662  4760 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:26.619  2662  4767 D TrafficStats: tagSocket(104) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:26.698  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:26.698  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:26.829  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:26.829  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:27.245  2662  2711 D EGL_emulation: app_time_stats: avg=1261.21ms min=1261.21ms max=1261.21ms count=1
+10-22 21:02:27.564  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:27.564  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:27.615  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:27.615  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:27.676  2662  2662 I Choreographer: Skipped 30 frames!  The application may be doing too much work on its main thread.
+10-22 21:02:27.913  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:27.914  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:28.012  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:28.013  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:28.304  2662  2684 I om.h4xtor.share: Background concurrent copying GC freed 38299(2108KB) AllocSpace objects, 56(3760KB) LOS objects, 49% free, 4089KB/8179KB, paused 23us,13us total 453.541ms
+10-22 21:02:28.347  2662  2662 I Choreographer: Skipped 35 frames!  The application may be doing too much work on its main thread.
+10-22 21:02:28.505  2662  2711 D EGL_emulation: app_time_stats: avg=630.10ms min=578.10ms max=682.10ms count=2
+10-22 21:02:28.558  2662  2688 I OpenGLRenderer: Davey! duration=747ms; Flags=0, FrameTimelineVsyncId=6255, IntendedVsync=78482158954, Vsync=79065492264, InputEventId=0, HandleInputStart=79079450441, AnimationStart=79079455931, PerformTraversalsStart=79081935736, DrawStart=79153143100, FrameDeadline=78598825616, FrameInterval=79076017237, FrameStartTime=16666666, SyncQueued=79194318425, SyncStart=79199082491, IssueDrawCommandsStart=79200041530, SwapBuffers=79213831672, FrameCompleted=79234591754, DequeueBufferDuration=3396, QueueBufferDuration=885963, GpuCompleted=79234463686, SwapBuffersCompleted=79234591754, DisplayPresentTime=0, CommandSubmissionCompleted=79213831672, 
+10-22 21:02:28.900  2662  2662 D CompatibilityChangeReporter: Compat change id reported: 147798919; UID 10192; state: ENABLED
+10-22 21:02:28.901  2662  4856 D TrafficStats: tagSocket(121) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:29.306  2662  4872 D TrafficStats: tagSocket(153) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:29.318  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:29.318  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:29.379  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:29.379  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:29.518  2662  2662 I Choreographer: Skipped 34 frames!  The application may be doing too much work on its main thread.
+10-22 21:02:29.673  2662  2711 D EGL_emulation: app_time_stats: avg=583.93ms min=75.89ms max=1091.98ms count=2
+10-22 21:02:29.695  2662  2688 I OpenGLRenderer: Davey! duration=751ms; Flags=0, FrameTimelineVsyncId=6502, IntendedVsync=79665492240, Vsync=80232158884, InputEventId=0, HandleInputStart=80248243337, AnimationStart=80248247274, PerformTraversalsStart=80248303539, DrawStart=80346086011, FrameDeadline=79682158906, FrameInterval=80246985450, FrameStartTime=16666666, SyncQueued=80368123578, SyncStart=80368329482, IssueDrawCommandsStart=80373747739, SwapBuffers=80381945350, FrameCompleted=80417581624, DequeueBufferDuration=3607, QueueBufferDuration=234027, GpuCompleted=80417581624, SwapBuffersCompleted=80402545477, DisplayPresentTime=0, CommandSubmissionCompleted=80381945350, 
+10-22 21:02:29.974  2662  4932 D TrafficStats: tagSocket(164) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:30.667  2662  4946 D TrafficStats: tagSocket(123) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:30.710  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:30.710  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:30.744  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:30.744  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:31.181  2662  2711 D EGL_emulation: app_time_stats: avg=502.49ms min=141.53ms max=998.05ms count=3
+10-22 21:02:31.236  2662  2711 D EGL_emulation: app_time_stats: avg=993.89ms min=307.89ms max=1679.88ms count=2
+10-22 21:02:31.298  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:31.300  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:31.404  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:31.404  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:31.460  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda17@b583d72
+10-22 21:02:31.465  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda17@fdc3fb8
+10-22 21:02:31.516  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:31.516  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:31.528  2662  4980 D TrafficStats: tagSocket(88) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:31.568  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:31.568  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:31.628  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:02:31.628  2662  2662 I Choreographer: Skipped 33 frames!  The application may be doing too much work on its main thread.
+10-22 21:02:34.129  2662  2711 D EGL_emulation: app_time_stats: avg=982.58ms min=68.64ms max=2340.89ms count=3
+10-22 21:02:34.681  2662  5035 D TrafficStats: tagSocket(114) with statsTag=0xffffffff, statsUid=-1
+10-22 21:02:35.061  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:35.128  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:02:41.798  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:02:50.218  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:02:55.171  2662  2689 I OpenGLRenderer: Davey! duration=869ms; Flags=0, FrameTimelineVsyncId=9642, IntendedVsync=104882157898, Vsync=104965491228, InputEventId=0, HandleInputStart=104973887306, AnimationStart=104973889350, PerformTraversalsStart=104973893618, DrawStart=104974085807, FrameDeadline=105048824558, FrameInterval=104973870264, FrameStartTime=16666666, SyncQueued=104974306277, SyncStart=105026168086, IssueDrawCommandsStart=105026261240, SwapBuffers=105638643941, FrameCompleted=105803867926, DequeueBufferDuration=2505, QueueBufferDuration=131655, GpuCompleted=105803867926, SwapBuffersCompleted=105801397037, DisplayPresentTime=72902040460001335, CommandSubmissionCompleted=105638643941, 
+10-22 21:02:57.396  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:03:01.476  2662  2662 D h4xtor  : click in com.google.android.contacts: Copy
+10-22 21:03:01.476  2662  2662 I h4xtor  : copy tapped in com.google.android.contacts
+10-22 21:03:03.428  2662  2662 I h4xtor  : copied text synced to 1 device(s)
+10-22 21:03:03.743  2662  5741 D TrafficStats: tagSocket(124) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:04.221  2662  2684 I om.h4xtor.share: Background young concurrent copying GC freed 50051(2230KB) AllocSpace objects, 12(624KB) LOS objects, 35% free, 5238KB/8179KB, paused 37us,15us total 372.361ms
+10-22 21:03:04.238  2662  2711 D EGL_emulation: app_time_stats: avg=9618.02ms min=775.33ms max=18913.17ms count=3
+10-22 21:03:04.832  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda17@e7d5241
+10-22 21:03:05.325  2662  5774 D TrafficStats: tagSocket(110) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:06.439  2662  2711 D EGL_emulation: app_time_stats: avg=1100.30ms min=187.92ms max=2012.68ms count=2
+10-22 21:03:06.595  2662  2696 I OpenGLRenderer: Davey! duration=767ms; Flags=0, FrameTimelineVsyncId=10834, IntendedVsync=116398824104, Vsync=116398824104, InputEventId=0, HandleInputStart=116406551776, AnimationStart=116406554811, PerformTraversalsStart=116406557477, DrawStart=116843905944, FrameDeadline=116415490770, FrameInterval=116406534443, FrameStartTime=16666666, SyncQueued=116844678305, SyncStart=116862126259, IssueDrawCommandsStart=116865176048, SwapBuffers=117147063036, FrameCompleted=117183532741, DequeueBufferDuration=2745, QueueBufferDuration=3163591, GpuCompleted=117183532741, SwapBuffersCompleted=117167677558, DisplayPresentTime=72057628414510403, CommandSubmissionCompleted=117147063036, 
+10-22 21:03:08.740  2662  2711 D EGL_emulation: app_time_stats: avg=1047.36ms min=31.27ms max=2063.45ms count=2
+10-22 21:03:09.362  2662  5926 D TrafficStats: tagSocket(97) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:09.441  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:09.442  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:09.516  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:09.520  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:09.891  2662  2711 D EGL_emulation: app_time_stats: avg=476.55ms min=62.15ms max=890.95ms count=2
+10-22 21:03:09.942  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:09.942  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:10.000  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:10.001  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:10.113  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:10.115  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:10.173  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:10.173  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:11.264  2662  6029 D TrafficStats: tagSocket(117) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:11.390  2662  6029 D TrafficStats: tagSocket(88) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:11.543  2662  2711 D EGL_emulation: app_time_stats: avg=549.64ms min=60.25ms max=1189.99ms count=3
+10-22 21:03:11.602  2662  2684 I om.h4xtor.share: Background concurrent copying GC freed 48728(3799KB) AllocSpace objects, 22(504KB) LOS objects, 49% free, 8408KB/16MB, paused 71us,16us total 222.492ms
+10-22 21:03:12.796  2662  2711 D EGL_emulation: app_time_stats: avg=252.93ms min=14.26ms max=703.07ms count=6
+10-22 21:03:13.304  2662  6076 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:13.430  2662  6087 D TrafficStats: tagSocket(124) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:13.479  2662  6091 D TrafficStats: tagSocket(180) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:13.531  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:13.534  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:13.539  2662  6087 D TrafficStats: tagSocket(97) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:13.641  2662  6094 D TrafficStats: tagSocket(113) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:13.657  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:13.657  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:13.753  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:13.753  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:13.785  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:13.785  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:13.948  2662  2711 D EGL_emulation: app_time_stats: avg=1202.05ms min=199.45ms max=2204.66ms count=2
+10-22 21:03:14.001  2662  2711 D EGL_emulation: app_time_stats: avg=131.77ms min=29.38ms max=780.41ms count=9
+10-22 21:03:14.006  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda17@94b4a88
+10-22 21:03:14.089  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:14.095  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:14.130  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:14.130  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:16.640  2662  2711 D EGL_emulation: app_time_stats: avg=897.46ms min=50.51ms max=2370.56ms count=3
+10-22 21:03:17.480  2662  6125 D TrafficStats: tagSocket(112) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:17.482  2662  6126 D TrafficStats: tagSocket(123) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:17.624  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:17.624  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:17.638  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:17.638  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:17.736  2662  2711 D EGL_emulation: app_time_stats: avg=1095.98ms min=1095.98ms max=1095.98ms count=1
+10-22 21:03:19.468  2662  2711 D EGL_emulation: app_time_stats: avg=370.77ms min=54.40ms max=1098.76ms count=4
+10-22 21:03:20.597  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:03:21.481  2662  6194 D TrafficStats: tagSocket(156) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:21.499  2662  6193 D TrafficStats: tagSocket(160) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:22.727  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:03:26.303  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:03:27.187  2662  2662 D AutofillManager: Fill dialog is enabled:false, hints=[password, passwordAuto, creditCardNumber, creditCardSecurityCode, creditCardExpirationDate]
+10-22 21:03:27.368  2662  2711 D EGL_emulation: app_time_stats: avg=783.52ms min=23.87ms max=7387.57ms count=10
+10-22 21:03:27.525  2662  6328 D TrafficStats: tagSocket(110) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:27.593  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:27.594  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:27.647  2662  6332 D TrafficStats: tagSocket(113) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:27.659  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:27.660  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:27.712  2662  6333 D TrafficStats: tagSocket(115) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:27.770  2662  6339 D TrafficStats: tagSocket(112) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:27.781  2662  6338 D TrafficStats: tagSocket(141) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:27.783  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:27.783  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:27.802  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:27.804  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:27.996  2662  2711 D EGL_emulation: app_time_stats: avg=2559.71ms min=38.73ms max=9809.98ms count=4
+10-22 21:03:28.032  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda17@c095b04
+10-22 21:03:28.069  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:28.069  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:28.077  2662  6343 D TrafficStats: tagSocket(88) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:28.084  2662  6342 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:28.095  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:28.095  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:28.281  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:28.281  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:28.303  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:28.303  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:30.675  2662  2711 D EGL_emulation: app_time_stats: avg=535.55ms min=49.04ms max=2241.17ms count=5
+10-22 21:03:32.046  2662  6401 D TrafficStats: tagSocket(104) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:32.052  2662  6402 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:32.152  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:03:32.215  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:32.215  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:32.239  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:32.239  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:32.376  2662  2711 D EGL_emulation: app_time_stats: avg=1700.54ms min=1700.54ms max=1700.54ms count=1
+10-22 21:03:34.490  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:03:35.439  2662  2711 D EGL_emulation: app_time_stats: avg=1515.01ms min=30.60ms max=2999.43ms count=2
+10-22 21:03:35.486  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:35.486  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:35.507  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:35.507  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:36.045  2662  6571 D TrafficStats: tagSocket(89) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:36.058  2662  6572 D TrafficStats: tagSocket(120) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:36.216  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:36.216  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:36.231  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:36.231  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:36.743  2662  6619 D TrafficStats: tagSocket(112) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:36.768  2662  6620 D TrafficStats: tagSocket(124) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:36.872  2662  2662 D AutofillManager: Fill dialog is enabled:false, hints=[password, passwordAuto, creditCardNumber, creditCardSecurityCode, creditCardExpirationDate]
+10-22 21:03:36.998  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:36.998  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:37.229  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:37.229  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:37.310  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:37.310  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:37.495  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:37.538  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:37.538  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:37.557  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:37.557  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:37.580  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda17@cc636b4
+10-22 21:03:37.580  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:40.723  2662  6690 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:40.724  2662  6689 D TrafficStats: tagSocket(110) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:40.867  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:40.867  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:40.880  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:40.880  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:40.945  2662  2711 D EGL_emulation: app_time_stats: avg=947.78ms min=68.16ms max=3205.28ms count=4
+10-22 21:03:44.723  2662  6733 D TrafficStats: tagSocket(117) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:44.724  2662  6732 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:44.859  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:44.859  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:44.872  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:44.872  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:44.936  2662  2711 D EGL_emulation: app_time_stats: avg=1992.82ms min=30.26ms max=3955.39ms count=2
+10-22 21:03:48.728  2662  6736 D TrafficStats: tagSocket(136) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:48.728  2662  6737 D TrafficStats: tagSocket(130) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:48.864  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:48.865  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:48.879  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:48.879  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:48.945  2662  2711 D EGL_emulation: app_time_stats: avg=2001.75ms min=50.61ms max=3952.89ms count=2
+10-22 21:03:51.908  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:03:52.729  2662  6776 D TrafficStats: tagSocket(132) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:52.732  2662  6777 D TrafficStats: tagSocket(132) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:52.763  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:03:52.768  2662  2662 D CompatibilityChangeReporter: Compat change id reported: 163400105; UID 10192; state: ENABLED
+10-22 21:03:52.768  2662  2662 I ImeTracker: com.h4xtor.share:a73741ed: onRequestShow at ORIGIN_CLIENT_SHOW_SOFT_INPUT reason SHOW_SOFT_INPUT
+10-22 21:03:52.771  2662  2662 D InputMethodManager: showSoftInput() view=android.widget.EditText{d99319d VFED..CL. .F.P..ID 42,124-942,255 aid=1073741824} flags=0 reason=SHOW_SOFT_INPUT
+10-22 21:03:52.804  2662  2711 D EGL_emulation: app_time_stats: avg=1920.89ms min=31.40ms max=3810.38ms count=2
+10-22 21:03:53.013  2662  2662 D InsetsController: show(ime(), fromIme=true)
+10-22 21:03:53.158  2662  2662 I ImeTracker: com.h4xtor.share:a73741ed: onShown
+10-22 21:03:53.819  2662  2711 D EGL_emulation: app_time_stats: avg=75.75ms min=18.97ms max=208.76ms count=13
+10-22 21:03:55.110  2662  2711 D EGL_emulation: app_time_stats: avg=102.75ms min=31.64ms max=498.90ms count=12
+10-22 21:03:56.119  2662  2711 D EGL_emulation: app_time_stats: avg=504.51ms min=499.46ms max=509.56ms count=2
+10-22 21:03:56.731  2662  3699 D TrafficStats: tagSocket(126) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:56.731  2662  2816 D TrafficStats: tagSocket(88) with statsTag=0xffffffff, statsUid=-1
+10-22 21:03:57.612  2662  2711 D EGL_emulation: app_time_stats: avg=298.47ms min=33.44ms max=502.18ms count=5
+10-22 21:03:58.034  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:03:59.124  2662  2711 D EGL_emulation: app_time_stats: avg=503.86ms min=498.29ms max=513.41ms count=3
+10-22 21:04:00.167  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:04:00.610  2662  2711 D EGL_emulation: app_time_stats: avg=495.34ms min=485.67ms max=500.99ms count=3
+10-22 21:04:00.731  2662  4071 D TrafficStats: tagSocket(112) with statsTag=0xffffffff, statsUid=-1
+10-22 21:04:00.731  2662  3728 D TrafficStats: tagSocket(97) with statsTag=0xffffffff, statsUid=-1
+10-22 21:04:01.048  2662  4472 D TrafficStats: tagSocket(110) with statsTag=0xffffffff, statsUid=-1
+10-22 21:04:01.081  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:01.085  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:01.109  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:01.110  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:01.144  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:01.145  2662  2662 I ImeTracker: com.h4xtor.share:68707d25: onRequestHide at ORIGIN_CLIENT_HIDE_SOFT_INPUT reason HIDE_SOFT_INPUT
+10-22 21:04:01.145  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=ImeCallback=ImeOnBackInvokedCallback@77553172 Callback=android.window.IOnBackInvokedCallback$Stub$Proxy@10cdfd7
+10-22 21:04:01.146  2662  2662 I ImeTracker: com.h4xtor.share:ac718a9e: onRequestHide at ORIGIN_CLIENT_HIDE_SOFT_INPUT reason HIDE_SOFT_INPUT
+10-22 21:04:01.164  2662  2662 I ImeTracker: com.h4xtor.share:68707d25: onFailed at PHASE_CLIENT_VIEW_SERVED
+10-22 21:04:01.222  2662  2662 E ImeBackDispatcher: Ime callback not found. Ignoring unregisterReceivedCallback. callbackId: 77553172
+10-22 21:04:01.338  2662  2662 I ImeTracker: com.h4xtor.share:273cef02: onRequestHide at ORIGIN_CLIENT_HIDE_SOFT_INPUT reason HIDE_SOFT_INPUT_BY_INSETS_API
+10-22 21:04:01.340  2662  2662 I ImeTracker: com.h4xtor.share:ac718a9e: onHidden
+10-22 21:04:02.016  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:02.154  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda17@dbf3bfe
+10-22 21:04:02.156  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:03.461  2662  2662 E FrameTracker: force finish cuj, time out: J<IME_INSETS_ANIMATION::0@0@com.h4xtor.share>
+10-22 21:04:04.731  2662  4605 D TrafficStats: tagSocket(89) with statsTag=0xffffffff, statsUid=-1
+10-22 21:04:04.731  2662  4566 D TrafficStats: tagSocket(88) with statsTag=0xffffffff, statsUid=-1
+10-22 21:04:11.629  2662  4680 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:04:11.756  2662  4760 D TrafficStats: tagSocket(114) with statsTag=0xffffffff, statsUid=-1
+10-22 21:04:11.790  2662  2662 D AutofillManager: Fill dialog is enabled:false, hints=[password, passwordAuto, creditCardNumber, creditCardSecurityCode, creditCardExpirationDate]
+10-22 21:04:11.861  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:11.861  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:11.974  2662  2662 E FrameTracker: force finish cuj, time out: J<IME_INSETS_ANIMATION::1@0@com.h4xtor.share>
+10-22 21:04:12.087  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:12.088  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:12.112  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:12.112  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:12.157  2662  4767 D TrafficStats: tagSocket(130) with statsTag=0xffffffff, statsUid=-1
+10-22 21:04:12.176  2662  4856 D TrafficStats: tagSocket(132) with statsTag=0xffffffff, statsUid=-1
+10-22 21:04:12.225  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:12.226  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:12.255  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:12.255  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:15.002  2662  2711 D EGL_emulation: app_time_stats: avg=755.48ms min=43.02ms max=2547.25ms count=4
+10-22 21:04:15.669  2662  4932 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:04:15.669  2662  4872 D TrafficStats: tagSocket(141) with statsTag=0xffffffff, statsUid=-1
+10-22 21:04:15.808  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:15.808  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:15.821  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:15.821  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:17.028  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:04:17.899  2662  2711 D EGL_emulation: app_time_stats: avg=960.37ms min=36.19ms max=1956.63ms count=3
+10-22 21:04:19.214  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:04:19.675  2662  4946 D TrafficStats: tagSocket(88) with statsTag=0xffffffff, statsUid=-1
+10-22 21:04:19.754  2662  4980 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:04:23.797  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:04:25.934  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:04:28.008  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:04:30.082  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:04:32.160  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:04:36.217  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:04:38.260  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:04:40.292  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:04:42.360  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:04:46.398  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:04:48.418  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:04:49.783  2662  5035 D TrafficStats: tagSocket(110) with statsTag=0xffffffff, statsUid=-1
+10-22 21:04:49.783  2662  5741 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:04:50.424  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:04:54.485  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:04:56.498  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:04:57.492  2662  2662 D h4xtor  : click in com.google.android.documentsui: USE THIS FOLDER
+10-22 21:05:00.078  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:05:01.028  2662  2662 D CompatibilityChangeReporter: Compat change id reported: 78294732; UID 10192; state: ENABLED
+10-22 21:05:01.077  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:05:01.100  2662  7500 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:01.128  2662  7500 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:01.159  2662  7500 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:01.179  2662  7500 D TrafficStats: tagSocket(88) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:01.189  2662  5774 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:01.191  2662  5926 D TrafficStats: tagSocket(130) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:01.350  2662  2662 D h4xtor  : click in com.google.android.documentsui: ALLOW
+10-22 21:05:01.598  2662  6076 D TrafficStats: tagSocket(115) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:01.612  2662  6091 D TrafficStats: tagSocket(136) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:03.692  2662  2711 D EGL_emulation: app_time_stats: avg=333.83ms min=42.56ms max=1563.28ms count=7
+10-22 21:05:04.845  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:05:05.621  2662  6094 D TrafficStats: tagSocket(149) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:05.621  2662  6087 D TrafficStats: tagSocket(145) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:05.709  2662  2711 D EGL_emulation: app_time_stats: avg=2017.08ms min=2017.08ms max=2017.08ms count=1
+10-22 21:05:05.889  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741829
+10-22 21:05:05.890  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741830
+10-22 21:05:05.890  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741831
+10-22 21:05:07.934  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:05:08.837  2662  2711 D EGL_emulation: app_time_stats: avg=781.99ms min=15.99ms max=2763.97ms count=4
+10-22 21:05:09.688  2662  6126 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:09.712  2662  6125 D TrafficStats: tagSocket(125) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:09.858  2662  2711 D EGL_emulation: app_time_stats: avg=43.10ms min=26.30ms max=60.77ms count=22
+10-22 21:05:11.381  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:05:12.306  2662  2711 D EGL_emulation: app_time_stats: avg=484.97ms min=4.36ms max=2259.70ms count=5
+10-22 21:05:13.677  2662  6194 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:13.681  2662  6193 D TrafficStats: tagSocket(159) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:13.843  2662  2711 D EGL_emulation: app_time_stats: avg=133.60ms min=29.34ms max=1061.90ms count=11
+10-22 21:05:14.997  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:05:15.904  2662  2711 D EGL_emulation: app_time_stats: avg=1025.53ms min=18.51ms max=2032.56ms count=2
+10-22 21:05:17.677  2662  6333 D TrafficStats: tagSocket(119) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:17.677  2662  6328 D TrafficStats: tagSocket(113) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:17.841  2662  2711 D EGL_emulation: app_time_stats: avg=173.66ms min=26.90ms max=1463.56ms count=11
+10-22 21:05:19.002  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:05:19.902  2662  2711 D EGL_emulation: app_time_stats: avg=1029.26ms min=20.02ms max=2038.51ms count=2
+10-22 21:05:21.677  2662  6332 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:21.677  2662  6338 D TrafficStats: tagSocket(125) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:21.841  2662  2711 D EGL_emulation: app_time_stats: avg=172.22ms min=30.10ms max=1482.01ms count=11
+10-22 21:05:22.996  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:05:25.679  2662  6343 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:25.679  2662  6339 D TrafficStats: tagSocket(114) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:25.840  2662  2711 D EGL_emulation: app_time_stats: avg=1999.72ms min=25.61ms max=3973.84ms count=2
+10-22 21:05:26.986  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:05:27.848  2662  2711 D EGL_emulation: app_time_stats: avg=1003.61ms min=19.82ms max=1987.40ms count=2
+10-22 21:05:27.849  2662  6342 D TrafficStats: tagSocket(124) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:27.891  2662  6342 D TrafficStats: tagSocket(149) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:27.904  2662  6342 D TrafficStats: tagSocket(113) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:27.918  2662  6342 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:28.769  2662  2684 I om.h4xtor.share: Background young concurrent copying GC freed 3714(4154KB) AllocSpace objects, 0(0B) LOS objects, 5% free, 18MB/19MB, paused 109us,24us total 250.532ms
+10-22 21:05:28.883  2662  2711 D EGL_emulation: app_time_stats: avg=88.38ms min=15.69ms max=347.50ms count=11
+10-22 21:05:28.987  2662  2684 I om.h4xtor.share: Background concurrent copying GC freed 34214(7422KB) AllocSpace objects, 147(5964KB) LOS objects, 49% free, 9766KB/19MB, paused 450us,38us total 153.959ms
+10-22 21:05:29.677  2662  6402 D TrafficStats: tagSocket(88) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:29.681  2662  6401 D TrafficStats: tagSocket(162) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:29.968  2662  2711 D EGL_emulation: app_time_stats: avg=51.85ms min=13.23ms max=193.13ms count=20
+10-22 21:05:31.216  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:05:33.681  2662  6572 D TrafficStats: tagSocket(124) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:33.682  2662  6571 D TrafficStats: tagSocket(114) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:33.847  2662  2711 D EGL_emulation: app_time_stats: avg=775.24ms min=24.25ms max=3740.06ms count=5
+10-22 21:05:34.991  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:05:35.886  2662  2711 D EGL_emulation: app_time_stats: avg=1013.87ms min=16.90ms max=2010.83ms count=2
+10-22 21:05:36.930  2662  2711 D EGL_emulation: app_time_stats: avg=42.32ms min=26.84ms max=59.00ms count=23
+10-22 21:05:37.679  2662  6619 D TrafficStats: tagSocket(113) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:37.679  2662  6620 D TrafficStats: tagSocket(129) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:39.001  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:05:41.679  2662  6689 D TrafficStats: tagSocket(119) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:41.679  2662  6690 D TrafficStats: tagSocket(130) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:41.841  2662  2711 D EGL_emulation: app_time_stats: avg=1227.50ms min=27.37ms max=3973.29ms count=4
+10-22 21:05:42.992  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:05:45.679  2662  6732 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:45.681  2662  6733 D TrafficStats: tagSocket(156) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:45.841  2662  2711 D EGL_emulation: app_time_stats: avg=2000.17ms min=24.88ms max=3975.47ms count=2
+10-22 21:05:46.983  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:05:49.682  2662  6736 D TrafficStats: tagSocket(115) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:49.683  2662  6737 D TrafficStats: tagSocket(129) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:49.841  2662  2711 D EGL_emulation: app_time_stats: avg=1996.54ms min=18.99ms max=3974.09ms count=2
+10-22 21:05:50.999  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:05:53.683  2662  6777 D TrafficStats: tagSocket(117) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:53.684  2662  6776 D TrafficStats: tagSocket(130) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:53.840  2662  2711 D EGL_emulation: app_time_stats: avg=1997.24ms min=17.96ms max=3976.52ms count=2
+10-22 21:05:54.985  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:05:57.685  2662  3699 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:57.685  2662  2816 D TrafficStats: tagSocket(119) with statsTag=0xffffffff, statsUid=-1
+10-22 21:05:57.840  2662  2711 D EGL_emulation: app_time_stats: avg=1999.83ms min=26.70ms max=3972.96ms count=2
+10-22 21:05:58.985  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:06:01.686  2662  4071 D TrafficStats: tagSocket(125) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:01.687  2662  3728 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:01.843  2662  2711 D EGL_emulation: app_time_stats: avg=1997.78ms min=17.05ms max=3978.50ms count=2
+10-22 21:06:02.994  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:06:05.688  2662  4605 D TrafficStats: tagSocket(117) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:05.688  2662  4472 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:05.845  2662  2711 D EGL_emulation: app_time_stats: avg=1996.53ms min=17.90ms max=3975.16ms count=2
+10-22 21:06:06.993  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:06:09.687  2662  4566 D TrafficStats: tagSocket(130) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:09.687  2662  4680 D TrafficStats: tagSocket(118) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:09.842  2662  2711 D EGL_emulation: app_time_stats: avg=1996.87ms min=24.21ms max=3969.53ms count=2
+10-22 21:06:10.992  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:06:13.688  2662  4760 D TrafficStats: tagSocket(88) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:13.688  2662  4767 D TrafficStats: tagSocket(124) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:13.843  2662  2711 D EGL_emulation: app_time_stats: avg=1996.67ms min=15.67ms max=3977.67ms count=2
+10-22 21:06:14.996  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:06:15.886  2662  2711 D EGL_emulation: app_time_stats: avg=1014.17ms min=16.47ms max=2011.86ms count=2
+10-22 21:06:16.925  2662  2711 D EGL_emulation: app_time_stats: avg=44.09ms min=29.58ms max=59.38ms count=22
+10-22 21:06:17.689  2662  4856 D TrafficStats: tagSocket(125) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:17.689  2662  4932 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:18.995  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:06:19.904  2662  2711 D EGL_emulation: app_time_stats: avg=740.00ms min=16.98ms max=2032.96ms count=4
+10-22 21:06:21.690  2662  4980 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:21.690  2662  4872 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:21.858  2662  2711 D EGL_emulation: app_time_stats: avg=191.74ms min=30.80ms max=1530.22ms count=10
+10-22 21:06:23.029  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:06:23.918  2662  2711 D EGL_emulation: app_time_stats: avg=1028.80ms min=17.62ms max=2039.98ms count=2
+10-22 21:06:25.690  2662  4946 D TrafficStats: tagSocket(113) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:25.690  2662  5035 D TrafficStats: tagSocket(129) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:25.848  2662  2711 D EGL_emulation: app_time_stats: avg=172.01ms min=28.75ms max=1481.78ms count=11
+10-22 21:06:27.013  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:06:29.081  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:06:29.692  2662  5741 D TrafficStats: tagSocket(117) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:29.692  2662  5926 D TrafficStats: tagSocket(124) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:29.859  2662  2711 D EGL_emulation: app_time_stats: avg=2002.22ms min=17.55ms max=3986.89ms count=2
+10-22 21:06:32.060  2662  2662 D CompatibilityChangeReporter: Compat change id reported: 150939131; UID 10192; state: ENABLED
+10-22 21:06:32.602  2662  2711 D EGL_emulation: app_time_stats: avg=680.44ms min=8.63ms max=2571.76ms count=4
+10-22 21:06:33.631  2662  8151 D TrafficStats: tagSocket(114) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:33.648  2662  8151 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:33.660  2662  2711 D EGL_emulation: app_time_stats: avg=1056.96ms min=1056.96ms max=1056.96ms count=1
+10-22 21:06:33.701  2662  6076 D TrafficStats: tagSocket(113) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:33.701  2662  6091 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:34.440  2662  6094 D TrafficStats: tagSocket(119) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:34.442  2662  6087 D TrafficStats: tagSocket(145) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:34.599  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741846
+10-22 21:06:34.600  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741847
+10-22 21:06:34.601  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741848
+10-22 21:06:34.602  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741849
+10-22 21:06:34.602  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741850
+10-22 21:06:34.603  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741851
+10-22 21:06:34.604  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741852
+10-22 21:06:34.689  2662  2711 D EGL_emulation: app_time_stats: avg=255.96ms min=14.05ms max=763.77ms count=4
+10-22 21:06:36.253  2662  2711 D EGL_emulation: app_time_stats: avg=778.14ms min=12.96ms max=1543.32ms count=2
+10-22 21:06:37.691  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:06:38.440  2662  6125 D TrafficStats: tagSocket(88) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:38.440  2662  6126 D TrafficStats: tagSocket(118) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:38.561  2662  2711 D EGL_emulation: app_time_stats: avg=2307.89ms min=2307.89ms max=2307.89ms count=1
+10-22 21:06:38.612  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:38.612  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:38.680  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:38.680  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:38.700  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:38.700  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:40.782  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:06:42.440  2662  6193 D TrafficStats: tagSocket(133) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:42.440  2662  6194 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:42.579  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:42.580  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:42.594  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:42.594  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:42.662  2662  2711 D EGL_emulation: app_time_stats: avg=1025.16ms min=29.57ms max=3853.27ms count=4
+10-22 21:06:43.775  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:06:44.646  2662  2711 D EGL_emulation: app_time_stats: avg=989.25ms min=30.34ms max=1948.16ms count=2
+10-22 21:06:44.773  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741858
+10-22 21:06:44.774  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741859
+10-22 21:06:44.774  2662  2662 D AutofillManager: Triggering pre-emptive request for fill dialog.
+10-22 21:06:45.103  2662  2662 I AssistStructure: Flattened final assist data: 5948 bytes, containing 2 windows, 50 views
+10-22 21:06:46.324  2662  2711 D EGL_emulation: app_time_stats: avg=347.87ms min=9.48ms max=988.26ms count=4
+10-22 21:06:46.509  2662  6333 D TrafficStats: tagSocket(117) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:46.511  2662  6328 D TrafficStats: tagSocket(186) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:46.753  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:46.754  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:46.779  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:46.779  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:46.866  2662  2711 D EGL_emulation: app_time_stats: avg=443.89ms min=54.43ms max=1628.16ms count=5
+10-22 21:06:47.319  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:06:48.178  2662  2662 I ImeTracker: com.h4xtor.share:e5bf60da: onRequestShow at ORIGIN_CLIENT_SHOW_SOFT_INPUT reason SHOW_SOFT_INPUT
+10-22 21:06:48.179  2662  2662 D InputMethodManager: showSoftInput() view=android.widget.EditText{678dc67 VFED..CL. .F.P..ID 196,0-824,118 aid=1073741858} flags=0 reason=SHOW_SOFT_INPUT
+10-22 21:06:48.223  2662  2711 D EGL_emulation: app_time_stats: avg=207.28ms min=13.95ms max=1513.97ms count=9
+10-22 21:06:48.464  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda17@75adab7
+10-22 21:06:48.507  2662  2662 D InsetsController: show(ime(), fromIme=true)
+10-22 21:06:48.580  2662  2711 D EGL_emulation: app_time_stats: avg=854.54ms min=32.13ms max=1676.95ms count=2
+10-22 21:06:48.942  2662  2662 I ImeTracker: com.h4xtor.share:e5bf60da: onShown
+10-22 21:06:49.285  2662  2711 D EGL_emulation: app_time_stats: avg=212.23ms min=130.74ms max=407.40ms count=5
+10-22 21:06:50.501  2662  6338 D TrafficStats: tagSocket(165) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:50.501  2662  6332 D TrafficStats: tagSocket(137) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:50.641  2662  2711 D EGL_emulation: app_time_stats: avg=161.39ms min=57.87ms max=499.56ms count=8
+10-22 21:06:50.649  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:50.649  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:50.698  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:50.698  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:50.762  2662  2711 D EGL_emulation: app_time_stats: avg=543.41ms min=43.41ms max=1815.69ms count=4
+10-22 21:06:51.952  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:06:52.140  2662  2711 D EGL_emulation: app_time_stats: avg=499.38ms min=490.59ms max=507.54ms count=3
+10-22 21:06:52.812  2662  2662 I ImeTracker: com.h4xtor.share:4f0a62a3: onRequestShow at ORIGIN_CLIENT_SHOW_SOFT_INPUT reason SHOW_SOFT_INPUT
+10-22 21:06:52.812  2662  2662 D InputMethodManager: showSoftInput() view=android.widget.EditText{73272bd VFED..CL. .F.P..ID 58,253-882,371 aid=1073741859} flags=0 reason=SHOW_SOFT_INPUT
+10-22 21:06:52.943  2662  2711 D EGL_emulation: app_time_stats: avg=1090.13ms min=51.75ms max=2128.50ms count=2
+10-22 21:06:52.953  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=ImeCallback=ImeOnBackInvokedCallback@77553172 Callback=android.window.IOnBackInvokedCallback$Stub$Proxy@d324dd4
+10-22 21:06:52.958  2662  2662 D InsetsController: show(ime(), fromIme=true)
+10-22 21:06:52.959  2662  2662 I ImeTracker: com.h4xtor.share:f17ad5a3: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+10-22 21:06:52.959  2662  2662 D InsetsController: show(ime(), fromIme=true)
+10-22 21:06:52.960  2662  2662 I ImeTracker: com.h4xtor.share:4f0a62a3: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+10-22 21:06:53.090  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda17@8778a72
+10-22 21:06:53.427  2662  2711 D EGL_emulation: app_time_stats: avg=257.42ms min=103.11ms max=500.01ms count=5
+10-22 21:06:54.501  2662  6339 D TrafficStats: tagSocket(124) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:54.501  2662  6343 D TrafficStats: tagSocket(113) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:54.640  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:54.641  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:54.654  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:54.654  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:54.714  2662  2711 D EGL_emulation: app_time_stats: avg=590.24ms min=185.81ms max=1221.47ms count=3
+10-22 21:06:54.808  2662  2711 D EGL_emulation: app_time_stats: avg=125.25ms min=12.95ms max=465.42ms count=11
+10-22 21:06:56.290  2662  2711 D EGL_emulation: app_time_stats: avg=493.88ms min=485.98ms max=500.00ms count=3
+10-22 21:06:56.363  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:06:57.232  2662  2711 D EGL_emulation: app_time_stats: avg=1253.46ms min=27.14ms max=2479.78ms count=2
+10-22 21:06:57.499  2662  2711 D EGL_emulation: app_time_stats: avg=604.48ms min=516.96ms max=691.99ms count=2
+10-22 21:06:58.477  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:06:58.503  2662  6402 D TrafficStats: tagSocket(136) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:58.509  2662  6401 D TrafficStats: tagSocket(140) with statsTag=0xffffffff, statsUid=-1
+10-22 21:06:58.520  2662  2711 D EGL_emulation: app_time_stats: avg=166.77ms min=28.21ms max=513.32ms count=6
+10-22 21:06:58.676  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:58.676  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:58.704  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:58.704  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:06:58.770  2662  2711 D EGL_emulation: app_time_stats: avg=1537.89ms min=1537.89ms max=1537.89ms count=1
+10-22 21:06:59.182  2662  2662 E FrameTracker: force finish cuj, time out: J<IME_INSETS_ANIMATION::0@0@com.h4xtor.share>
+10-22 21:06:59.549  2662  2711 D EGL_emulation: app_time_stats: avg=514.89ms min=512.33ms max=517.45ms count=2
+10-22 21:07:00.497  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:07:01.023  2662  2711 D EGL_emulation: app_time_stats: avg=491.23ms min=479.11ms max=503.61ms count=3
+10-22 21:07:01.351  2662  2662 I ImeTracker: com.h4xtor.share:c4a6ae22: onRequestShow at ORIGIN_CLIENT_SHOW_SOFT_INPUT reason SHOW_SOFT_INPUT
+10-22 21:07:01.351  2662  2662 D InputMethodManager: showSoftInput() view=android.widget.EditText{73272bd VFED..CL. .F.P..ID 58,253-882,371 aid=1073741859} flags=0 reason=SHOW_SOFT_INPUT
+10-22 21:07:01.368  2662  2662 D InsetsController: show(ime(), fromIme=true)
+10-22 21:07:01.369  2662  2662 I ImeTracker: com.h4xtor.share:c4a6ae22: onCancelled at PHASE_CLIENT_APPLY_ANIMATION
+10-22 21:07:01.621  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda17@ed49704
+10-22 21:07:01.928  2662  2711 D EGL_emulation: app_time_stats: avg=1575.26ms min=27.72ms max=3122.80ms count=2
+10-22 21:07:02.029  2662  2711 D EGL_emulation: app_time_stats: avg=251.36ms min=115.16ms max=342.08ms count=4
+10-22 21:07:02.518  2662  6342 D TrafficStats: tagSocket(139) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:02.520  2662  6572 D TrafficStats: tagSocket(163) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:02.810  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:02.811  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:02.833  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:02.833  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:02.939  2662  2711 D EGL_emulation: app_time_stats: avg=489.87ms min=49.83ms max=929.91ms count=2
+10-22 21:07:03.124  2662  2711 D EGL_emulation: app_time_stats: avg=78.42ms min=8.56ms max=261.92ms count=13
+10-22 21:07:04.440  2662  2711 D EGL_emulation: app_time_stats: avg=438.63ms min=317.37ms max=520.33ms count=3
+10-22 21:07:04.942  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:07:05.940  2662  2711 D EGL_emulation: app_time_stats: avg=499.88ms min=492.07ms max=507.57ms count=3
+10-22 21:07:06.518  2662  6619 D TrafficStats: tagSocket(149) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:06.519  2662  6571 D TrafficStats: tagSocket(88) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:06.661  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:06.661  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:06.676  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:06.676  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:06.739  2662  2711 D EGL_emulation: app_time_stats: avg=1890.48ms min=60.07ms max=3720.88ms count=2
+10-22 21:07:06.948  2662  2711 D EGL_emulation: app_time_stats: avg=504.21ms min=500.10ms max=508.32ms count=2
+10-22 21:07:08.448  2662  2711 D EGL_emulation: app_time_stats: avg=500.00ms min=491.46ms max=508.50ms count=3
+10-22 21:07:09.463  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:07:09.940  2662  2711 D EGL_emulation: app_time_stats: avg=495.81ms min=487.32ms max=500.61ms count=3
+10-22 21:07:10.349  2662  2711 D EGL_emulation: app_time_stats: avg=1802.93ms min=30.35ms max=3575.51ms count=2
+10-22 21:07:10.368  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=ImeCallback=ImeOnBackInvokedCallback@77553172 Callback=android.window.IOnBackInvokedCallback$Stub$Proxy@fb4572a
+10-22 21:07:10.368  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda17@fef1197
+10-22 21:07:10.513  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:10.513  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:10.581  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:10.581  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:10.705  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:10.705  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:10.726  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:10.726  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:10.758  2662  6620 D TrafficStats: tagSocket(113) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:10.762  2662  6690 D TrafficStats: tagSocket(115) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:10.766  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:10.766  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:10.784  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:10.784  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:10.904  2662  2662 E ImeBackDispatcher: Ime callback not found. Ignoring unregisterReceivedCallback. callbackId: 77553172
+10-22 21:07:10.996  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:10.996  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:11.029  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:11.030  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:12.990  2662  2711 D EGL_emulation: app_time_stats: avg=440.16ms min=37.48ms max=1844.38ms count=6
+10-22 21:07:14.161  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:07:14.756  2662  6732 D TrafficStats: tagSocket(124) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:14.756  2662  6689 D TrafficStats: tagSocket(136) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:14.896  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:14.896  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:14.910  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:14.911  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:14.980  2662  2711 D EGL_emulation: app_time_stats: avg=1989.76ms min=1989.76ms max=1989.76ms count=1
+10-22 21:07:15.131  2662  6733 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:15.133  2662  6737 D TrafficStats: tagSocket(160) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:15.143  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:15.144  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:15.158  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:15.158  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:15.282  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:15.284  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:15.312  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:15.312  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:18.377  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:07:19.133  2662  6776 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:19.133  2662  6736 D TrafficStats: tagSocket(133) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:19.243  2662  2711 D EGL_emulation: app_time_stats: avg=704.79ms min=27.63ms max=3803.73ms count=6
+10-22 21:07:19.263  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:19.263  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:19.282  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:19.283  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:19.342  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:19.343  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:19.364  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:19.364  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:21.466  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:07:22.326  2662  2711 D EGL_emulation: app_time_stats: avg=768.48ms min=30.28ms max=2840.92ms count=4
+10-22 21:07:22.353  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:22.358  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:22.387  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:22.387  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:23.135  2662  2816 D TrafficStats: tagSocket(117) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:23.135  2662  6777 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:23.274  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:23.274  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:23.287  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:23.287  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:23.354  2662  2711 D EGL_emulation: app_time_stats: avg=338.09ms min=29.43ms max=859.34ms count=3
+10-22 21:07:24.697  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:07:25.587  2662  2711 D EGL_emulation: app_time_stats: avg=1113.28ms min=33.01ms max=2193.55ms count=2
+10-22 21:07:27.135  2662  4071 D TrafficStats: tagSocket(115) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:27.135  2662  3699 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:27.275  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:27.276  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:27.290  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:27.290  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:27.326  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741922
+10-22 21:07:27.357  2662  2711 D EGL_emulation: app_time_stats: avg=218.42ms min=31.71ms max=1408.92ms count=8
+10-22 21:07:28.492  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:07:30.609  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:07:31.135  2662  3728 D TrafficStats: tagSocket(137) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:31.135  2662  4472 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:31.273  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:31.273  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:31.286  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:31.286  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:31.322  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741923
+10-22 21:07:31.356  2662  2711 D EGL_emulation: app_time_stats: avg=1991.73ms min=32.64ms max=3950.83ms count=2
+10-22 21:07:31.482  2662  2662 D TrafficStats: tagSocket(88) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:31.505  2662  8625 D BluetoothSocket: accept(), timeout (ms):-1
+10-22 21:07:31.510  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:31.511  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:31.524  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:31.524  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:31.561  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741924
+10-22 21:07:31.654  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:31.654  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:31.676  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:31.676  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:31.716  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741925
+10-22 21:07:34.726  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:07:35.136  2662  4605 D TrafficStats: tagSocket(125) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:35.137  2662  4680 D TrafficStats: tagSocket(119) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:35.277  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:35.277  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:35.294  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:35.294  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:35.333  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741926
+10-22 21:07:35.366  2662  2711 D EGL_emulation: app_time_stats: avg=663.87ms min=32.51ms max=3577.23ms count=6
+10-22 21:07:38.076  2662  8624 D TrafficStats: tagSocket(113) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:38.077  2662  8624 D TrafficStats: tagSocket(133) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:38.079  2662  8655 D TrafficStats: tagSocket(146) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:38.080  2662  2818 D TrafficStats: tagSocket(157) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:38.110  2662  2711 D EGL_emulation: app_time_stats: avg=1371.74ms min=46.02ms max=2697.46ms count=2
+10-22 21:07:38.337  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:38.340  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:38.382  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:38.382  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:38.464  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741927
+10-22 21:07:39.154  2662  4566 D TrafficStats: tagSocket(124) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:39.158  2662  4760 D TrafficStats: tagSocket(127) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:39.160  2662  8656 D TrafficStats: tagSocket(146) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:39.475  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:39.475  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:39.506  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:39.506  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:39.775  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741928
+10-22 21:07:39.869  2662  2711 D EGL_emulation: app_time_stats: avg=439.66ms min=127.38ms max=1045.76ms count=4
+10-22 21:07:39.909  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:39.913  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:39.970  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:39.970  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:40.167  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741929
+10-22 21:07:40.371  2662  8655 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:40.410  2662  2818 D TrafficStats: tagSocket(162) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:42.819  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:42.827  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:43.232  2662  4767 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:43.258  2662  4932 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:43.259  2662  8656 D TrafficStats: tagSocket(104) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:43.736  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:43.764  2662  2818 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:43.803  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:43.804  2662  2818 D TrafficStats: tagSocket(118) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:43.909  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:43.909  2662  2818 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:44.013  2662  2684 I om.h4xtor.share: Background concurrent copying GC freed 89288(5017KB) AllocSpace objects, 190(6472KB) LOS objects, 49% free, 8862KB/17MB, paused 45us,31us total 155.852ms
+10-22 21:07:44.041  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:44.042  2662  2818 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:44.176  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:44.177  2662  2818 D TrafficStats: tagSocket(118) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:44.399  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:44.428  2662  2818 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:44.627  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:44.637  2662  2818 D TrafficStats: tagSocket(118) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:44.726  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:44.731  2662  2818 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:44.823  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:44.824  2662  2818 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:44.876  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:44.877  2662  2818 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:44.971  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:44.972  2662  2818 D TrafficStats: tagSocket(118) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:44.985  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:44.986  2662  2818 D TrafficStats: tagSocket(117) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:45.081  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:45.082  2662  2818 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:45.143  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:45.143  2662  2818 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:45.240  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:45.243  2662  2818 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:45.375  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:45.376  2662  2818 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:45.388  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:45.389  2662  2818 D TrafficStats: tagSocket(115) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:45.478  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:45.479  2662  2818 D TrafficStats: tagSocket(117) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:47.603  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:47.603  2662  2818 D TrafficStats: tagSocket(117) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:47.695  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:47.696  2662  2818 D TrafficStats: tagSocket(117) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:49.923  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:49.924  2662  2818 D TrafficStats: tagSocket(117) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:50.200  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:50.229  2662  2818 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:50.230  2662  8655 D TrafficStats: tagSocket(115) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:50.233  2662  2818 D TrafficStats: tagSocket(129) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:50.438  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:50.442  2662  2818 D TrafficStats: tagSocket(115) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:50.549  2662  8655 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:50.554  2662  2818 D TrafficStats: tagSocket(118) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:50.734  2662  8655 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:50.736  2662  2818 D TrafficStats: tagSocket(125) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:53.397  2662  4856 D TrafficStats: tagSocket(102) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:53.399  2662  4980 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:53.403  2662  8656 D TrafficStats: tagSocket(129) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:53.452  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:53.624  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:53.812  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:53.868  2662  2684 I om.h4xtor.share: Background concurrent copying GC freed 11268(681KB) AllocSpace objects, 79(4940KB) LOS objects, 49% free, 4412KB/8824KB, paused 31us,28us total 168.963ms
+10-22 21:07:53.926  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741930
+10-22 21:07:54.208  2662  2689 I OpenGLRenderer: Davey! duration=715ms; Flags=1, FrameTimelineVsyncId=30516, IntendedVsync=404132145928, Vsync=404532145912, InputEventId=0, HandleInputStart=404540034913, AnimationStart=404540043158, PerformTraversalsStart=404540140490, DrawStart=404683496523, FrameDeadline=404148812594, FrameInterval=404533245028, FrameStartTime=16666666, SyncQueued=404796284539, SyncStart=404804463393, IssueDrawCommandsStart=404804725061, SwapBuffers=404811313851, FrameCompleted=404855715664, DequeueBufferDuration=3506, QueueBufferDuration=2180767, GpuCompleted=404855659850, SwapBuffersCompleted=404855715664, DisplayPresentTime=0, CommandSubmissionCompleted=404811313851, 
+10-22 21:07:54.253  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:54.253  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:54.274  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:54.274  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:54.506  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741931
+10-22 21:07:54.800  2662  6384 I OpenGLRenderer: Davey! duration=805ms; Flags=0, FrameTimelineVsyncId=30658, IntendedVsync=404682145906, Vsync=405048812558, InputEventId=0, HandleInputStart=405050076978, AnimationStart=405050084050, PerformTraversalsStart=405050974412, DrawStart=405265095225, FrameDeadline=404882145898, FrameInterval=405049979906, FrameStartTime=16666666, SyncQueued=405358404583, SyncStart=405390576515, IssueDrawCommandsStart=405390892485, SwapBuffers=405462941288, FrameCompleted=405519637974, DequeueBufferDuration=2414, QueueBufferDuration=138579, GpuCompleted=405519637974, SwapBuffersCompleted=405508857276, DisplayPresentTime=0, CommandSubmissionCompleted=405462941288, 
+10-22 21:07:54.844  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:54.845  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:54.929  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:54.929  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:55.012  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741932
+10-22 21:07:55.294  2662  8802 I OpenGLRenderer: Davey! duration=710ms; Flags=0, FrameTimelineVsyncId=30837, IntendedVsync=405248812550, Vsync=405698812532, InputEventId=0, HandleInputStart=405712179070, AnimationStart=405712186955, PerformTraversalsStart=405713116719, DrawStart=405743174606, FrameDeadline=405548812538, FrameInterval=405711310510, FrameStartTime=16666666, SyncQueued=405768163398, SyncStart=405774500951, IssueDrawCommandsStart=405774846015, SwapBuffers=405886358919, FrameCompleted=405965864182, DequeueBufferDuration=2234, QueueBufferDuration=339393, GpuCompleted=405965807116, SwapBuffersCompleted=405965864182, DisplayPresentTime=0, CommandSubmissionCompleted=405886358919, 
+10-22 21:07:57.427  2662  4872 D TrafficStats: tagSocket(141) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:57.429  2662  5035 D TrafficStats: tagSocket(145) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:57.437  2662  8656 D TrafficStats: tagSocket(159) with statsTag=0xffffffff, statsUid=-1
+10-22 21:07:57.760  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:57.760  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:57.841  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:57.864  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:57.926  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741933
+10-22 21:07:58.038  2662  2711 D EGL_emulation: app_time_stats: avg=977.90ms min=132.03ms max=2669.42ms count=4
+10-22 21:07:59.070  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:07:59.928  2662  2711 D EGL_emulation: app_time_stats: avg=927.75ms min=42.12ms max=1813.38ms count=2
+10-22 21:07:59.957  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:59.957  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:59.972  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:07:59.972  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:01.396  2662  4946 D TrafficStats: tagSocket(135) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:01.397  2662  5926 D TrafficStats: tagSocket(119) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:01.397  2662  8656 D TrafficStats: tagSocket(169) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:01.618  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:01.618  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:01.633  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:01.633  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:01.699  2662  2711 D EGL_emulation: app_time_stats: avg=590.19ms min=56.26ms max=1596.61ms count=3
+10-22 21:08:02.809  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:08:03.704  2662  2711 D EGL_emulation: app_time_stats: avg=998.57ms min=32.21ms max=1964.93ms count=2
+10-22 21:08:05.397  2662  5741 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:05.397  2662  5774 D TrafficStats: tagSocket(104) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:05.397  2662  8656 D TrafficStats: tagSocket(156) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:05.624  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:05.625  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:05.642  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:05.642  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:05.686  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741936
+10-22 21:08:05.720  2662  2711 D EGL_emulation: app_time_stats: avg=247.36ms min=28.54ms max=1689.97ms count=8
+10-22 21:08:06.946  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:08:09.398  2662  6076 D TrafficStats: tagSocket(111) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:09.400  2662  8656 D TrafficStats: tagSocket(145) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:09.406  2662  6091 D TrafficStats: tagSocket(154) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:09.634  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:09.635  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:09.647  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:09.647  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:09.682  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741937
+10-22 21:08:09.713  2662  2711 D EGL_emulation: app_time_stats: avg=1995.67ms min=50.07ms max=3941.28ms count=2
+10-22 21:08:10.858  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:08:11.729  2662  2711 D EGL_emulation: app_time_stats: avg=1006.49ms min=32.30ms max=1980.69ms count=2
+10-22 21:08:11.798  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:11.798  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:11.811  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:11.811  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:13.410  2662  6087 D TrafficStats: tagSocket(125) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:13.410  2662  6094 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:13.411  2662  8656 D TrafficStats: tagSocket(149) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:13.634  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:13.634  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:13.648  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:13.648  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:13.713  2662  2711 D EGL_emulation: app_time_stats: avg=487.71ms min=26.06ms max=1781.28ms count=4
+10-22 21:08:14.901  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:08:15.755  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:15.759  2662  2662 I ImeTracker: com.h4xtor.share:7f44e836: onRequestShow at ORIGIN_CLIENT_SHOW_SOFT_INPUT reason SHOW_SOFT_INPUT
+10-22 21:08:15.760  2662  2662 D InputMethodManager: showSoftInput() view=android.widget.EditText{e981e9c VFED..CL. .F.P..ID 42,124-942,255 aid=1073741824} flags=0 reason=SHOW_SOFT_INPUT
+10-22 21:08:15.785  2662  2711 D EGL_emulation: app_time_stats: avg=1035.05ms min=29.99ms max=2040.11ms count=2
+10-22 21:08:15.869  2662  2662 D InsetsController: show(ime(), fromIme=true)
+10-22 21:08:15.943  2662  2662 I ImeTracker: com.h4xtor.share:7f44e836: onShown
+10-22 21:08:16.823  2662  2711 D EGL_emulation: app_time_stats: avg=107.78ms min=44.18ms max=264.98ms count=9
+10-22 21:08:17.481  2662  6125 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:17.484  2662  8656 D TrafficStats: tagSocket(141) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:17.491  2662  6126 D TrafficStats: tagSocket(152) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:17.826  2662  2711 D EGL_emulation: app_time_stats: avg=52.96ms min=32.22ms max=72.90ms count=17
+10-22 21:08:19.110  2662  2711 D EGL_emulation: app_time_stats: avg=209.59ms min=7.22ms max=499.93ms count=6
+10-22 21:08:20.110  2662  2711 D EGL_emulation: app_time_stats: avg=499.91ms min=499.42ms max=500.39ms count=2
+10-22 21:08:20.552  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:08:21.126  2662  2711 D EGL_emulation: app_time_stats: avg=508.36ms min=494.32ms max=522.39ms count=2
+10-22 21:08:21.424  2662  6193 D TrafficStats: tagSocket(110) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:21.427  2662  8656 D TrafficStats: tagSocket(139) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:21.441  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:21.442  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:21.468  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:21.468  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:21.510  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:21.511  2662  2662 I ImeTracker: com.h4xtor.share:eec095d9: onRequestHide at ORIGIN_CLIENT_HIDE_SOFT_INPUT reason HIDE_SOFT_INPUT
+10-22 21:08:21.511  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=ImeCallback=ImeOnBackInvokedCallback@77553172 Callback=android.window.IOnBackInvokedCallback$Stub$Proxy@1697d06
+10-22 21:08:21.512  2662  2662 I ImeTracker: com.h4xtor.share:ca986df7: onRequestHide at ORIGIN_CLIENT_HIDE_SOFT_INPUT reason HIDE_SOFT_INPUT
+10-22 21:08:21.514  2662  2662 I ImeTracker: com.h4xtor.share:eec095d9: onFailed at PHASE_CLIENT_VIEW_SERVED
+10-22 21:08:21.602  2662  6194 D TrafficStats: tagSocket(115) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:21.606  2662  2662 E ImeBackDispatcher: Ime callback not found. Ignoring unregisterReceivedCallback. callbackId: 77553172
+10-22 21:08:21.609  2662  8656 D TrafficStats: tagSocket(136) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:21.612  2662  6328 D TrafficStats: tagSocket(138) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:21.728  2662  2662 I ImeTracker: com.h4xtor.share:24695e38: onRequestHide at ORIGIN_CLIENT_HIDE_SOFT_INPUT reason HIDE_SOFT_INPUT_BY_INSETS_API
+10-22 21:08:21.732  2662  2662 I ImeTracker: com.h4xtor.share:ca986df7: onHidden
+10-22 21:08:22.048  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:22.261  2662  2662 D AutofillManager: onActivityFinishing(): calling cancelLocked()
+10-22 21:08:22.261  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda17@8cf8f41
+10-22 21:08:22.262  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:24.840  2662  2711 D EGL_emulation: app_time_stats: avg=331.29ms min=22.50ms max=1119.46ms count=4
+10-22 21:08:25.605  2662  6338 D TrafficStats: tagSocket(135) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:25.607  2662  6333 D TrafficStats: tagSocket(169) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:25.607  2662  8656 D TrafficStats: tagSocket(171) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:25.950  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:08:26.292  2662  2662 E FrameTracker: force finish cuj, time out: J<IME_INSETS_ANIMATION::0@0@com.h4xtor.share>
+10-22 21:08:26.292  2662  2662 W FrameTracker: Missed SF frame:UNKNOWN: 66, 32284, 0, CUJ=J<IME_INSETS_ANIMATION::0@0@com.h4xtor.share>
+10-22 21:08:26.798  2662  2662 D AutofillManager: Fill dialog is enabled:false, hints=[password, passwordAuto, creditCardNumber, creditCardSecurityCode, creditCardExpirationDate]
+10-22 21:08:26.819  2662  2711 D EGL_emulation: app_time_stats: avg=172.68ms min=11.91ms max=1407.40ms count=11
+10-22 21:08:26.864  2662  6029 D TrafficStats: tagSocket(112) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:26.869  2662  8656 D TrafficStats: tagSocket(114) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:26.959  2662  6029 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:26.960  2662  8656 D TrafficStats: tagSocket(125) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:27.065  2662  6029 D TrafficStats: tagSocket(138) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:27.066  2662  8656 D TrafficStats: tagSocket(157) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:27.203  2662  6029 D TrafficStats: tagSocket(115) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:27.210  2662  8656 D TrafficStats: tagSocket(124) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:27.341  2662  6029 D TrafficStats: tagSocket(135) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:27.345  2662  8656 D TrafficStats: tagSocket(137) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:27.404  2662  6029 D TrafficStats: tagSocket(156) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:27.405  2662  8656 D TrafficStats: tagSocket(162) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:27.516  2662  6029 D TrafficStats: tagSocket(112) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:27.517  2662  8656 D TrafficStats: tagSocket(118) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:27.617  2662  6029 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:27.617  2662  8656 D TrafficStats: tagSocket(139) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:27.729  2662  6029 D TrafficStats: tagSocket(138) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:27.730  2662  8656 D TrafficStats: tagSocket(145) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:27.840  2662  6029 D TrafficStats: tagSocket(157) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:27.843  2662  8656 D TrafficStats: tagSocket(115) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:27.975  2662  2711 D EGL_emulation: app_time_stats: avg=231.23ms min=33.74ms max=550.94ms count=5
+10-22 21:08:28.039  2662  6029 D TrafficStats: tagSocket(130) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.040  2662  8656 D TrafficStats: tagSocket(135) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.125  2662  6029 D TrafficStats: tagSocket(143) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.125  2662  8656 D TrafficStats: tagSocket(144) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.228  2662  6029 D TrafficStats: tagSocket(112) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.229  2662  8656 D TrafficStats: tagSocket(114) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.307  2662  6029 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.308  2662  8656 D TrafficStats: tagSocket(125) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.413  2662  6029 D TrafficStats: tagSocket(138) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.413  2662  8656 D TrafficStats: tagSocket(147) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.542  2662  6029 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.542  2662  8656 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.641  2662  6029 D TrafficStats: tagSocket(129) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.641  2662  8656 D TrafficStats: tagSocket(135) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.741  2662  6029 D TrafficStats: tagSocket(143) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.741  2662  8656 D TrafficStats: tagSocket(144) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.801  2662  6029 D TrafficStats: tagSocket(112) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.802  2662  8656 D TrafficStats: tagSocket(118) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.863  2662  6029 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.864  2662  8656 D TrafficStats: tagSocket(139) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.981  2662  6029 D TrafficStats: tagSocket(127) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:28.982  2662  8656 D TrafficStats: tagSocket(141) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:29.054  2662  6029 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:29.055  2662  8656 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:29.118  2662  6029 D TrafficStats: tagSocket(129) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:29.118  2662  8656 D TrafficStats: tagSocket(135) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:29.188  2662  2711 D EGL_emulation: app_time_stats: avg=202.07ms min=55.21ms max=275.55ms count=6
+10-22 21:08:29.230  2662  6029 D TrafficStats: tagSocket(140) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:29.233  2662  8656 D TrafficStats: tagSocket(143) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:29.332  2662  6029 D TrafficStats: tagSocket(112) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:29.332  2662  8656 D TrafficStats: tagSocket(118) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:31.107  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda17@2a861be
+10-22 21:08:32.301  2662  2662 E FrameTracker: force finish cuj, time out: J<IME_INSETS_ANIMATION::1@0@com.h4xtor.share>
+10-22 21:08:39.053  2662  6332 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:39.058  2662  8656 D TrafficStats: tagSocket(104) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:39.062  2662  6343 D TrafficStats: tagSocket(111) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:39.092  2662  2662 D AutofillManager: Fill dialog is enabled:false, hints=[password, passwordAuto, creditCardNumber, creditCardSecurityCode, creditCardExpirationDate]
+10-22 21:08:39.220  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:39.220  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:39.529  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:39.529  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:39.551  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:39.551  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:39.588  2662  6402 D TrafficStats: tagSocket(134) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:39.589  2662  6339 D TrafficStats: tagSocket(142) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:39.591  2662  8656 D TrafficStats: tagSocket(136) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:39.601  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:39.601  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:39.621  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:39.622  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:42.353  2662  2711 D EGL_emulation: app_time_stats: avg=746.88ms min=74.84ms max=2525.81ms count=4
+10-22 21:08:43.068  2662  6572 D TrafficStats: tagSocket(141) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:43.068  2662  6401 D TrafficStats: tagSocket(144) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:43.069  2662  8656 D TrafficStats: tagSocket(154) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:43.291  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:43.291  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:43.308  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:43.308  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:43.382  2662  2711 D EGL_emulation: app_time_stats: avg=1028.71ms min=1028.71ms max=1028.71ms count=1
+10-22 21:08:47.071  2662  6342 D TrafficStats: tagSocket(114) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:47.071  2662  8656 D TrafficStats: tagSocket(118) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:47.073  2662  6571 D TrafficStats: tagSocket(165) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:47.293  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:47.293  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:47.305  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:47.305  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:47.368  2662  2711 D EGL_emulation: app_time_stats: avg=1988.98ms min=30.27ms max=3947.69ms count=2
+10-22 21:08:51.077  2662  6620 D TrafficStats: tagSocket(109) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:51.077  2662  6619 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:51.078  2662  8656 D TrafficStats: tagSocket(168) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:51.297  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:51.297  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:51.310  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:51.310  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:51.374  2662  2711 D EGL_emulation: app_time_stats: avg=1999.98ms min=30.86ms max=3969.10ms count=2
+10-22 21:08:51.444  2662  6690 D TrafficStats: tagSocket(118) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:51.601  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:51.601  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:51.621  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:51.622  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:54.071  2662  2711 D EGL_emulation: app_time_stats: avg=531.29ms min=27.72ms max=2339.11ms count=5
+10-22 21:08:55.078  2662  6732 D TrafficStats: tagSocket(119) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:55.078  2662  6689 D TrafficStats: tagSocket(112) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:55.218  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:55.218  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:55.230  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:55.230  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:55.294  2662  2711 D EGL_emulation: app_time_stats: avg=1222.88ms min=1222.88ms max=1222.88ms count=1
+10-22 21:08:55.413  2662  6737 D TrafficStats: tagSocket(104) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:55.415  2662  6733 D TrafficStats: tagSocket(159) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:55.428  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:55.428  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:55.441  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:55.441  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:55.573  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:55.573  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:55.596  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:55.596  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:57.700  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:08:58.559  2662  2711 D EGL_emulation: app_time_stats: avg=540.34ms min=29.59ms max=2848.42ms count=6
+10-22 21:08:58.582  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:58.583  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:58.599  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:58.600  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:59.415  2662  6736 D TrafficStats: tagSocket(127) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:59.415  2662  6776 D TrafficStats: tagSocket(114) with statsTag=0xffffffff, statsUid=-1
+10-22 21:08:59.553  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:59.553  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:59.568  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:59.568  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:08:59.642  2662  2711 D EGL_emulation: app_time_stats: avg=355.34ms min=31.14ms max=927.07ms count=3
+10-22 21:09:00.927  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:01.837  2662  2711 D EGL_emulation: app_time_stats: avg=1094.20ms min=53.27ms max=2135.14ms count=2
+10-22 21:09:03.416  2662  6777 D TrafficStats: tagSocket(119) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:03.416  2662  2816 D TrafficStats: tagSocket(118) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:03.554  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:03.554  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:03.567  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:03.567  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:03.603  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741837
+10-22 21:09:03.632  2662  2711 D EGL_emulation: app_time_stats: avg=158.58ms min=29.49ms max=1323.33ms count=11
+10-22 21:09:04.765  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:06.875  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:07.416  2662  3699 D TrafficStats: tagSocket(112) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:07.416  2662  4071 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:07.558  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:07.559  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:07.574  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:07.574  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:07.622  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741838
+10-22 21:09:07.652  2662  2711 D EGL_emulation: app_time_stats: avg=2009.66ms min=48.87ms max=3970.45ms count=2
+10-22 21:09:10.276  2662  8624 D TrafficStats: tagSocket(111) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:10.276  2662  8624 D TrafficStats: tagSocket(129) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:11.422  2662  3728 D TrafficStats: tagSocket(162) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:11.422  2662  4472 D TrafficStats: tagSocket(161) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:11.561  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:11.561  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:11.575  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:11.575  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:11.612  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741839
+10-22 21:09:11.641  2662  2711 D EGL_emulation: app_time_stats: avg=1994.72ms min=48.56ms max=3940.88ms count=2
+10-22 21:09:12.279  2662  9222 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:12.280  2662  2818 D TrafficStats: tagSocket(146) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:12.397  2662  4680 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:12.398  2662  4605 D TrafficStats: tagSocket(117) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:12.409  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:12.409  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:12.423  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:12.423  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:12.460  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741840
+10-22 21:09:12.559  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:12.559  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:12.581  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:12.581  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:12.625  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741841
+10-22 21:09:12.657  2662  2711 D EGL_emulation: app_time_stats: avg=250.87ms min=26.31ms max=812.98ms count=4
+10-22 21:09:14.406  2662  9222 D TrafficStats: tagSocket(119) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:14.407  2662  2818 D TrafficStats: tagSocket(157) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:14.671  2662  2711 D EGL_emulation: app_time_stats: avg=1004.12ms min=29.72ms max=1978.52ms count=2
+10-22 21:09:16.081  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:16.128  2662  2711 D EGL_emulation: app_time_stats: avg=371.01ms min=3.16ms max=1120.99ms count=4
+10-22 21:09:16.453  2662  4566 D TrafficStats: tagSocket(155) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:16.489  2662  4760 D TrafficStats: tagSocket(132) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:16.671  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:16.671  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:16.688  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:16.688  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:16.738  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741842
+10-22 21:09:16.768  2662  2711 D EGL_emulation: app_time_stats: avg=1048.23ms min=223.49ms max=1872.97ms count=2
+10-22 21:09:20.086  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:20.449  2662  4767 D TrafficStats: tagSocket(136) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:20.449  2662  4932 D TrafficStats: tagSocket(113) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:20.587  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:20.587  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:20.600  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:20.600  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:20.638  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741843
+10-22 21:09:20.668  2662  2711 D EGL_emulation: app_time_stats: avg=1949.67ms min=56.05ms max=3843.30ms count=2
+10-22 21:09:20.942  2662  9222 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:20.942  2662  2818 D TrafficStats: tagSocket(162) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:20.966  2662  2711 D EGL_emulation: app_time_stats: avg=480.97ms min=35.34ms max=4434.55ms count=10
+10-22 21:09:20.984  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda17@c6c0af3
+10-22 21:09:21.117  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:21.118  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:21.153  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:21.153  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:21.180  2662  9222 D TrafficStats: tagSocket(109) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:21.180  2662  2818 D TrafficStats: tagSocket(119) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:21.213  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:21.213  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:21.242  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:21.243  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:21.309  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741845
+10-22 21:09:21.354  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:21.355  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:21.385  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:21.385  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:21.445  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741846
+10-22 21:09:21.714  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:21.717  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:21.753  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:21.753  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:21.968  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741847
+10-22 21:09:22.061  2662  2711 D EGL_emulation: app_time_stats: avg=226.42ms min=52.75ms max=375.45ms count=6
+10-22 21:09:23.936  2662  2711 D EGL_emulation: app_time_stats: avg=932.62ms min=66.78ms max=1798.47ms count=2
+10-22 21:09:24.453  2662  4856 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:24.453  2662  4980 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:24.460  2662  5035 D TrafficStats: tagSocket(163) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:24.461  2662  9223 D TrafficStats: tagSocket(164) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:25.358  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:25.524  2662  2662 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda17@a1adaa0
+10-22 21:09:25.525  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:29.579  2662  4872 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:29.606  2662  4946 D TrafficStats: tagSocket(110) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:29.664  2662  5926 D TrafficStats: tagSocket(112) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:29.694  2662  9223 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:29.712  2662  2662 D AutofillManager: Fill dialog is enabled:false, hints=[password, passwordAuto, creditCardNumber, creditCardSecurityCode, creditCardExpirationDate]
+10-22 21:09:29.908  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:29.908  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:30.106  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:30.108  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:30.187  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:30.187  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:30.363  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:30.363  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:30.384  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:30.385  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:33.456  2662  5741 D TrafficStats: tagSocket(140) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:33.457  2662  5774 D TrafficStats: tagSocket(150) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:33.458  2662  6091 D TrafficStats: tagSocket(152) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:33.458  2662  9223 D TrafficStats: tagSocket(157) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:33.483  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:33.690  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:33.690  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:33.703  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:33.703  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:33.773  2662  2711 D EGL_emulation: app_time_stats: avg=741.33ms min=60.63ms max=3204.92ms count=5
+10-22 21:09:34.389  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:34.390  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:34.404  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:34.405  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:36.628  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:37.457  2662  6076 D TrafficStats: tagSocket(127) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:37.461  2662  6094 D TrafficStats: tagSocket(168) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:37.464  2662  6087 D TrafficStats: tagSocket(171) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:37.465  2662  9223 D TrafficStats: tagSocket(172) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:37.554  2662  2711 D EGL_emulation: app_time_stats: avg=753.65ms min=33.56ms max=3035.53ms count=5
+10-22 21:09:37.788  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:37.788  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:37.819  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:37.819  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:37.877  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741830
+10-22 21:09:40.043  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:41.468  2662  6193 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:41.469  2662  9223 D TrafficStats: tagSocket(143) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:41.469  2662  6125 D TrafficStats: tagSocket(149) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:41.470  2662  6126 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:41.690  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:41.690  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:41.704  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:41.705  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:41.745  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741831
+10-22 21:09:41.777  2662  2711 D EGL_emulation: app_time_stats: avg=524.47ms min=28.71ms max=3832.94ms count=8
+10-22 21:09:42.355  2662  9222 D TrafficStats: tagSocket(112) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:42.356  2662  2818 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:42.537  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:42.538  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:42.553  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:42.553  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:42.591  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741832
+10-22 21:09:44.412  2662  2818 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:44.441  2662  6328 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:44.446  2662  6194 D TrafficStats: tagSocket(128) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:44.464  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:44.464  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:44.483  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:44.483  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:44.530  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741833
+10-22 21:09:44.563  2662  2711 D EGL_emulation: app_time_stats: avg=552.54ms min=27.61ms max=1913.83ms count=5
+10-22 21:09:44.623  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:44.624  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:44.642  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:44.643  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:44.689  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741834
+10-22 21:09:47.729  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:48.443  2662  6333 D TrafficStats: tagSocket(119) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:48.443  2662  6338 D TrafficStats: tagSocket(110) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:48.590  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:48.590  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:48.603  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:48.603  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:48.641  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741835
+10-22 21:09:48.676  2662  2711 D EGL_emulation: app_time_stats: avg=822.59ms min=35.05ms max=3637.75ms count=5
+10-22 21:09:50.927  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:51.821  2662  2711 D EGL_emulation: app_time_stats: avg=1568.82ms min=34.35ms max=3103.30ms count=2
+10-22 21:09:52.443  2662  6332 D TrafficStats: tagSocket(127) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:52.443  2662  6343 D TrafficStats: tagSocket(118) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:52.582  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:52.582  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:52.595  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:52.595  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:52.652  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741836
+10-22 21:09:54.234  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:09:56.445  2662  6402 D TrafficStats: tagSocket(117) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:56.451  2662  6339 D TrafficStats: tagSocket(156) with statsTag=0xffffffff, statsUid=-1
+10-22 21:09:56.594  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:56.594  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:56.610  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:56.611  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:09:56.648  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741837
+10-22 21:09:56.678  2662  2711 D EGL_emulation: app_time_stats: avg=690.44ms min=28.48ms max=3958.47ms count=7
+10-22 21:09:57.768  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:00.449  2662  6572 D TrafficStats: tagSocket(139) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:00.449  2662  6401 D TrafficStats: tagSocket(114) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:00.588  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:00.588  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:00.602  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:00.602  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:00.639  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741838
+10-22 21:10:00.669  2662  2711 D EGL_emulation: app_time_stats: avg=1991.65ms min=34.29ms max=3949.02ms count=2
+10-22 21:10:01.762  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:04.450  2662  6571 D TrafficStats: tagSocket(132) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:04.450  2662  6342 D TrafficStats: tagSocket(127) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:04.591  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:04.591  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:04.605  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:04.605  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:04.641  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741839
+10-22 21:10:04.671  2662  2711 D EGL_emulation: app_time_stats: avg=1996.66ms min=30.64ms max=3962.68ms count=2
+10-22 21:10:05.760  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:08.450  2662  6619 D TrafficStats: tagSocket(118) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:08.450  2662  6620 D TrafficStats: tagSocket(109) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:08.588  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:08.588  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:08.601  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:08.601  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:08.636  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741840
+10-22 21:10:08.666  2662  2711 D EGL_emulation: app_time_stats: avg=1997.94ms min=39.86ms max=3956.03ms count=2
+10-22 21:10:09.764  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:12.451  2662  6732 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:12.451  2662  6690 D TrafficStats: tagSocket(129) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:12.591  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:12.591  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:12.604  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:12.604  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:12.639  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741841
+10-22 21:10:12.669  2662  2711 D EGL_emulation: app_time_stats: avg=1999.45ms min=44.56ms max=3954.34ms count=2
+10-22 21:10:13.766  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:16.452  2662  6733 D TrafficStats: tagSocket(127) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:16.452  2662  6689 D TrafficStats: tagSocket(112) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:16.592  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:16.592  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:16.606  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:16.606  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:16.642  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741842
+10-22 21:10:16.674  2662  2711 D EGL_emulation: app_time_stats: avg=2000.81ms min=29.84ms max=3971.78ms count=2
+10-22 21:10:17.775  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:20.452  2662  6736 D TrafficStats: tagSocket(132) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:20.452  2662  6737 D TrafficStats: tagSocket(115) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:20.591  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:20.591  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:20.604  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:20.604  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:20.664  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741843
+10-22 21:10:20.697  2662  2711 D EGL_emulation: app_time_stats: avg=2003.98ms min=30.60ms max=3977.35ms count=2
+10-22 21:10:21.778  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:24.453  2662  6776 D TrafficStats: tagSocket(104) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:24.453  2662  2816 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:24.593  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:24.593  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:24.609  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:24.609  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:24.643  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741844
+10-22 21:10:24.673  2662  2711 D EGL_emulation: app_time_stats: avg=1987.90ms min=35.15ms max=3940.66ms count=2
+10-22 21:10:25.750  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:28.454  2662  6777 D TrafficStats: tagSocket(128) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:28.454  2662  4071 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:28.592  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:28.592  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:28.605  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:28.605  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:28.641  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741845
+10-22 21:10:28.672  2662  2711 D EGL_emulation: app_time_stats: avg=1999.51ms min=55.36ms max=3943.66ms count=2
+10-22 21:10:29.756  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:30.673  2662  2711 D EGL_emulation: app_time_stats: avg=998.37ms min=27.90ms max=1968.84ms count=2
+10-22 21:10:32.455  2662  3699 D TrafficStats: tagSocket(129) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:32.455  2662  3728 D TrafficStats: tagSocket(109) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:32.595  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:32.595  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:32.607  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:32.607  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:32.672  2662  2711 D EGL_emulation: app_time_stats: avg=195.02ms min=29.71ms max=1562.98ms count=10
+10-22 21:10:33.763  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:34.653  2662  2711 D EGL_emulation: app_time_stats: avg=987.28ms min=27.07ms max=1947.49ms count=2
+10-22 21:10:36.456  2662  4605 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:36.456  2662  4472 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:36.595  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:36.595  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:36.609  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:36.609  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:36.675  2662  2711 D EGL_emulation: app_time_stats: avg=1011.16ms min=50.60ms max=1971.71ms count=2
+10-22 21:10:37.796  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:40.457  2662  4680 D TrafficStats: tagSocket(127) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:40.457  2662  4566 D TrafficStats: tagSocket(112) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:40.598  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:40.598  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:40.615  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:40.615  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:40.692  2662  2711 D EGL_emulation: app_time_stats: avg=2002.54ms min=27.12ms max=3977.96ms count=2
+10-22 21:10:41.784  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:44.459  2662  4767 D TrafficStats: tagSocket(129) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:44.459  2662  4760 D TrafficStats: tagSocket(119) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:44.599  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:44.599  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:44.611  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:44.611  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:44.675  2662  2711 D EGL_emulation: app_time_stats: avg=1980.92ms min=30.32ms max=3931.53ms count=2
+10-22 21:10:45.782  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:48.460  2662  4932 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:48.460  2662  4980 D TrafficStats: tagSocket(110) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:48.598  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:48.598  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:48.610  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:48.610  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:48.675  2662  2711 D EGL_emulation: app_time_stats: avg=1996.72ms min=30.41ms max=3963.03ms count=2
+10-22 21:10:49.785  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:52.460  2662  5035 D TrafficStats: tagSocket(127) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:52.461  2662  4856 D TrafficStats: tagSocket(117) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:52.602  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:52.602  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:52.617  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:52.617  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:52.692  2662  2711 D EGL_emulation: app_time_stats: avg=2005.34ms min=31.02ms max=3979.66ms count=2
+10-22 21:10:53.777  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:10:56.462  2662  4872 D TrafficStats: tagSocket(104) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:56.462  2662  5926 D TrafficStats: tagSocket(119) with statsTag=0xffffffff, statsUid=-1
+10-22 21:10:56.601  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:56.601  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:56.614  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:56.614  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:10:56.678  2662  2711 D EGL_emulation: app_time_stats: avg=1986.32ms min=33.50ms max=3939.13ms count=2
+10-22 21:10:57.785  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:00.462  2662  5774 D TrafficStats: tagSocket(114) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:00.462  2662  4946 D TrafficStats: tagSocket(129) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:00.603  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:11:00.603  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:11:00.620  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:11:00.620  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:11:00.698  2662  2711 D EGL_emulation: app_time_stats: avg=2006.85ms min=28.88ms max=3984.82ms count=2
+10-22 21:11:01.780  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:04.462  2662  5741 D TrafficStats: tagSocket(115) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:04.464  2662  6091 D TrafficStats: tagSocket(157) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:04.605  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:11:04.605  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:11:04.618  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:11:04.618  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:11:04.696  2662  2711 D EGL_emulation: app_time_stats: avg=1994.83ms min=33.73ms max=3955.92ms count=2
+10-22 21:11:05.776  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:08.463  2662  6094 D TrafficStats: tagSocket(118) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:08.463  2662  6076 D TrafficStats: tagSocket(127) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:08.601  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:11:08.601  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:11:08.614  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:11:08.614  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:11:08.681  2662  2711 D EGL_emulation: app_time_stats: avg=1989.98ms min=33.06ms max=3946.89ms count=2
+10-22 21:11:09.810  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:10.678  2662  2711 D EGL_emulation: app_time_stats: avg=998.73ms min=52.97ms max=1944.50ms count=2
+10-22 21:11:10.707  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:11:10.707  2662  2662 D AutofillManager: view not autofillable - has multiline input type
+10-22 21:11:10.826  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741856
+10-22 21:11:10.827  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741857
+10-22 21:11:10.828  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741858
+10-22 21:11:12.464  2662  6087 D TrafficStats: tagSocket(129) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:12.464  2662  6125 D TrafficStats: tagSocket(110) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:12.623  2662  2711 D EGL_emulation: app_time_stats: avg=648.21ms min=40.06ms max=1714.17ms count=3
+10-22 21:11:13.760  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:14.652  2662  2711 D EGL_emulation: app_time_stats: avg=1008.20ms min=20.48ms max=1995.92ms count=2
+10-22 21:11:15.686  2662  2711 D EGL_emulation: app_time_stats: avg=40.05ms min=20.71ms max=63.49ms count=23
+10-22 21:11:16.465  2662  6126 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:16.465  2662  6193 D TrafficStats: tagSocket(114) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:17.775  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:18.687  2662  2711 D EGL_emulation: app_time_stats: avg=748.17ms min=23.54ms max=2033.15ms count=4
+10-22 21:11:20.466  2662  6328 D TrafficStats: tagSocket(128) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:20.466  2662  6194 D TrafficStats: tagSocket(104) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:20.625  2662  2711 D EGL_emulation: app_time_stats: avg=171.17ms min=25.89ms max=1501.05ms count=11
+10-22 21:11:21.781  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:23.828  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:24.467  2662  6333 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:24.468  2662  6338 D TrafficStats: tagSocket(127) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:24.626  2662  2711 D EGL_emulation: app_time_stats: avg=1995.11ms min=16.75ms max=3973.48ms count=2
+10-22 21:11:25.058  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741873
+10-22 21:11:25.060  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741874
+10-22 21:11:25.062  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741875
+10-22 21:11:25.064  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741876
+10-22 21:11:25.064  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741877
+10-22 21:11:25.065  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741878
+10-22 21:11:28.318  2662  6332 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:28.336  2662  6343 D TrafficStats: tagSocket(109) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:28.520  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741886
+10-22 21:11:28.521  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741887
+10-22 21:11:28.522  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741888
+10-22 21:11:28.527  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741889
+10-22 21:11:28.528  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741890
+10-22 21:11:28.529  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741891
+10-22 21:11:32.320  2662  6402 D TrafficStats: tagSocket(135) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:32.320  2662  6339 D TrafficStats: tagSocket(134) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:32.476  2662  2711 D EGL_emulation: app_time_stats: avg=772.88ms min=41.40ms max=3598.71ms count=5
+10-22 21:11:32.622  2662  6572 D TrafficStats: tagSocket(144) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:32.622  2662  6401 D TrafficStats: tagSocket(152) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:32.810  2662  2818 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:32.825  2662  6342 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:32.825  2662  6571 D TrafficStats: tagSocket(111) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:33.041  2662  6619 D TrafficStats: tagSocket(109) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:33.043  2662  6620 D TrafficStats: tagSocket(113) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:33.188  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741899
+10-22 21:11:33.189  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741900
+10-22 21:11:33.190  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741901
+10-22 21:11:33.190  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741902
+10-22 21:11:33.191  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741903
+10-22 21:11:33.191  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741904
+10-22 21:11:33.193  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741905
+10-22 21:11:36.283  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:37.043  2662  6690 D TrafficStats: tagSocket(119) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:37.043  2662  6732 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:37.166  2662  2711 D EGL_emulation: app_time_stats: avg=931.68ms min=15.54ms max=3854.47ms count=5
+10-22 21:11:37.328  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741908
+10-22 21:11:37.329  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741909
+10-22 21:11:37.330  2662  2662 D AutofillManager: notifyViewEnteredForFillDialog:1073741910
+10-22 21:11:39.374  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:40.252  2662  2711 D EGL_emulation: app_time_stats: avg=769.43ms min=25.37ms max=2816.91ms count=4
+10-22 21:11:41.119  2662  6689 D TrafficStats: tagSocket(129) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:41.134  2662  6733 D TrafficStats: tagSocket(130) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:41.271  2662  2711 D EGL_emulation: app_time_stats: avg=40.84ms min=26.61ms max=55.33ms count=23
+10-22 21:11:42.697  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:43.585  2662  2711 D EGL_emulation: app_time_stats: avg=576.85ms min=31.07ms max=2182.88ms count=4
+10-22 21:11:45.108  2662  6737 D TrafficStats: tagSocket(128) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:45.109  2662  6736 D TrafficStats: tagSocket(127) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:45.272  2662  2711 D EGL_emulation: app_time_stats: avg=150.58ms min=29.77ms max=1222.01ms count=11
+10-22 21:11:46.430  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:48.476  2662  2662 I h4xtor  : copy watcher connected
+10-22 21:11:49.109  2662  2816 D TrafficStats: tagSocket(104) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:49.109  2662  6776 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:49.274  2662  2711 D EGL_emulation: app_time_stats: avg=2000.05ms min=28.10ms max=3971.99ms count=2
+10-22 21:11:53.112  2662  4071 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:53.113  2662  6777 D TrafficStats: tagSocket(129) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:53.274  2662  2711 D EGL_emulation: app_time_stats: avg=998.60ms min=21.46ms max=3861.53ms count=4
+10-22 21:11:57.113  2662  3728 D TrafficStats: tagSocket(124) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:57.115  2662  4605 D TrafficStats: tagSocket(156) with statsTag=0xffffffff, statsUid=-1
+10-22 21:11:57.273  2662  2711 D EGL_emulation: app_time_stats: avg=1997.84ms min=23.24ms max=3972.43ms count=2
+10-22 21:12:01.117  2662  4680 D TrafficStats: tagSocket(109) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:01.117  2662  4472 D TrafficStats: tagSocket(128) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:01.274  2662  2711 D EGL_emulation: app_time_stats: avg=1997.96ms min=18.41ms max=3977.51ms count=2
+10-22 21:12:05.120  2662  4566 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:05.120  2662  4767 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:05.276  2662  2711 D EGL_emulation: app_time_stats: avg=1997.28ms min=21.09ms max=3973.47ms count=2
+10-22 21:12:09.122  2662  4980 D TrafficStats: tagSocket(138) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:09.122  2662  4760 D TrafficStats: tagSocket(114) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:09.277  2662  2711 D EGL_emulation: app_time_stats: avg=1996.22ms min=16.94ms max=3975.50ms count=2
+10-22 21:12:13.127  2662  4932 D TrafficStats: tagSocket(98) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:13.127  2662  4856 D TrafficStats: tagSocket(125) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:13.292  2662  2711 D EGL_emulation: app_time_stats: avg=2007.33ms min=21.26ms max=3993.41ms count=2
+10-22 21:12:17.130  2662  5926 D TrafficStats: tagSocket(128) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:17.130  2662  5035 D TrafficStats: tagSocket(113) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:17.289  2662  2711 D EGL_emulation: app_time_stats: avg=1998.37ms min=16.46ms max=3980.28ms count=2
+10-22 21:12:21.134  2662  4872 D TrafficStats: tagSocket(119) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:21.135  2662  4946 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:21.293  2662  2711 D EGL_emulation: app_time_stats: avg=1999.85ms min=18.56ms max=3981.15ms count=2
+10-22 21:12:25.138  2662  5774 D TrafficStats: tagSocket(111) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:25.138  2662  5741 D TrafficStats: tagSocket(129) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:25.295  2662  2711 D EGL_emulation: app_time_stats: avg=1996.98ms min=22.35ms max=3971.62ms count=2
+10-22 21:12:29.141  2662  6091 D TrafficStats: tagSocket(124) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:29.141  2662  6094 D TrafficStats: tagSocket(128) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:29.308  2662  2711 D EGL_emulation: app_time_stats: avg=2004.48ms min=21.92ms max=3987.04ms count=2
+10-22 21:12:33.147  2662  6125 D TrafficStats: tagSocket(122) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:33.147  2662  6076 D TrafficStats: tagSocket(104) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:33.309  2662  2711 D EGL_emulation: app_time_stats: avg=1994.94ms min=15.33ms max=3974.55ms count=2
+10-22 21:12:37.151  2662  6087 D TrafficStats: tagSocket(114) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:37.151  2662  6126 D TrafficStats: tagSocket(119) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:37.314  2662  2711 D EGL_emulation: app_time_stats: avg=1991.66ms min=15.01ms max=3968.32ms count=2
+10-22 21:12:41.154  2662  6328 D TrafficStats: tagSocket(129) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:41.154  2662  6193 D TrafficStats: tagSocket(127) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:41.311  2662  2711 D EGL_emulation: app_time_stats: avg=1993.16ms min=16.95ms max=3969.37ms count=2
+10-22 21:12:45.156  2662  6194 D TrafficStats: tagSocket(128) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:45.156  2662  6338 D TrafficStats: tagSocket(109) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:45.310  2662  2711 D EGL_emulation: app_time_stats: avg=1996.04ms min=19.01ms max=3973.07ms count=2
+10-22 21:12:49.159  2662  6333 D TrafficStats: tagSocket(116) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:49.160  2662  6332 D TrafficStats: tagSocket(156) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:49.324  2662  2711 D EGL_emulation: app_time_stats: avg=2000.10ms min=18.67ms max=3981.53ms count=2
+10-22 21:12:53.162  2662  6402 D TrafficStats: tagSocket(108) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:53.162  2662  6343 D TrafficStats: tagSocket(129) with statsTag=0xffffffff, statsUid=-1
+10-22 21:12:53.324  2662  2711 D EGL_emulation: app_time_stats: avg=1998.15ms min=19.30ms max=3977.00ms count=2
