@@ -1127,7 +1127,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         top.addView(texts, params);
         card.addView(top);
         card.addView(toggleRow("Tillad forbindelse via Bluetooth",
-                "Kun PC'er, du har parret med i både Bluetooth og h4xtor share.", enabled, checked -> {
+                "Kun PC'er, du har parret med i Bluetooth. En ny PC forbinder med en kode.", enabled, checked -> {
                     if (checked && !service.hasBluetoothPermission()) {
                         requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT},
                                 REQUEST_BLUETOOTH_PERMISSION);
@@ -1138,7 +1138,8 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                 }), ui.margins(0, 14, 0, 0));
         if (enabled && linked == null) {
             card.addView(ui.text("Første gang: par telefonen med PC'en i Bluetooth-indstillingerne "
-                    + "(på PC'en: Indstillinger → Bluetooth → Tilføj enhed).", 12.5f, ui.muted, false),
+                    + "(på PC'en: Indstillinger → Bluetooth → Tilføj enhed). Tryk så "
+                    + "\"Søg via Bluetooth\" i h4xtor share på PC'en.", 12.5f, ui.muted, false),
                     ui.margins(0, 10, 0, 0));
             TextView settings = ui.button("Åbn Bluetooth-indstillinger", "ghost");
             settings.setOnClickListener(v -> {

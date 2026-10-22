@@ -399,8 +399,16 @@ def bluetooth_checks(desktop: Desktop, phone: Peer) -> None:
     tap_text("^OK$")
     stranger.run(stranger.client.confirm_pairing(over, str(response["pairing_id"]), code))
     assert stranger.config.is_trusted(phone.device_id), "the PC did not store the pairing"
-    stored = prefs()
-    assert f"out_token_{stranger.config.device_id}" in stored, "the phone did not trust the PC"
+    stored = ""
+    for _ in range(20):  # SharedPreferences.apply() writes to disk a moment later
+        stored = prefs()
+        if f"out_token_{stranger.config.device_id}" in stored and "known_peers" in stored \
+                and stranger.config.device_id in stored.split("known_peers", 1)[1]:
+            break
+        time.sleep(0.5)
+    assert f"out_token_{stranger.config.device_id}" in stored, (
+        "the phone did not trust the PC; tokens: "
+        + ", ".join(re.findall(r'name="(out_token_[0-9a-f]+)"', stored)))
     known = re.search(r'name="known_peers">(.*?)</string>', stored, re.S)
     assert known and stranger.config.device_id in known.group(1), "PC not remembered"
     assert "127.0.0.1" not in known.group(1), "the bridge address was saved as the PC's address"
