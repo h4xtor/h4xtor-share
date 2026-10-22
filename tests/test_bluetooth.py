@@ -157,3 +157,55 @@ def test_windows_sockaddr_layout() -> None:
 def test_windows_connect_fails_cleanly_without_the_phone() -> None:
     with pytest.raises(OSError):
         bluetooth.open_bridge("00:00:00:00:00:01", "pc-id", 1)
+
+
+def test_candidates_also_try_every_paired_phone() -> None:
+    paired = [
+        ("11:11:11:11:11:11", "WH-1000XM5", False),
+        ("22:22:22:22:22:22", "Galaxy S24", True),
+        ("33:33:33:33:33:33", "Lennarts telefon", True),
+    ]
+    # The app name ("S24 Ultra") is not the Bluetooth name: still tried, headphones left alone.
+    assert bluetooth.candidates(paired, "Min mobil") == ["22:22:22:22:22:22", "33:33:33:33:33:33"]
+    assert bluetooth.candidates(paired, "telefon", remembered="22:22:22:22:22:22") == [
+        "22:22:22:22:22:22",
+        "33:33:33:33:33:33",
+    ]
+
+
+def test_scan_targets_prefer_phones() -> None:
+    paired = [("11:11:11:11:11:11", "WH", False), ("22:22:22:22:22:22", "S24", True)]
+    assert bluetooth.scan_targets(paired) == ["22:22:22:22:22:22"]
+    assert bluetooth.scan_targets(paired, skip=["22:22:22:22:22:22"]) == []
+    unknown = [("11:11:11:11:11:11", "A"), ("22:22:22:22:22:22", "B", None)]
+    assert bluetooth.scan_targets(unknown) == ["11:11:11:11:11:11", "22:22:22:22:22:22"]
+
+
+def test_phone_class_of_device() -> None:
+    assert bluetooth.is_phone_class(0x5A020C)  # smartphone
+    assert not bluetooth.is_phone_class(0x240404)  # headphones
+    assert not bluetooth.is_phone_class(0x2A010C)  # laptop
+
+
+def test_scan_reports_bridges_and_reasons() -> None:
+    def opener(address, device_id, local_port, on_closed=None):
+        if address.startswith("22"):
+            left, right = socket.socketpair()
+            Bridge(right, "phone-id", 1, odd=False).start()
+            bridge = Bridge(left, device_id, local_port).start()
+            bridge.wait_hello(5)
+            return bridge
+        raise OSError(10060, "timeout")
+
+    paired = [("22:22:22:22:22:22", "S24", True), ("33:33:33:33:33:33", "Pixel", True)]
+    found, problems = bluetooth.scan("pc-id", 1, paired, opener=opener)
+    assert [(mac, bridge.remote_id) for mac, bridge in found] == [("22:22:22:22:22:22", "phone-id")]
+    assert "svarede ikke" in problems["33:33:33:33:33:33"]
+    for _mac, bridge in found:
+        bridge.close()
+
+
+def test_describe_windows_errors() -> None:
+    assert "Tillad forbindelse via Bluetooth" in bluetooth.describe(OSError(10108, "x"))
+    assert "slået fra på PC'en" in bluetooth.describe(OSError(10050, "x"))
+    assert bluetooth.describe(ConnectionError("Ingen h4xtor share")) == "Ingen h4xtor share"

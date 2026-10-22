@@ -11,8 +11,8 @@ android {
         minSdk 29
         targetSdk 36
         // The E2E test builds an older copy (-Ph4xVersionCode/-Ph4xVersionName) to update from.
-        versionCode((project.findProperty('h4xVersionCode') ?: '31') as int)
-        versionName((project.findProperty('h4xVersionName') ?: '1.3.6') as String)
+        versionCode((project.findProperty('h4xVersionCode') ?: '32') as int)
+        versionName((project.findProperty('h4xVersionName') ?: '1.3.7') as String)
     }
 
     signingConfigs {

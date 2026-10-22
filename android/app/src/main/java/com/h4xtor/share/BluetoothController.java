@@ -32,6 +32,9 @@ final class BluetoothController {
         void onBridgeDown(BluetoothBridge bridge);
     }
 
+    /** A PC that is not paired in h4xtor share yet may keep its link this long to pair. */
+    static final long PENDING_MS = 10 * 60_000L;
+
     private final Context context;
     private final AppIdentity identity;
     private final Listener listener;
@@ -40,6 +43,7 @@ final class BluetoothController {
     private volatile Closeable acceptor;
     private volatile ServerSocket debugAcceptor;
     private volatile BluetoothBridge current;
+    private volatile BluetoothBridge pending; // a PC that may pair over this link
 
     BluetoothController(Context context, AppIdentity identity, Listener listener) {
         this.context = context.getApplicationContext();
@@ -88,6 +92,34 @@ final class BluetoothController {
         if (bridge != null) {
             bridge.close();
         }
+        BluetoothBridge waiting = pending;
+        pending = null;
+        if (waiting != null) {
+            waiting.close();
+        }
+    }
+
+    /**
+     * The PC on the pending link has just paired with this phone (over that link): use the
+     * link for it from now on. False when there is no such link.
+     */
+    boolean promotePending(String pcId) {
+        BluetoothBridge bridge = pending;
+        if (bridge == null || bridge.isClosed() || !pcId.equals(bridge.remoteId())) {
+            return false;
+        }
+        pending = null;
+        promote(bridge, pcId);
+        return true;
+    }
+
+    private void promote(BluetoothBridge bridge, String pcId) {
+        BluetoothBridge old = current;
+        current = bridge;
+        if (old != null && old != bridge) {
+            old.close(); // one PC at a time
+        }
+        listener.onBridgeUp(bridge, pcId);
     }
 
     @SuppressLint("MissingPermission")
@@ -136,20 +168,29 @@ final class BluetoothController {
     }
 
     private void serve(java.io.InputStream in, java.io.OutputStream out, Closeable link) throws Exception {
-        BluetoothBridge old = current;
-        if (old != null) {
-            old.close();
-        }
         BluetoothBridge bridge = new BluetoothBridge(in, out, link, identity.deviceId(), AppIdentity.PORT,
                 false, listener::onBridgeDown).start();
-        current = bridge;
         thread(() -> {
             try {
                 String pcId = bridge.awaitHello(10_000);
-                if (pcId != null && identity.isOutboundTrusted(pcId)) {
-                    listener.onBridgeUp(bridge, pcId);
+                if (pcId == null) {
+                    bridge.close(); // not an h4xtor share PC
+                } else if (identity.isOutboundTrusted(pcId)) {
+                    promote(bridge, pcId);
                 } else {
-                    bridge.close(); // not a PC this phone is paired with in h4xtor share
+                    // A PC found this phone on Bluetooth but is not paired in h4xtor share yet:
+                    // keep the link so it can ask for a pairing code. The share server still
+                    // refuses everything else from it (no token), exactly as on Wi-Fi.
+                    BluetoothBridge old = pending;
+                    pending = bridge;
+                    if (old != null && old != bridge) {
+                        old.close();
+                    }
+                    Thread.sleep(PENDING_MS);
+                    if (pending == bridge) {
+                        pending = null;
+                        bridge.close();
+                    }
                 }
             } catch (InterruptedException error) {
                 bridge.close();

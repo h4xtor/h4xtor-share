@@ -923,3 +923,142 @@ def test_bluetooth_fallback_switches_route_and_back(tmp_path, monkeypatch) -> No
         _pump(app, lambda: phone_ends[0].closed)  # the phone notices the link is gone
     finally:
         app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_bluetooth_finds_and_pairs_a_phone_never_seen_on_wifi(tmp_path, monkeypatch) -> None:
+    """Paired only in Windows' Bluetooth settings: search, pair with code, send, reconnect."""
+    import asyncio
+    import socket
+    import threading
+
+    from h4xtor_share import bluetooth
+    from h4xtor_share.config import Config
+    from h4xtor_share.crypto import ensure_certificate, server_ssl_context
+    from h4xtor_share.models import ClipboardReceived, PairingPrompt
+    from h4xtor_share.server import ShareServer
+
+    # The "phone": the real protocol-v1 server, reachable only through the bridge.
+    phone_config = Config(tmp_path / "phone" / "config.json")
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        phone_config.data.update(port=int(probe.getsockname()[1]), device_name="S24 Ultra",
+                                 platform="android")
+    cert, key, phone_fp = ensure_certificate(phone_config.path.parent, "S24 Ultra")
+    phone_events: list[object] = []
+    loop = asyncio.new_event_loop()
+    threading.Thread(target=loop.run_forever, daemon=True).start()
+    phone_server = ShareServer(phone_config, server_ssl_context(cert, key), phone_fp,
+                               phone_events.append, host="127.0.0.1")
+    asyncio.run_coroutine_threadsafe(phone_server.start(), loop).result(20)
+    phone_id = phone_config.device_id
+
+    app = _new_app()
+    opened: list[tuple[str, str | None]] = []
+    phone_ends: list[bluetooth.Bridge] = []
+
+    def fake_open_bridge(address, device_id, local_port, expected_id=None, on_closed=None):
+        opened.append((address, expected_id))
+        if address != "22:22:22:22:22:22":  # the headphones: no h4xtor share there
+            raise OSError(10108, "service not found")
+        left, right = socket.socketpair()
+        phone_ends.append(
+            bluetooth.Bridge(right, phone_id, phone_config.port, odd=False).start()
+        )
+        pc = bluetooth.Bridge(left, device_id, local_port, odd=True, on_closed=on_closed).start()
+        assert pc.wait_hello(5) == phone_id
+        return pc
+
+    paired = [
+        ("11:11:11:11:11:11", "WH-1000XM5", False),
+        ("22:22:22:22:22:22", "Galaxy S24", True),  # Bluetooth name differs from the app name
+    ]
+    monkeypatch.setattr(bluetooth, "supported", lambda: True)
+    monkeypatch.setattr(bluetooth, "paired_devices", lambda: paired)
+    monkeypatch.setattr(bluetooth, "open_bridge", fake_open_bridge)
+
+    def auto_code(peer, response) -> None:  # stands in for typing the code shown on the phone
+        prompt = next(e for e in phone_events if isinstance(e, PairingPrompt))
+
+        async def confirm():
+            await app.client.confirm_pairing(peer, str(response["pairing_id"]), prompt.code)
+            return peer
+
+        app.runtime.submit(confirm(), "pair_confirmed")
+
+    monkeypatch.setattr(app, "_prompt_for_pairing_code", auto_code)
+    try:
+        from h4xtor_share.ui_kit import Button
+
+        def buttons(widget) -> list[Button]:
+            found = [widget] if isinstance(widget, Button) else []
+            for child in widget.winfo_children():
+                found += buttons(child)
+            return found
+
+        search = [b for b in buttons(app) if b._text == "Søg via Bluetooth"]
+        assert search, "no 'Søg via Bluetooth' button"
+        search[0].command()  # what a click on it runs
+        _pump(app, lambda: phone_id in app.peers, 15)
+        found = app.peers[phone_id]
+        assert (found.name, found.transport, found.address) == ("S24 Ultra", "bluetooth",
+                                                                "127.0.0.1")
+        assert not app.config_store.is_trusted(phone_id)
+        assert opened == [("22:22:22:22:22:22", None)]  # only the phone, not the headphones
+        card_texts = " ".join(_texts(app.device_cards[phone_id].card))
+        assert "fundet på Bluetooth" in card_texts and "127.0.0.1" not in card_texts
+
+        # Click the device: pair with the code, over Bluetooth.
+        app.pair_with_code(found)
+        _pump(app, lambda: app.config_store.is_trusted(phone_id), 15)
+        assert phone_config.is_trusted(app.config_store.device_id)  # both ways
+        known = app.config_store.data["known_peers"][phone_id]
+        assert (known["address"], known["transport"]) == ("", "bluetooth")
+
+        # Sharing works over the link.
+        asyncio.run_coroutine_threadsafe(
+            app.client.send_clipboard(app.peers[phone_id], "hej via bluetooth"), app.runtime.loop
+        ).result(20)
+        assert any(isinstance(e, ClipboardReceived) and e.text == "hej via bluetooth"
+                   for e in phone_events)
+
+        # Out of range: the phone stays in the list (offline) instead of vanishing…
+        phone_ends[0].close()
+        _pump(app, lambda: phone_id not in app._bt_bridges)
+        kept = app.peers[phone_id]
+        assert (kept.address, kept.transport) == ("", "bluetooth")
+        assert not app.peer_status[phone_id].online
+        # …and comes back on Bluetooth by itself (the remembered MAC first).
+        app.event_queue.put(("bt_maybe", kept))
+        _pump(app, lambda: phone_id in app._bt_bridges, 15)
+        assert opened[-1] == ("22:22:22:22:22:22", phone_id)
+        assert app.peers[phone_id].address == "127.0.0.1"
+    finally:
+        app.close()
+        asyncio.run_coroutine_threadsafe(phone_server.stop(), loop).result(20)
+        loop.call_soon_threadsafe(loop.stop)
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_bluetooth_search_explains_why_nothing_was_found(tmp_path, monkeypatch) -> None:
+    from h4xtor_share import bluetooth
+
+    app = _new_app()
+    shown: list[str] = []
+    monkeypatch.setattr(app.toast, "show", lambda text, *a, **k: shown.append(text))
+    monkeypatch.setattr(bluetooth, "supported", lambda: True)
+    try:
+        monkeypatch.setattr(bluetooth, "paired_devices", lambda: [])
+        app.scan_bluetooth(manual=True)
+        _pump(app, lambda: not app._bt_scanning and any("Ingen parrede" in t for t in shown))
+
+        def refuse(*_a, **_k):
+            raise OSError(10108, "service not found")
+
+        phone = [("AA:AA:AA:AA:AA:AA", "S24", True)]
+        monkeypatch.setattr(bluetooth, "paired_devices", lambda: phone)
+        monkeypatch.setattr(bluetooth, "open_bridge", refuse)
+        app.scan_bluetooth(manual=True)
+        _pump(app, lambda: any("Tillad forbindelse via Bluetooth" in t for t in shown))
+    finally:
+        app.close()

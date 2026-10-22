@@ -213,6 +213,10 @@ public final class H4xtorServer {
         }
     }
 
+    static boolean isLoopback(String address) {
+        return address.startsWith("127.") || "::1".equals(address) || "0:0:0:0:0:0:0:1".equals(address);
+    }
+
     static String remoteAddress(InetAddress address) {
         if (address == null) {
             return "";
@@ -458,10 +462,21 @@ public final class H4xtorServer {
         if (request.remote.isEmpty()) {
             return null;
         }
+        String address = request.remote;
+        if (isLoopback(address)) {
+            // Paired over the Bluetooth link: 127.0.0.1 is this phone itself. Keep a Wi-Fi
+            // address known from before, else the PC is (for now) reached on Bluetooth only.
+            address = "";
+            for (Peer known : identity.knownPeers()) {
+                if (known.deviceId.equals(peerId) && !isLoopback(known.address)) {
+                    address = known.address;
+                }
+            }
+        }
         Peer peer = new Peer(
                 peerId,
                 peerName,
-                request.remote,
+                address,
                 port,
                 fingerprint,
                 clip(reverse.optString("platform", "unknown"), 32),

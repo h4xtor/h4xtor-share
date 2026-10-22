@@ -175,9 +175,23 @@ class Config:
     # -- known peers --------------------------------------------------------
     def remember_peer(self, peer: Peer) -> None:
         """Persist the last address of a trusted peer so it reconnects at startup."""
-        if peer.transport == "bluetooth":
-            return  # 127.0.0.1:<bridge port> only lives as long as the Bluetooth link
         known = self.data.setdefault("known_peers", {})
+        if peer.transport == "bluetooth":
+            # 127.0.0.1:<bridge port> only lives as long as the Bluetooth link: keep a Wi-Fi
+            # address we already know, else remember the phone without one (reached on
+            # Bluetooth only).
+            if peer.device_id in known:
+                return
+            peer = Peer(
+                peer.device_id,
+                peer.name,
+                "",
+                DEFAULT_PORT,
+                peer.fingerprint,
+                peer.platform,
+                "bluetooth",
+                peer.capabilities,
+            )
         entry = {
             "name": peer.name,
             "address": peer.address,

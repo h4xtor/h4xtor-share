@@ -4,6 +4,17 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
+## 1.3.7 – 2026-10-22
+### Nyt
+- Bluetooth: "Søg via Bluetooth" på PC'en finder telefonen, selvom de aldrig har været på samme Wi-Fi. Telefonen dukker op på listen, og du forbinder med den 6-cifrede kode – direkte over Bluetooth.
+### Forbedret
+- PC'en prøver nu alle parrede telefoner, også når navnet i Bluetooth (fx "Galaxy S24") er et andet end navnet i h4xtor share. Høretelefoner og tastaturer bliver ladt i fred.
+- En telefon, der kun er forbundet via Bluetooth, bliver på listen (offline), når den er uden for rækkevidde, og forbinder selv igen, når den er tilbage – også efter genstart af PC'en.
+- Fejlbeskeder siger nu præcis, hvad der mangler, fx "Slå 'Tillad forbindelse via Bluetooth' til i appen" eller "Bluetooth er slået fra på PC'en".
+### Rettet
+- Bluetooth: telefon og PC fandt ikke hinanden, selvom de var parret i Windows' Bluetooth-menu. Før virkede Bluetooth kun, hvis de først havde været forbundet over Wi-Fi.
+- "Forbind via Bluetooth" i enhedens menu mangler ikke længere for telefoner, der blev parret før version 1.3.6.
+
 ## 1.3.6 – 2026-10-21
 ### Nyt
 - Bluetooth: PC og telefon kan nu forbinde via Bluetooth, når der hverken er Wi-Fi eller Wi-Fi Direct. Slå "Tillad forbindelse via Bluetooth" til på telefonen (fanen Del), og par telefonen med PC'en i Bluetooth-indstillingerne én gang. PC'en skifter selv til Bluetooth, når Wi-Fi ikke kan nå telefonen, og tilbage igen, når Wi-Fi virker. Alt virker – bare langsommere. Kræver Windows eller Linux på PC'en.

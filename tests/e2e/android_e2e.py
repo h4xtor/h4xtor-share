@@ -363,6 +363,62 @@ def bluetooth_checks(desktop: Desktop, phone: Peer) -> None:
     shot("28-bluetooth-ended")
     ok("Bluetooth: link lost, the phone switches back to Wi-Fi")
 
+    # ---- A PC that was never on the phone's Wi-Fi: found and paired over Bluetooth ----
+    stranger = Desktop("BTPC", 47482)
+    pending = None
+    for _ in range(10):
+        try:
+            link = socket.create_connection(("127.0.0.1", 47496), timeout=5)
+            link.settimeout(None)
+            candidate = bluetooth.Bridge(link, stranger.config.device_id, stranger.port).start()
+            if candidate.wait_hello(5) == phone.device_id:
+                pending = candidate
+                break
+        except (OSError, ConnectionError):
+            pass
+        time.sleep(1.5)
+    assert pending is not None, "the phone did not answer a PC it is not paired with"
+    time.sleep(2)
+    assert not pending.closed, "the phone dropped the Bluetooth link of a new PC"
+    info = stranger.run(stranger.client.get_info("127.0.0.1", pending.port))
+    assert info.device_id == phone.device_id
+    over = Peer(info.device_id, info.name, "127.0.0.1", pending.port, info.fingerprint,
+                "android", "bluetooth", info.capabilities)
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(2)
+    response = stranger.run(stranger.client.request_pairing(over))
+    code = ""
+    deadline = time.time() + 20
+    while not code and time.time() < deadline:
+        for node in ui_nodes():
+            if re.fullmatch(r"\d{3} \d{3}", node.get("text") or ""):
+                code = (node.get("text") or "").replace(" ", "")
+        time.sleep(0.5)
+    assert code, "the phone did not show a pairing code for the Bluetooth PC"
+    shot("29-bluetooth-pair-code")
+    tap_text("^OK$")
+    stranger.run(stranger.client.confirm_pairing(over, str(response["pairing_id"]), code))
+    assert stranger.config.is_trusted(phone.device_id), "the PC did not store the pairing"
+    stored = prefs()
+    assert f"out_token_{stranger.config.device_id}" in stored, "the phone did not trust the PC"
+    known = re.search(r'name="known_peers">(.*?)</string>', stored, re.S)
+    assert known and stranger.config.device_id in known.group(1), "PC not remembered"
+    assert "127.0.0.1" not in known.group(1), "the bridge address was saved as the PC's address"
+    ok("Bluetooth: a new PC finds the phone and pairs with a code over Bluetooth")
+    stranger.run(stranger.client.send_clipboard(over, "Parret via Bluetooth"))
+    time.sleep(2)
+    assert "Parret via Bluetooth" in prefs(), "text over the new Bluetooth pairing did not arrive"
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(1)
+    tap_text("^Del$")
+    time.sleep(1)
+    assert scroll_to("^Forbundet via Bluetooth$"), "phone does not use the link for the new PC"
+    shot("29b-bluetooth-paired-new-pc")
+    ok("Bluetooth: the phone keeps using the link for the PC it just paired with")
+    stranger.run(stranger.client.unpair(over))  # leave only the main PCs for the next checks
+    time.sleep(2)
+    pending.close()
+
 
 def update_checks() -> None:
     """Older version installed → finds the new one on a fake GitHub → updates → reopens."""

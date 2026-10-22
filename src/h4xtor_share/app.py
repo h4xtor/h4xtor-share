@@ -30,7 +30,7 @@ from tkinterdnd2 import DND_FILES, TkinterDnD
 
 from h4xtor_share import __version__, bluetooth, integration, wifidirect
 from h4xtor_share.client import PeerClient
-from h4xtor_share.config import Config
+from h4xtor_share.config import DEFAULT_PORT, Config
 from h4xtor_share.crypto import ensure_certificate, server_ssl_context
 from h4xtor_share.discovery import DiscoveryService, local_ipv4_addresses
 from h4xtor_share.history import HistoryStore, is_link
@@ -435,18 +435,24 @@ class DeviceCard:
         selected = paired and app.selected_id == peer.device_id and not app.target_all
         platform_label = PLATFORM_LABELS.get(peer.platform.lower(), peer.platform.title())
         transport = TRANSPORT_LABELS.get(peer.transport, peer.transport)
+        where = "" if peer.transport == "bluetooth" else peer.address
         self.name_label.configure(text=peer.name + ("   ✓ valgt" if selected else ""))
         if paired:
             state = "Online" if online else "Offline"
             self.dot.configure(fg=c["success"] if online else c["faint"])
             self.meta_label.configure(
-                text=f"{state}  ·  {platform_label}  ·  {transport}  ·  {peer.address}"
+                text="  ·  ".join(
+                    part for part in (state, platform_label, transport, where) if part
+                )
             )
         else:
             self.dot.configure(fg=c["accent"] if online else c["faint"])
             self.meta_label.configure(
-                text=f"Ikke forbundet  ·  fundet på {transport}  ·  {platform_label}  ·  "
-                f"{peer.address}"
+                text="  ·  ".join(
+                    part
+                    for part in ("Ikke forbundet", f"fundet på {transport}", platform_label, where)
+                    if part
+                )
             )
         self.signal.set(status.rtt_ms if online and status is not None else None)
         assert self.card is not None
@@ -469,7 +475,9 @@ class DeviceCard:
                 menu.add_command(
                     label="Afbryd Bluetooth", command=lambda: app.disconnect_bluetooth(self.peer)
                 )
-            elif self.peer.supports("bluetooth") and bluetooth.supported():
+            elif bluetooth.supported() and (
+                self.peer.supports("bluetooth") or self.peer.platform == "android"
+            ):
                 menu.add_command(
                     label="Forbind via Bluetooth",
                     command=lambda: app.connect_bluetooth(self.peer, manual=True),
@@ -766,6 +774,9 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         self._bt_before: dict[str, Peer] = {}
         self._bt_trying: set[str] = set()
         self._bt_last_try: dict[str, float] = {}
+        self._bt_macs: dict[str, str] = {}  # device id -> MAC of the running bridge
+        self._bt_scanning = False
+        self._bt_last_scan = -1e9
         self.scan_future: Future[Any] | None = None
         self._pending_send: list[Path] = list(initial_send or [])
 
@@ -1105,6 +1116,16 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         Button(
             top, self.theme, "Scan netværk", self.scan_lan, kind="ghost", size="sm", icon="⟳"
         ).pack(side="right", padx=(0, px(4)))
+        if bluetooth.supported():
+            Button(
+                top,
+                self.theme,
+                "Søg via Bluetooth",
+                lambda: self.scan_bluetooth(manual=True),
+                kind="ghost",
+                size="sm",
+                icon="ᛒ",
+            ).pack(side="right", padx=(0, px(4)))
 
         scroll = ScrollFrame(page, self.theme)
         scroll.pack(fill="both", expand=True)
@@ -1246,7 +1267,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         head.pack(fill="x", pady=(0, px(2)))
         self.lan_title = tk.Label(
             head,
-            text="Fundet på netværket",
+            text="Fundet i nærheden",
             bg=c["bg"],
             fg=c["muted"],
             font=self.theme.font(9, "bold"),
@@ -1256,8 +1277,8 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         tk.Label(
             self.lan_section,
             text=(
-                "Enheder med h4xtor share på dit Wi-Fi, som du ikke har forbundet. "
-                "Klik Forbind – eller ✕ for at skjule."
+                "Enheder med h4xtor share på dit Wi-Fi eller via Bluetooth, som du ikke har "
+                "forbundet. Klik Forbind – eller ✕ for at skjule."
             ),
             bg=c["bg"],
             fg=c["faint"],
@@ -1284,11 +1305,16 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         ).pack(fill="x", pady=(0, px(10)))
         chips = tk.Frame(frame, bg=c["bg"])
         chips.pack(fill="x")
-        for label, icon, command in (
+        chip_actions: list[tuple[str, str, Callable[[], None]]] = [
             ("Forbind din telefon med QR", "▣", self.show_qr_pairing),
             ("Scan netværket", "⟳", self.scan_lan),
             ("Tilføj via IP-adresse", "⌁", self.add_manual_peer),
-        ):
+        ]
+        if bluetooth.supported():
+            chip_actions.append(
+                ("Søg via Bluetooth", "ᛒ", lambda: self.scan_bluetooth(manual=True))
+            )
+        for label, icon, command in chip_actions:
             Button(chips, self.theme, label, command, kind="secondary", size="sm", icon=icon).pack(
                 side="left", padx=(0, px(8))
             )
@@ -2555,7 +2581,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         await self.server.stop()
 
     def _known_addresses(self) -> list[str]:
-        return [peer.address for peer in self.config_store.known_peers()]
+        return [peer.address for peer in self.config_store.known_peers() if peer.address]
 
     def _receive_core_event(self, event: object) -> None:
         self.event_queue.put(("core_event", event))
@@ -2667,6 +2693,8 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
             self._bluetooth_down(value)
         elif tag == "bt_maybe":
             self._maybe_bluetooth(value)
+        elif tag == "bt_scanned":
+            self._bluetooth_scanned(value)
         elif tag == "bt_wifi_back":
             bridge = self._bt_bridges.get(value)
             if bridge is not None:
@@ -2809,7 +2837,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         # One address = one device. A different id on the same address is either a
         # stale record (old mDNS cache, reinstalled app) or a reused DHCP lease.
         for other_id, other in list(self.peers.items()):
-            if other_id == peer.device_id or other.address != peer.address:
+            if other_id == peer.device_id or other.address != peer.address or not peer.address:
                 continue
             if other.port != peer.port:
                 continue
@@ -2903,7 +2931,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
             self.paired_empty.pack(fill="x", before=self.paired_list)
         if lan:
             self.lan_section.pack(fill="x", pady=(px(18), 0))
-            self.lan_title.configure(text=f"Fundet på netværket  ·  {len(lan)}")
+            self.lan_title.configure(text=f"Fundet i nærheden  ·  {len(lan)}")
         else:
             self.lan_section.pack_forget()
 
@@ -3005,6 +3033,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
     async def _check_peer_health(self) -> None:
         peers = list(self.peers.values())
         if not peers:
+            self.event_queue.put(("bt_maybe", None))
             return
         results = await asyncio.gather(
             *(self.client.ping(peer) for peer in peers),
@@ -3016,6 +3045,8 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
                 self.event_queue.put(("bt_maybe", peer))
             else:
                 self.event_queue.put(("peer_status", PeerStatus(peer.device_id, True, result)))
+        if not any(not isinstance(result, BaseException) for result in results):
+            self.event_queue.put(("bt_maybe", None))  # nothing online: look on Bluetooth
         # On Bluetooth: as soon as the phone answers on Wi-Fi again, go back to the faster path.
         for device_id, before in list(self._bt_before.items()):
             if device_id in self._bt_bridges:
@@ -3447,11 +3478,12 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
                 return None  # automatic attempts stay quiet
             hint = (
                 "Par telefonen under Windows' Bluetooth-indstillinger, og slå "
-                "'Tillad forbindelse via Bluetooth' til i h4xtor share på telefonen."
+                "'Tillad forbindelse via Bluetooth' til i h4xtor share på telefonen (fanen Del)."
             )
             if not paired:
                 raise RuntimeError(f"Ingen parrede Bluetooth-enheder. {hint}")
-            raise RuntimeError(f"{peer.name} svarer ikke over Bluetooth ({last}). {hint}")
+            reason = bluetooth.describe(last) if last is not None else "ingen telefon fundet"
+            raise RuntimeError(f"{peer.name} svarer ikke over Bluetooth: {reason} {hint}")
 
         async def run() -> tuple[Peer, bluetooth.Bridge, str] | None:
             try:
@@ -3466,28 +3498,151 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         if bridge is not None:
             bridge.close()
 
-    def _maybe_bluetooth(self, peer: Peer) -> None:
-        """Phone offline on Wi-Fi: try Bluetooth by itself, at most once a minute."""
+    def _maybe_bluetooth(self, peer: Peer | None) -> None:
+        """Phone offline on Wi-Fi: try Bluetooth by itself, at most once a minute.
+
+        ``None`` means nothing answers at all: then look for phones on Bluetooth every few
+        minutes, so a phone that was never on the same Wi-Fi still shows up.
+        """
+        if not bluetooth.supported():
+            return
+        if peer is None:
+            if not self._bt_scanning and time.monotonic() - self._bt_last_scan > 180:
+                self.scan_bluetooth(manual=False)
+            return
         if (
-            not bluetooth.supported()
-            or peer.transport == "bluetooth"
+            peer.device_id in self._bt_bridges
             or peer.platform != "android"
-            or not peer.supports("bluetooth")
             or not self.config_store.is_trusted(peer.device_id)
             or time.monotonic() - self._bt_last_try.get(peer.device_id, -1e9) < 60
         ):
             return
         self.connect_bluetooth(peer)
 
-    def _bluetooth_up(self, peer: Peer, bridge: bluetooth.Bridge, address: str) -> None:
+    def scan_bluetooth(self, manual: bool = True) -> None:
+        """Find h4xtor share on the phones paired with this PC in Bluetooth."""
+        if self._bt_scanning:
+            if manual:
+                self.toast.show("Søger allerede via Bluetooth…")
+            return
+        self._bt_scanning = True
+        self._bt_last_scan = time.monotonic()
+        if manual:
+            self.toast.show("Søger efter telefoner via Bluetooth…", duration_ms=10000)
+        skip = set(self._bt_macs.values())
+
+        def search() -> tuple[list[tuple[str, bluetooth.Bridge]], dict[str, str], int]:
+            paired = bluetooth.paired_devices()
+            found, problems = bluetooth.scan(
+                self.config_store.device_id,
+                self.config_store.port,
+                paired,
+                skip=skip,
+                on_closed=lambda item: self.event_queue.put(("bt_down", item)),
+            )
+            return found, problems, len(paired)
+
+        async def run() -> dict[str, Any]:
+            try:
+                found, problems, paired = await asyncio.to_thread(search)
+                results: list[tuple[Peer, bluetooth.Bridge, str]] = []
+                for address, bridge in found:
+                    try:
+                        info = await self.client.get_info("127.0.0.1", bridge.port)
+                    except Exception as error:  # noqa: BLE001 - one phone must not stop the rest
+                        bridge.close()
+                        problems[address] = f"svarede ikke ({error})"
+                        continue
+                    if info.device_id != bridge.remote_id:
+                        bridge.close()
+                        continue
+                    # Its Wi-Fi address (if any) is unknown here; 127.0.0.1 is only the bridge.
+                    info = Peer(
+                        info.device_id,
+                        info.name,
+                        "",
+                        info.port,
+                        info.fingerprint,
+                        info.platform,
+                        "bluetooth",
+                        info.capabilities,
+                    )
+                    results.append((info, bridge, address))
+                return {
+                    "found": results,
+                    "problems": problems,
+                    "paired": paired,
+                    "manual": manual,
+                }
+            finally:
+                self._bt_scanning = False
+
+        self.runtime.submit(run(), "bt_scanned")
+
+    def _bluetooth_scanned(self, value: dict[str, Any]) -> None:
+        manual = bool(value.get("manual"))
+        found: list[tuple[Peer, bluetooth.Bridge, str]] = value.get("found") or []
+        names = []
+        for info, bridge, address in found:
+            if bridge.closed:
+                continue
+            if info.device_id in self._bt_bridges:
+                bridge.close()  # already linked (a manual connect finished meanwhile)
+                continue
+            trusted = self.config_store.is_trusted(info.device_id)
+            if not trusted and info.device_id in self.config_store.hidden_peers():
+                if not manual:
+                    bridge.close()
+                    continue
+                self.config_store.unhide_peer(info.device_id)
+            names.append(info.name)
+            self._bluetooth_up(info, bridge, address, quiet=not trusted)
+        if not manual:
+            return
+        if names:
+            pending = [
+                info.name for info, _b, _a in found
+                if not self.config_store.is_trusted(info.device_id)
+            ]
+            text = f"Fundet via Bluetooth: {', '.join(names)}"
+            if pending:
+                text += " – klik på enheden for at forbinde"
+            self.toast.show(text, "success", 8000)
+            return
+        problems: dict[str, str] = value.get("problems") or {}
+        if not value.get("paired"):
+            self.toast.show(
+                "Ingen parrede Bluetooth-enheder. Par telefonen under Windows' "
+                "Bluetooth-indstillinger først.",
+                "error",
+                9000,
+            )
+        elif problems:
+            reason = next(iter(problems.values()))
+            self.toast.show(
+                f"Ingen h4xtor share fundet via Bluetooth. {reason}",
+                "error",
+                10000,
+            )
+        else:
+            self.toast.show("Ingen telefoner blandt de parrede Bluetooth-enheder.", "error", 8000)
+
+    def _bluetooth_up(
+        self, peer: Peer, bridge: bluetooth.Bridge, address: str, quiet: bool = False
+    ) -> None:
         if bridge.closed:
             return
+        old = self._bt_bridges.get(peer.device_id)
+        if old is not None and old is not bridge:
+            bridge.close()
+            return
         self._bt_bridges[peer.device_id] = bridge
+        self._bt_macs[peer.device_id] = address
         self.config_store.data.setdefault("bt_addresses", {})[peer.device_id] = address
         with contextlib.suppress(OSError):
             self.config_store.save()
         current = self.peers.get(peer.device_id, peer)
-        if current.transport != "bluetooth":
+        if current.transport != "bluetooth" and current.address:
             self._bt_before[peer.device_id] = current
         self._upsert_peer(
             Peer(
@@ -3501,17 +3656,41 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
                 current.capabilities,
             )
         )
-        self.toast.show(f"Forbundet med {current.name} via Bluetooth", "success")
+        routed = self.peers.get(peer.device_id)
+        if routed is not None and self.config_store.is_trusted(peer.device_id):
+            # A phone only ever seen on Bluetooth still shows up after a restart.
+            self.config_store.remember_peer(routed)
+        if not quiet:
+            self.toast.show(f"Forbundet med {current.name} via Bluetooth", "success")
 
     def _bluetooth_down(self, bridge: bluetooth.Bridge) -> None:
         for device_id, item in list(self._bt_bridges.items()):
             if item is not bridge:
                 continue
             del self._bt_bridges[device_id]
+            self._bt_macs.pop(device_id, None)
             before = self._bt_before.pop(device_id, None)
+            current = self.peers.get(device_id)
+            if before is None and current is not None and current.transport == "bluetooth":
+                if not self.config_store.is_trusted(device_id):
+                    self._remove_peer_card(device_id)  # found on Bluetooth, never paired
+                    continue
+                # Only ever reached on Bluetooth: keep it, offline, until it is back.
+                before = Peer(
+                    current.device_id,
+                    current.name,
+                    "",
+                    DEFAULT_PORT,
+                    current.fingerprint,
+                    current.platform,
+                    "bluetooth",
+                    current.capabilities,
+                )
+                self._bt_last_try.pop(device_id, None)  # may try again right away
             if before is not None:
                 self.peers.pop(device_id, None)  # the Wi-Fi route replaces the bridge outright
                 self._upsert_peer(before)
+                self.event_queue.put(("peer_status", PeerStatus(device_id, False, None)))
                 self.toast.show(f"Bluetooth-forbindelsen til {before.name} er slut")
 
     def restore_wifi(self) -> None:

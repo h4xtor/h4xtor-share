@@ -59,7 +59,7 @@ gradle -p android testDebugUnitTest lintDebug assembleDebug
    a `.sha256` per binary and `CHANGELOG.md` (fixed names: the in-app updater looks for them), and uses
    the changelog entry as release notes.
 
-The latest release is **v1.3.6**. Without tag-push rights, start a release from Actions → Release → Run workflow (tag input).
+The latest release is **v1.3.7**. Without tag-push rights, start a release from Actions → Release → Run workflow (tag input).
 
 
 ## Known limits (be honest about these)
@@ -70,8 +70,12 @@ The latest release is **v1.3.6**. Without tag-push rights, start a release from 
   (Indstillinger → "Send med det samme, når du kopierer"); sideloaded APKs on Android 13+ first need
   App-info → ⋮ → "Tillad begrænsede indstillinger". Copies via keyboard shortcuts are not caught;
   then the app/notification/tile/"Send til PC" paths still work. PC → phone always works.
-- Bluetooth needs the phone and PC paired in the OS Bluetooth settings first, works on Windows and
-  Linux only (no RFCOMM sockets in Python on macOS) and is 10–50× slower than Wi-Fi. CI tests the
+- Bluetooth needs the phone and PC paired in the OS Bluetooth settings first (and "Tillad forbindelse
+  via Bluetooth" on in the phone app). Since v1.3.7 the PC finds phones with "Søg via Bluetooth"
+  (paired devices whose class of device says phone; all when unknown) and can pair with the code
+  over the link: the phone keeps an unpaired PC's link open for 10 minutes (`pending` in
+  `BluetoothController`), and a peer reached only on Bluetooth is remembered with an empty address.
+  It works on Windows and Linux only (no RFCOMM sockets in Python on macOS) and is 10–50× slower than Wi-Fi. CI tests the
   bridge over TCP (the emulator has no Bluetooth: `files/bt_debug_port`), so the radio part
   (Windows SDP lookup by UUID, Android `listenUsingRfcommWithServiceRecord`) is only proven on
   real hardware.

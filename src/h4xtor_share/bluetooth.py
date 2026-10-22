@@ -24,7 +24,8 @@ import subprocess
 import sys
 import threading
 import uuid
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterable, Iterator
+from concurrent.futures import ThreadPoolExecutor
 
 SERVICE_UUID = "6f3b2a10-5c1e-4d8a-9f47-4834786f7231"
 MAGIC = "h4xtor-bt/1"
@@ -33,6 +34,10 @@ HEADER = struct.Struct(">BII")
 MAX_CHUNK = 32 * 1024
 MAX_FRAME = 1024 * 1024
 MAC_PATTERN = re.compile(r"^[0-9A-F]{2}(:[0-9A-F]{2}){5}$")
+PHONE_CLASS = 2  # Bluetooth "major device class" for phones
+
+# A paired device: (MAC, name) or (MAC, name, is_phone) where is_phone may be None (unknown).
+PairedDevice = tuple
 
 
 def encode(kind: int, stream: int, payload: bytes = b"") -> bytes:
@@ -217,8 +222,13 @@ def supported() -> bool:
     return sys.platform == "win32" or sys.platform.startswith("linux")
 
 
-def paired_devices() -> list[tuple[str, str]]:
-    """(MAC, name) of the Bluetooth devices paired with this computer."""
+def is_phone_class(cod: int) -> bool:
+    """True when a Bluetooth "class of device" value says the device is a phone."""
+    return (int(cod) >> 8) & 0x1F == PHONE_CLASS
+
+
+def paired_devices() -> list[tuple[str, str, bool | None]]:
+    """(MAC, name, is_phone) of the Bluetooth devices paired with this computer."""
     try:
         if sys.platform == "win32":
             return _paired_windows()
@@ -229,7 +239,7 @@ def paired_devices() -> list[tuple[str, str]]:
     return []
 
 
-def _paired_windows() -> list[tuple[str, str]]:
+def _paired_windows() -> list[tuple[str, str, bool | None]]:
     import winreg
 
     devices = []
@@ -243,17 +253,23 @@ def _paired_windows() -> list[tuple[str, str]]:
                 break
             index += 1
             name = ""
+            phone: bool | None = None
             with contextlib.suppress(OSError), winreg.OpenKey(root, key_name) as key:
                 raw, _kind = winreg.QueryValueEx(key, "Name")
                 if isinstance(raw, bytes):
                     name = raw.split(b"\0", 1)[0].decode("utf-8", "replace")
+                elif isinstance(raw, str):
+                    name = raw.split("\0", 1)[0]
+                with contextlib.suppress(OSError, TypeError, ValueError):
+                    cod, _kind = winreg.QueryValueEx(key, "COD")
+                    phone = is_phone_class(int(cod))
             mac = ":".join(key_name[i : i + 2] for i in range(0, 12, 2)).upper()
             if MAC_PATTERN.match(mac):
-                devices.append((mac, name))
+                devices.append((mac, name, phone))
     return devices
 
 
-def _paired_linux() -> list[tuple[str, str]]:
+def _paired_linux() -> list[tuple[str, str, bool | None]]:
     for command in (["bluetoothctl", "devices", "Paired"], ["bluetoothctl", "paired-devices"]):
         try:
             output = subprocess.run(
@@ -265,31 +281,68 @@ def _paired_linux() -> list[tuple[str, str]]:
         for line in output.splitlines():
             parts = line.strip().split(" ", 2)
             if len(parts) >= 2 and parts[0] == "Device" and MAC_PATTERN.match(parts[1].upper()):
-                devices.append((parts[1].upper(), parts[2] if len(parts) > 2 else ""))
+                mac = parts[1].upper()
+                devices.append((mac, parts[2] if len(parts) > 2 else "", _phone_linux(mac)))
         if devices:
             return devices
     return []
 
 
-def candidates(
-    paired: list[tuple[str, str]], phone_name: str, remembered: str = "", everything: bool = False
-) -> list[str]:
-    """MACs worth trying for a phone: the one that worked before, then name matches.
+def _phone_linux(address: str) -> bool | None:
+    try:
+        output = subprocess.run(
+            ["bluetoothctl", "info", address], capture_output=True, text=True, timeout=5,
+            check=False,
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    match = re.search(r"Class:\s*0x([0-9a-fA-F]+)", output)
+    if match:
+        return is_phone_class(int(match.group(1), 16))
+    icon = re.search(r"Icon:\s*(\S+)", output)
+    return icon.group(1) == "phone" if icon else None
 
-    ``everything`` adds the other paired devices too (when the user asked explicitly);
+
+def _phone_flag(device: PairedDevice) -> bool | None:
+    return device[2] if len(device) > 2 else None
+
+
+def candidates(
+    paired: Iterable[PairedDevice],
+    phone_name: str,
+    remembered: str = "",
+    everything: bool = False,
+) -> list[str]:
+    """MACs worth trying for a phone: the one that worked before, name matches, then phones.
+
+    The h4xtor share name ("S24 Ultra") rarely equals the Bluetooth name ("Galaxy S24"),
+    so every paired device that says it is a phone is tried too; the hello says who it is.
+    ``everything`` adds the other paired devices as well (when the user asked explicitly);
     automatic attempts leave headphones and keyboards alone.
     """
+    paired = list(paired)
     wanted = phone_name.casefold().strip()
     order: list[str] = []
     if remembered and MAC_PATTERN.match(remembered):
         order.append(remembered)
-    for mac, name in paired:
-        name = name.casefold().strip()
+    for device in paired:
+        mac, name = device[0], device[1].casefold().strip()
         if wanted and name and (wanted in name or name in wanted) and mac not in order:
             order.append(mac)
+    order += [d[0] for d in paired if _phone_flag(d) and d[0] not in order]
     if everything:
-        order += [mac for mac, _name in paired if mac not in order]
+        order += [d[0] for d in paired if d[0] not in order]
     return order
+
+
+def scan_targets(paired: Iterable[PairedDevice], skip: Iterable[str] = ()) -> list[str]:
+    """MACs to look for h4xtor share on: the paired phones (all devices when none says)."""
+    paired = [d for d in paired if d[0] not in set(skip)]
+    phones = [d[0] for d in paired if _phone_flag(d)]
+    if phones:
+        return phones
+    # No class info at all (older Windows, plain Linux): try whatever is not known as non-phone.
+    return [d[0] for d in paired if _phone_flag(d) is None]
 
 
 def _sockets_for(address: str) -> Iterator[socket.socket]:
@@ -347,6 +400,29 @@ def _connect_windows(address: str) -> socket.socket:
     return link
 
 
+WINDOWS_ERRORS = {
+    10013: "Windows nægtede adgang til Bluetooth.",
+    10049: "Telefonen er ikke tilgængelig over Bluetooth lige nu.",
+    10050: "Bluetooth er slået fra på PC'en.",
+    10051: "Bluetooth er slået fra på PC'en.",
+    10060: "Telefonen svarede ikke (er den tændt, i nærheden og har Bluetooth slået til?).",
+    10061: "Telefonen afviste forbindelsen.",
+    10064: "Telefonen er ikke inden for rækkevidde eller har Bluetooth slået fra.",
+    10065: "Telefonen er ikke inden for rækkevidde eller har Bluetooth slået fra.",
+    10108: "h4xtor share lytter ikke på Bluetooth på telefonen. Slå 'Tillad forbindelse via "
+    "Bluetooth' til i appen (fanen Del).",
+}
+
+
+def describe(error: BaseException) -> str:
+    """A short Danish explanation of a failed Bluetooth attempt."""
+    code = getattr(error, "errno", None)
+    if isinstance(code, int) and code in WINDOWS_ERRORS:
+        return WINDOWS_ERRORS[code]
+    text = str(error).strip()
+    return text or "Ukendt Bluetooth-fejl."
+
+
 def open_bridge(
     address: str,
     device_id: str,
@@ -369,3 +445,34 @@ def open_bridge(
             continue
         return bridge
     raise last
+
+
+def scan(
+    device_id: str,
+    local_port: int,
+    paired: Iterable[PairedDevice] | None = None,
+    skip: Iterable[str] = (),
+    on_closed: Callable[[Bridge], None] | None = None,
+    opener: Callable[..., Bridge] | None = None,
+) -> tuple[list[tuple[str, Bridge]], dict[str, str]]:
+    """Look for h4xtor share on every paired phone at once.
+
+    Returns the bridges that answered (MAC, bridge) and, per MAC that did not, why not.
+    """
+    opener = opener or open_bridge
+    devices = list(paired_devices() if paired is None else paired)
+    targets = scan_targets(devices, skip)
+    found: list[tuple[str, Bridge]] = []
+    problems: dict[str, str] = {}
+    if not targets:
+        return found, problems
+
+    def one(address: str) -> None:
+        try:
+            found.append((address, opener(address, device_id, local_port, on_closed=on_closed)))
+        except (OSError, ConnectionError) as error:
+            problems[address] = describe(error)
+
+    with ThreadPoolExecutor(max_workers=min(8, len(targets))) as pool:
+        list(pool.map(one, targets))
+    return found, problems

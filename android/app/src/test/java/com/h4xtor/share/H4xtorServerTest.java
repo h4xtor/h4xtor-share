@@ -1,10 +1,22 @@
 package com.h4xtor.share;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.Test;
 
 public final class H4xtorServerTest {
+    @Test
+    public void pairingOverTheBluetoothBridgeIsSeenAsLoopback() {
+        // A PC that pairs over Bluetooth reaches this server from 127.0.0.1 (the bridge):
+        // that address must never be remembered as the PC's own address.
+        assertTrue(H4xtorServer.isLoopback("127.0.0.1"));
+        assertTrue(H4xtorServer.isLoopback("::1"));
+        assertFalse(H4xtorServer.isLoopback("192.168.1.20"));
+        assertFalse(H4xtorServer.isLoopback(""));
+    }
+
     @Test
     public void safeFileNameStripsPathTraversal() {
         assertEquals("payload.bin", H4xtorServer.safeFileName("../../payload.bin"));

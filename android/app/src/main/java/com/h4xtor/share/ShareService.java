@@ -814,7 +814,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         // One address = one device: drop stale records (reinstalled app, old cache).
         for (Peer other : new ArrayList<>(peers.values())) {
             if (other.deviceId.equals(peer.deviceId) || !other.address.equals(peer.address)
-                    || other.port != peer.port) {
+                    || other.port != peer.port || peer.address.isEmpty()) {
                 continue;
             }
             if (!identity.isOutboundTrusted(other.deviceId)) {
@@ -833,7 +833,9 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         if (identity.isOutboundTrusted(peer.deviceId) && !"bluetooth".equals(merged.transport)) {
             identity.remember(merged);
         }
-        if (existing == null || !existing.address.equals(merged.address)) {
+        if (merged.address.isEmpty()) {
+            online.putIfAbsent(merged.deviceId, false); // reached on Bluetooth only
+        } else if (existing == null || !existing.address.equals(merged.address)) {
             network.execute(() -> {
                 try {
                     long time = client.ping(merged, 2_000);
@@ -1025,6 +1027,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     @Override
     public void onPeerPaired(Peer peer) {
         upsert(peer, true);
+        bluetooth.promotePending(peer.deviceId); // paired over Bluetooth: keep using that link
         notifications.cancel(100);
         message("Forbundet med " + peer.name + " ✓", false);
         main.post(() -> {
