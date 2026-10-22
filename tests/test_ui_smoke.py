@@ -953,6 +953,7 @@ def test_bluetooth_finds_and_pairs_a_phone_never_seen_on_wifi(tmp_path, monkeypa
     asyncio.run_coroutine_threadsafe(phone_server.start(), loop).result(20)
     phone_id = phone_config.device_id
 
+    monkeypatch.setattr(bluetooth, "supported", lambda: True)  # macOS too: the radio is faked
     app = _new_app()
     opened: list[tuple[str, str | None]] = []
     phone_ends: list[bluetooth.Bridge] = []
@@ -1043,10 +1044,10 @@ def test_bluetooth_finds_and_pairs_a_phone_never_seen_on_wifi(tmp_path, monkeypa
 def test_bluetooth_search_explains_why_nothing_was_found(tmp_path, monkeypatch) -> None:
     from h4xtor_share import bluetooth
 
+    monkeypatch.setattr(bluetooth, "supported", lambda: True)
     app = _new_app()
     shown: list[str] = []
     monkeypatch.setattr(app.toast, "show", lambda text, *a, **k: shown.append(text))
-    monkeypatch.setattr(bluetooth, "supported", lambda: True)
     try:
         monkeypatch.setattr(bluetooth, "paired_devices", lambda: [])
         app.scan_bluetooth(manual=True)
