@@ -96,6 +96,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         public volatile String status = "active";
         public volatile String uri = "";
         public volatile String error = "";
+        volatile String peerId = "";
         final long created = System.currentTimeMillis();
         long lastTime = SystemClock.elapsedRealtime();
         long lastSent;
@@ -1468,7 +1469,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         TransferItem item = newTransfer(file.getName(), false, target);
         item.total = file.length();
         runTransfer(item, current -> {
-            client.sendFile(target, file, (name, sent, total) -> progress(current, sent, total), current.cancel);
+            client.sendFile(route(target), file, (name, sent, total) -> progress(current, sent, total), current.cancel);
             recordSent(target, "file", file.getName(), file.length());
             //noinspection ResultOfMethodCallIgnored
             file.delete();
@@ -1480,6 +1481,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         TransferItem item = new TransferItem(
                 java.util.UUID.randomUUID().toString(), name, true, folder, peer.name);
         item.cancel = new H4xtorClient.CancelToken();
+        item.peerId = peer.deviceId;
         transfers.put(item.id, item);
         changed();
         return item;
@@ -1535,15 +1537,39 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         void run(TransferItem item) throws Exception;
     }
 
+    /** The PC's route right now: a transfer may start on Wi-Fi and be resumed over Bluetooth, or back. */
+    private Peer route(Peer peer) {
+        Peer now = peers.get(peer.deviceId);
+        return now != null ? now : peer;
+    }
+
+    /** The same file already on its way to the same device (a share sheet opened twice). */
+    private TransferItem activeSend(Peer peer, Uri uri) {
+        synchronized (transfers) {
+            for (TransferItem item : transfers.values()) {
+                if (item.outgoing && "active".equals(item.status) && peer.deviceId.equals(item.peerId)
+                        && uri.toString().equals(item.uri)) {
+                    return item;
+                }
+            }
+        }
+        return null;
+    }
+
     public List<String> sendUris(Peer peer, List<Uri> uris) {
         List<String> ids = new ArrayList<>();
         for (Uri uri : uris) {
+            TransferItem running = activeSend(peer, uri);
+            if (running != null) {
+                ids.add(running.id);
+                continue;
+            }
             H4xtorClient.SourceInfo info = client.describe(uri);
             TransferItem item = newTransfer(info.name, false, peer);
             item.total = Math.max(0, info.size);
             item.uri = uri.toString(); // the phone's own copy: lets "Åbn" open what was sent
             runTransfer(item, current -> {
-                client.sendFile(peer, uri, (name, sent, total) -> progress(current, sent, total), current.cancel);
+                client.sendFile(route(peer), uri, (name, sent, total) -> progress(current, sent, total), current.cancel);
                 recordSent(peer, "file", info.name, info.size, uri.toString());
             });
             ids.add(item.id);
@@ -1559,7 +1585,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         String name = client.treeName(tree);
         TransferItem item = newTransfer(name, true, peer);
         runTransfer(item, current -> {
-            client.sendFolder(peer, tree, (folder, sent, total) -> progress(current, sent, total), current.cancel);
+            client.sendFolder(route(peer), tree, (folder, sent, total) -> progress(current, sent, total), current.cancel);
             recordSent(peer, "folder", name, current.total);
         });
     }

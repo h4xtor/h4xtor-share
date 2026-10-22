@@ -23,6 +23,7 @@ import struct
 import subprocess
 import sys
 import threading
+import time
 import uuid
 from collections.abc import Callable, Iterable, Iterator
 from concurrent.futures import ThreadPoolExecutor
@@ -33,6 +34,7 @@ HELLO, OPEN, DATA, CLOSE = 0, 1, 2, 3
 HEADER = struct.Struct(">BII")
 MAX_CHUNK = 32 * 1024
 MAX_FRAME = 1024 * 1024
+BULK = 16 * 1024  # a DATA frame this big is file data, not a ping
 MAC_PATTERN = re.compile(r"^[0-9A-F]{2}(:[0-9A-F]{2}){5}$")
 PHONE_CLASS = 2  # Bluetooth "major device class" for phones
 
@@ -71,6 +73,7 @@ class Bridge:
         self.on_closed = on_closed
         self.remote_id = ""
         self.opened = 0  # streams carried so far (both directions), handy for tests and status
+        self.bulk_at = 0.0  # last time a full chunk went over the link (a file transfer)
         self._next_id = 1 if odd else 2
         self._streams: dict[int, socket.socket] = {}
         self._lock = threading.Lock()
@@ -99,6 +102,11 @@ class Bridge:
     def closed(self) -> bool:
         return self._closed.is_set()
 
+    @property
+    def busy(self) -> bool:
+        """A file is on its way: closing the link now would break it (pings are tiny)."""
+        return time.monotonic() - self.bulk_at < 15
+
     def close(self) -> None:
         if self._closed.is_set():
             return
@@ -123,6 +131,8 @@ class Bridge:
 
     # -- link ------------------------------------------------------------------
     def _send(self, kind: int, stream: int, payload: bytes = b"") -> None:
+        if len(payload) >= BULK:
+            self.bulk_at = time.monotonic()
         with self._write_lock:
             self.link.sendall(encode(kind, stream, payload))
 
@@ -157,6 +167,8 @@ class Bridge:
         elif kind == DATA:
             with self._lock:
                 local = self._streams.get(stream)
+            if len(payload) >= BULK:
+                self.bulk_at = time.monotonic()
             if local is not None:
                 # ponytail: no per-stream flow control; a stalled local reader stalls the link.
                 try:

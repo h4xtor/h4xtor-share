@@ -75,8 +75,10 @@ def pair():
 def test_streams_both_ways_with_large_data(pair) -> None:
     pc, phone, _closed = pair
     big = os.urandom(3 * 1024 * 1024)
+    assert not pc.busy  # hello only
     # PC app -> pc.port -> link -> phone's own server
     assert _roundtrip(pc.port, big, b"PHONE:") == big
+    assert pc.busy and phone.busy  # a file is moving: the PC must not switch the link off now
     # phone app -> phone.port -> link -> PC's own server
     assert _roundtrip(phone.port, b"hej fra telefonen", b"PC:") == b"hej fra telefonen"
     assert pc.opened == 2 and phone.opened == 2  # both streams, odd/even ids never collide
