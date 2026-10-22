@@ -416,11 +416,25 @@ def bluetooth_checks(desktop: Desktop, phone: Peer) -> None:
     stranger.run(stranger.client.send_clipboard(over, "Parret via Bluetooth"))
     time.sleep(2)
     assert "Parret via Bluetooth" in prefs(), "text over the new Bluetooth pairing did not arrive"
-    shell(f"am start -W -n {PKG}/.MainActivity")
-    time.sleep(1)
-    tap_text("^Del$")
-    time.sleep(1)
-    assert scroll_to("^Forbundet via Bluetooth$"), "phone does not use the link for the new PC"
+    # Android shows its own clipboard pop-up for the new text: get it out of the way first,
+    # or the taps below land on it instead of the app.
+    linked = False
+    for _ in range(3):
+        shell("input keyevent KEYCODE_BACK", check=False)
+        shell("input keyevent KEYCODE_HOME", check=False)
+        shell("cmd statusbar collapse", check=False)
+        time.sleep(5)
+        shell(f"am start -W -n {PKG}/.MainActivity")
+        time.sleep(2)
+        try:
+            tap_text("^Del$", timeout=8)
+        except AssertionError:
+            continue
+        time.sleep(1)
+        if scroll_to("^Forbundet via Bluetooth$"):
+            linked = True
+            break
+    assert linked, "phone does not use the link for the new PC"
     shot("29b-bluetooth-paired-new-pc")
     ok("Bluetooth: the phone keeps using the link for the PC it just paired with")
     stranger.run(stranger.client.unpair(over))  # leave only the main PCs for the next checks
