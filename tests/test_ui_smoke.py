@@ -1011,7 +1011,9 @@ def test_bluetooth_finds_and_pairs_a_phone_never_seen_on_wifi(tmp_path, monkeypa
 
         # Click the device: pair with the code, over Bluetooth.
         app.pair_with_code(found)
-        _pump(app, lambda: app.config_store.is_trusted(phone_id), 15)
+        # Trust is stored first; the UI remembers the peer a moment later.
+        _pump(app, lambda: app.config_store.is_trusted(phone_id)
+              and phone_id in app.config_store.data.get("known_peers", {}), 15)
         assert phone_config.is_trusted(app.config_store.device_id)  # both ways
         known = app.config_store.data["known_peers"][phone_id]
         assert (known["address"], known["transport"]) == ("", "bluetooth")
