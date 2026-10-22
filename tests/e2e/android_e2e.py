@@ -330,11 +330,20 @@ def bluetooth_checks(desktop: Desktop, phone: Peer) -> None:
     ok("Bluetooth: link PC -> phone")
     movie = WORK / "bt-film.bin"
     movie.write_bytes(os.urandom(2 * 1024 * 1024 + 123))  # not a whole number of pieces
-    desktop.run(desktop.client.send_file(over_bt, movie, lambda _p: None), timeout=180)
+    ids: set[str] = set()
+    desktop.run(desktop.client.send_file(over_bt, movie, lambda p: ids.add(p.transfer_id)),
+                timeout=180)
     time.sleep(2)
     listing = shell("ls -l /sdcard/Download/h4xtor-share/", check=False)
     assert "bt-film.bin" in listing and str(movie.stat().st_size) in listing, listing
     ok("Bluetooth: 2 MB file PC -> phone (in pieces), complete")
+    # The PC lost the phone's last answer and tries again with the same id: no second copy.
+    desktop.client._resumable[(phone.device_id, str(movie.resolve()))] = ids.pop()
+    desktop.run(desktop.client.send_file(over_bt, movie, lambda _p: None), timeout=60)
+    time.sleep(2)
+    listing = shell("ls /sdcard/Download/h4xtor-share/", check=False)
+    assert listing.count("bt-film") == 1, listing
+    ok("Bluetooth: a retry after a lost answer does not save the file twice on the phone")
     album = WORK / "BTMappe"
     (album / "sub").mkdir(parents=True)
     (album / "sub" / "c.bin").write_bytes(os.urandom(300_000))

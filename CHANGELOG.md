@@ -9,7 +9,7 @@ Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 - En fil sendt fra telefonen til PC'en kunne hænge i appen. Over Bluetooth hoppede bjælken til næsten 100 % og stod så stille i flere minutter – nu sendes filen i små bidder, så bjælken viser, hvor langt den reelt er, og arket lukker selv, når filen er fremme.
 - Telefonen sendte den samme fil igen, når appen blev åbnet på ny (fx efter en opdatering, eller når Android genskabte "Del"-arket). Nu sendes en deling præcis én gang.
 - PC'en skiftede tilbage til Wi-Fi midt i en Bluetooth-overførsel og afbrød den. Nu venter den, til filen er fremme.
-- Hvis telefonen ikke nåede at få PC'ens "modtaget"-svar og prøvede igen, fik PC'en filen to gange. Nu genkender PC'en filen og gemmer den kun én gang.
+- Hvis afsenderen ikke nåede at få "modtaget"-svaret og prøvede igen, blev filen gemt to gange. Nu genkender både PC og telefon filen og gemmer den kun én gang.
 ### Forbedret
 - En overførsel, der går helt i stå (fx hvis Wi-Fi forsvinder), stopper nu efter 45 sekunder med en tydelig besked i stedet for at hænge i op til et kvarter. Tryk "Fortsæt" for at fortsætte, hvor den slap.
 - "Fortsæt" på en afbrudt overførsel bruger nu den vej til PC'en, der virker lige nu (Wi-Fi eller Bluetooth).
