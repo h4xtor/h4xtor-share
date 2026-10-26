@@ -4,6 +4,16 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
+## 1.4.0 – 2026-10-26
+### Nyt
+- Nyt design ("Aurora + Orbit"): mørk nattehimmel med blødt, drivende nordlys i turkis, himmelblå og orange – på både PC og telefon.
+- Orbit-kortet: aben sidder i midten som din PC/telefon, og dine enheder kredser rundt om den. Tryk på en enhed for at sende til den. Mens der sendes, flyver små lys ud til modtageren – og aben hopper, når filen er landet.
+- PC: menuen er delt op i Del, Telefon, Forbindelse og Andet, og Wi-Fi Direct og Bluetooth har fået deres egen side ("Wi-Fi Direct & Bluetooth").
+- PC: statusmærker øverst på Send viser LAN, Wi-Fi Direct og Bluetooth med det samme.
+### Forbedret
+- Telefonen: glas-kort og en svævende fanebjælke i bunden; overskrifter i en moderne, kraftig skrift.
+- PC'en starter i mørkt tema (du kan stadig vælge Lyst eller Automatisk under Indstillinger).
+
 ## 1.3.9 – 2026-10-26
 ### Nyt
 - Wi-Fi Direct fra PC'en: under Indstillinger → Wi-Fi Direct kan PC'en nu selv lave netværket ("Opret netværk her på PC'en"). Telefonen får kortet "PC'en har lavet Wi-Fi Direct" og forbinder med ét tryk – eller scan PC'ens Wi-Fi-QR. PC'en beholder sit internet, og telefonen sin mobildata. Virker på Windows og Linux.

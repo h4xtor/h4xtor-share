@@ -265,7 +265,7 @@ class Config:
 
     @property
     def theme(self) -> str:
-        value = str(self.data.get("theme") or "system")
+        value = str(self.data.get("theme") or "dark")  # mix design: dark by default
         return value if value in {"system", "light", "dark"} else "system"
 
     @theme.setter

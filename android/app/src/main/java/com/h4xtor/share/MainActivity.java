@@ -80,6 +80,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private android.widget.ImageView sendButton;
     private String dismissedClip;
     private boolean renderPending;
+    private FrameLayout navHolder;
+    /** Kept between renders so its animation never restarts. */
+    private OrbitView orbit;
+    private int landedSends = -1;
     /** A finger is on the screen: live progress waits, so a button is never rebuilt mid-tap. */
     private boolean touching;
 
@@ -294,6 +298,9 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private View buildShell() {
         FrameLayout root = new FrameLayout(this);
         root.setBackgroundColor(ui.bg);
+        // Mix design: a slowly drifting aurora behind everything.
+        root.addView(new AuroraView(this), new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
 
         LinearLayout column = ui.column();
         root.addView(column, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
@@ -309,13 +316,15 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                 ViewGroup.LayoutParams.WRAP_CONTENT));
         column.addView(scroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        View line = new View(this);
-        line.setBackgroundColor(ui.border);
-        column.addView(line, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, ui.dp(1))));
+        // Floating glass tab bar.
         nav = ui.row();
-        nav.setBackgroundColor(ui.surface);
-        nav.setPadding(ui.dp(6), ui.dp(6), ui.dp(6), ui.dp(8));
-        column.addView(nav, ui.matchWrap());
+        nav.setBackground(ui.rounded(ui.surface, ui.border, 26));
+        nav.setPadding(ui.dp(6), ui.dp(6), ui.dp(6), ui.dp(6));
+        navHolder = new FrameLayout(this);
+        navHolder.addView(nav, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+        navHolder.setPadding(ui.dp(12), ui.dp(6), ui.dp(12), ui.dp(12));
+        column.addView(navHolder, ui.matchWrap());
 
         toastView = ui.text("", 14f, ui.bg, true);
         toastView.setPadding(ui.dp(18), ui.dp(13), ui.dp(18), ui.dp(13));
@@ -329,7 +338,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         root.addView(toastView, toastParams);
         Ui.onInsets(root, (top, bottom) -> {
             column.setPadding(0, top, 0, 0);
-            nav.setPadding(ui.dp(6), ui.dp(6), ui.dp(6), ui.dp(8) + bottom);
+            navHolder.setPadding(ui.dp(12), ui.dp(6), ui.dp(12), ui.dp(12) + bottom);
             FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) toastView.getLayoutParams();
             params.bottomMargin = ui.dp(92) + bottom;
             toastView.setLayoutParams(params);
@@ -644,8 +653,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
 
     private View topBar() {
         LinearLayout bar = ui.row();
-        TextView mark = ui.text("✻", 22f, ui.accent, true);
-        bar.addView(mark);
+        android.widget.ImageView mark = new android.widget.ImageView(this);
+        mark.setImageResource(R.drawable.ic_monkey);
+        mark.setContentDescription("h4xtor share");
+        bar.addView(mark, new LinearLayout.LayoutParams(ui.dp(30), ui.dp(30)));
         LinearLayout.LayoutParams nameParams = ui.weight(1);
         nameParams.setMargins(ui.dp(8), 0, ui.dp(8), 0);
         bar.addView(ui.text("h4xtor share", 16.5f, ui.text, true), nameParams);
@@ -676,15 +687,12 @@ public final class MainActivity extends Activity implements ShareService.UiListe
 
     private View greeting(Peer target) {
         LinearLayout box = ui.column();
-        LinearLayout headline = ui.row();
-        headline.addView(ui.title("Velkommen til\nH4xtor Share", 31), ui.weight(1));
-        android.widget.ImageView monkey = new android.widget.ImageView(this);
-        monkey.setImageResource(R.drawable.ic_monkey);
-        monkey.setContentDescription("H4xtor Share-aben");
-        LinearLayout.LayoutParams monkeyParams = new LinearLayout.LayoutParams(ui.dp(84), ui.dp(84));
-        monkeyParams.setMargins(ui.dp(12), 0, 0, 0);
-        headline.addView(monkey, monkeyParams);
-        box.addView(headline);
+        box.addView(ui.title("Slip noget herind.", 30));
+        TextView sub = ui.title("Aben bringer det til " + (sendToAll ? "alle enheder"
+                : target != null ? target.name : "din PC") + ".", 19);
+        sub.setTextColor(ui.accent);
+        box.addView(sub, ui.margins(0, 2, 0, 0));
+        box.addView(orbitView(target), ui.margins(0, 10, 0, 0));
         if (target != null) {
             boolean online = service.isOnline(target.deviceId);
             box.addView(ui.text(online
@@ -693,6 +701,49 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                     ui.margins(0, 8, 0, 0));
         }
         return box;
+    }
+
+    /** The monkey in the middle, paired PCs on the orbit; tap one to send to it. */
+    private View orbitView(Peer target) {
+        if (orbit == null) {
+            orbit = new OrbitView(this);
+            orbit.setListener(id -> {
+                Peer peer = service.peer(id);
+                if (peer != null) {
+                    select(peer);
+                }
+            });
+        }
+        if (orbit.getParent() instanceof ViewGroup) {
+            ((ViewGroup) orbit.getParent()).removeView(orbit);
+        }
+        java.util.Set<String> sendingTo = new java.util.HashSet<>();
+        int landed = 0;
+        for (ShareService.TransferItem item : service.transfers()) {
+            if (item.outgoing && "active".equals(item.status)) {
+                sendingTo.add(item.peerName);
+            }
+            if (item.outgoing && "done".equals(item.status)) {
+                landed++;
+            }
+        }
+        if (landedSends >= 0 && landed > landedSends) {
+            orbit.celebrate();
+        }
+        landedSends = landed;
+        List<OrbitView.Node> nodes = new ArrayList<>();
+        List<Peer> paired = service.pairedPeers();
+        for (int i = 0; i < paired.size() && i < 5; i++) {
+            Peer peer = paired.get(i);
+            boolean online = service.isOnline(peer.deviceId);
+            String route = "wifi-direct".equals(peer.transport) ? "direct"
+                    : "bluetooth".equals(peer.transport) ? "bt" : "wifi";
+            nodes.add(new OrbitView.Node(peer.deviceId, peer.name, online ? route : "offline", online,
+                    sendToAll || (target != null && target.deviceId.equals(peer.deviceId)),
+                    sendingTo.contains(peer.name)));
+        }
+        orbit.setNodes(nodes, sendingTo.isEmpty() ? "klar" : "sender…");
+        return orbit;
     }
 
     private EditText composerInput() {
@@ -1156,7 +1207,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         card.addView(ui.text("Slukker af sig selv efter 10 minutter uden brug, så din normale Wi-Fi "
                 + "derhjemme ikke bliver forstyrret.", 12.5f, ui.muted, false), ui.margins(0, 10, 0, 0));
         if (desktops.isEmpty()) {
-            card.addView(ui.text("På PC'en: Wi-Fi Direct → \"Kobl på telefonens\" → skriv netværk og kode.",
+            card.addView(ui.text("På PC'en: Wi-Fi Direct & Bluetooth → \"Kobl på telefonens\" → skriv netværk og kode.",
                     12.5f, ui.muted, false), ui.margins(0, 10, 0, 0));
         }
         return card;
@@ -1224,7 +1275,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         }
         card.addView(ui.text(join.isConnecting() ? "Forbinder til " + join.ssid() + "…"
                 : "Eller: kobl på PC'ens eget netværk", 14.5f, ui.text, true), ui.margins(0, 12, 0, 0));
-        card.addView(ui.text("På PC'en: Wi-Fi Direct → \"Opret her\". Tryk \"Send til telefonen\" der, "
+        card.addView(ui.text("På PC'en: Wi-Fi Direct & Bluetooth → \"Opret her\". Tryk \"Send til telefonen\" der, "
                 + "eller scan PC'ens Wi-Fi-QR her.", 12.5f, ui.muted, false), ui.margins(0, 2, 0, 0));
         TextView scan = ui.button("Scan PC'ens Wi-Fi-QR", "secondary");
         scan.setOnClickListener(v -> scanQr());

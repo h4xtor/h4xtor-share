@@ -1195,3 +1195,47 @@ def test_pc_wifi_direct_can_be_retried_after_a_failed_start(tmp_path, monkeypatc
         assert app.direct_toggle.enabled
     finally:
         app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_send_page_orbit_shows_devices_and_picks_one(tmp_path, monkeypatch) -> None:
+    from h4xtor_share.app import TransferState
+    from h4xtor_share.models import PeerStatus
+
+    app, peers = _paired_app(2, tmp_path, monkeypatch)
+    try:
+        for peer in peers:
+            app.peer_status[peer.device_id] = PeerStatus(peer.device_id, True, 4.0)
+        app._reorder_cards()
+        app.update()
+        names = [node["name"] for node in app.orbit.nodes]
+        assert sorted(names) == ["Bærbar", "Mobil"]
+        assert all(node["sub"] == "wifi · 4 ms" for node in app.orbit.nodes)
+        app._orbit_pick(peers[1].device_id)  # a click on a node on the map
+        assert app.selected_id == peers[1].device_id
+        assert "Bærbar" in app.greeting_sub.cget("text")
+        assert [n["id"] for n in app.orbit.nodes if n["selected"]] == [peers[1].device_id]
+        app.transfers["t"] = TransferState("t", "ferie.mp4", "send", "Bærbar", total=10, sent=4)
+        app._update_transfer_badge()
+        assert app.orbit.sending == {peers[1].device_id}
+        app.orbit._animate()  # one frame of the motion (ring, pulse, beams, lights, blink)
+        app.transfers["t"].status = "done"
+        app._update_transfer_badge()
+        assert app.orbit._hop > 0  # the monkey hops when the send has landed
+        assert app.orbit.sending == set()
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_menu_groups_and_connections_page() -> None:
+    app = _new_app()
+    try:
+        keys = [key for key, _icon, _label in app.NAV_ITEMS]
+        assert keys[:3] == ["share", "transfers", "clipboard"]
+        assert "connections" in keys and "connections" in app.pages
+        app.show_page("connections")
+        assert app.active_page == "connections"
+        assert app.direct_status.winfo_toplevel() is app
+    finally:
+        app.close()
