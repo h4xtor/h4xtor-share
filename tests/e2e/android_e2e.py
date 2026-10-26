@@ -662,6 +662,7 @@ def queue_checks(desktop: Desktop, phone: Peer) -> None:
     assert not screen_has(r"^(I kø|Sender|På pause)", 5), "a row is still open after all arrived"
     shot("32-resumed-done")
     ok("Fortsæt alle continues where each file stopped; all five byte-identical on the PC")
+    tap_text("^Del$")  # the next steps start from the Del tab (the app reopens on the last tab)
 
 
 def main() -> None:
