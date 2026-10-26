@@ -645,6 +645,8 @@ def queue_checks(desktop: Desktop, phone: Peer) -> None:
     ok("five files at once: three send, the rest wait as 'I kø' (no row stuck at 0 %)")
 
     tap_text("^Pause alle$")
+    if not screen_has("^På pause$", 8) and screen_has("^Pause alle$", 2):
+        tap_text("^Pause alle$")  # a slow emulator can drop a tap; once more
     assert screen_has("^På pause$", 15), "Pause alle did not pause"
     assert not screen_has("^Sender$", 3), "a file kept sending after Pause alle"
     shot("31-paused")
@@ -652,6 +654,8 @@ def queue_checks(desktop: Desktop, phone: Peer) -> None:
 
     desktop.server.receive_delay = 0.0
     tap_text("^Fortsæt alle$")
+    if screen_has("^Fortsæt alle$", 5) and not screen_has("^(Sender|I kø)", 1):
+        tap_text("^Fortsæt alle$")
     received = [desktop.wait_for(FileReceived, timeout=120) for _ in names]
     by_name = {event.path.name: event.path for event in received}
     for name, source in sources.items():

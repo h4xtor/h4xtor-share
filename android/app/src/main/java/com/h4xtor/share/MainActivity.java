@@ -80,6 +80,8 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private android.widget.ImageView sendButton;
     private String dismissedClip;
     private boolean renderPending;
+    /** A finger is on the screen: live progress waits, so a button is never rebuilt mid-tap. */
+    private boolean touching;
 
     // ---------------------------------------------------------------- lifecycle
     @Override
@@ -387,6 +389,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     // ------------------------------------------------------------------ render
     @Override
     public void onStateChanged() {
+        if (touching) {
+            renderPending = true;
+            return;
+        }
         if (composerInput != null && composerInput.hasFocus() && PAGE_DEVICES.equals(page)) {
             // Never rebuild the screen under the user's fingers while typing.
             renderPending = true;
@@ -398,6 +404,28 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         } else {
             renderNav();
         }
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(android.view.MotionEvent event) {
+        int action = event.getActionMasked();
+        if (action == android.view.MotionEvent.ACTION_DOWN) {
+            touching = true;
+        }
+        boolean handled = super.dispatchTouchEvent(event);
+        if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
+            touching = false;
+            if (renderPending) {
+                // After the click has run; a scroll that is still flinging is left alone.
+                content.postDelayed(() -> {
+                    if (!touching && renderPending && service != null) {
+                        renderPending = false;
+                        onStateChanged();
+                    }
+                }, 350);
+            }
+        }
+        return handled;
     }
 
     private void render() {
