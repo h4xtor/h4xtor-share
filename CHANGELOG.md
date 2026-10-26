@@ -15,7 +15,7 @@ Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 - PC'en starter i mørkt tema (du kan stadig vælge Lyst eller Automatisk under Indstillinger).
 - Aurora-glas: stærkere nordlys med et bølgende lysgardin på telefonen og glødende lys bag orbit-kortet på PC'en. Kort og enheder ligner frostet glas med en lys kant, og en skinnende nordlys-stribe løber langs PC'ens menu og top.
 ### Rettet
-- Telefonen: fanebjælken gemmer sig, mens tastaturet er fremme, så den aldrig dækker Send-knappen.
+- Telefonen: når du skriver, gemmer fanebjælken sig, og skærmen ruller selv op, så hele feltet med Send-knappen står over tastaturet.
 
 ## 1.3.9 – 2026-10-26
 ### Nyt

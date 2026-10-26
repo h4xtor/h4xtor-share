@@ -340,6 +340,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             // While typing, the floating tab bar steps aside so it never covers Send.
             column.setPadding(0, top, 0, keyboard ? bottom : 0);
             navHolder.setVisibility(keyboard ? View.GONE : View.VISIBLE);
+            if (keyboard) {
+                // Lift the whole composer (text, chips and Send) above the keyboard.
+                scroll.postDelayed(this::revealComposer, 120);
+            }
             navHolder.setPadding(ui.dp(12), ui.dp(6), ui.dp(12), ui.dp(12) + bottom);
             FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) toastView.getLayoutParams();
             params.bottomMargin = ui.dp(92) + bottom;
@@ -746,6 +750,20 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         }
         orbit.setNodes(nodes, sendingTo.isEmpty() ? "klar" : "sender…");
         return orbit;
+    }
+
+    /** Scrolls so the composer card, Send button included, sits fully above the keyboard. */
+    private void revealComposer() {
+        if (composerInput == null || !composerInput.hasFocus() || sendButton == null) {
+            return;
+        }
+        View row = (View) sendButton.getParent();
+        View card = row == null ? null : (View) row.getParent();
+        if (card == null || card.getHeight() == 0) {
+            return;
+        }
+        card.requestRectangleOnScreen(new android.graphics.Rect(0, 0, card.getWidth(),
+                card.getHeight() + ui.dp(12)), false);
     }
 
     private EditText composerInput() {
