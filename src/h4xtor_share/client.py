@@ -379,6 +379,17 @@ class PeerClient:
             },
         )
 
+    async def offer_pc_wifi_direct(
+        self, peer: Peer, ssid: str, passphrase: str, addresses: list[str]
+    ) -> None:
+        """Ask a phone to join the Wi-Fi Direct network this PC made (it shows a "Forbind" card)."""
+        self._require(peer, "wifi-direct-pc")
+        await self._authed_post(
+            peer,
+            "/api/v1/wifi-direct/pc-offer",
+            {"ssid": ssid, "passphrase": passphrase, "addresses": addresses[:8]},
+        )
+
     async def unpair(self, peer: Peer) -> None:
         """Forget *peer* locally and, best effort, ask it to forget us too."""
         try:

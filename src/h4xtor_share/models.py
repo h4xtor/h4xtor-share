@@ -20,6 +20,7 @@ DESKTOP_CAPABILITIES: tuple[str, ...] = (
     "speedtest",
     "notifications",
     "sms",
+    "wifi-direct-pc",
 )
 
 
@@ -132,6 +133,17 @@ class WifiDirectOffer:
     passphrase: str
     owner_address: str
     port: int
+
+
+@dataclass(slots=True)
+class WifiDirectJoined:
+    """A paired phone joined the Wi-Fi Direct network this PC made and is at *address*."""
+
+    peer_id: str
+    peer_name: str
+    address: str
+    port: int
+    ssid: str
 
 
 @dataclass(slots=True)

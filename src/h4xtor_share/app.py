@@ -28,7 +28,7 @@ from typing import Any
 
 from tkinterdnd2 import DND_FILES, TkinterDnD
 
-from h4xtor_share import __version__, bluetooth, integration, wifidirect
+from h4xtor_share import __version__, bluetooth, integration, wifidirect, wifidirect_host
 from h4xtor_share.client import PeerClient
 from h4xtor_share.config import DEFAULT_PORT, Config
 from h4xtor_share.crypto import ensure_certificate, server_ssl_context
@@ -47,6 +47,7 @@ from h4xtor_share.models import (
     PeerPaired,
     PeerStatus,
     TransferProgress,
+    WifiDirectJoined,
     WifiDirectOffer,
 )
 from h4xtor_share.openers import open_path, reveal_in_folder
@@ -1475,6 +1476,9 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         page, actions = self._page(
             "transfers", "Overførsler", "Alt der sendes og modtages – live, og kan genoptages."
         )
+        Button(actions, self.theme, "Stop alle", self.stop_all_transfers, kind="ghost").pack(
+            side="left", padx=(0, px(8))
+        )
         Button(actions, self.theme, "Ryd færdige", self.clear_finished_transfers).pack(side="left")
         Button(actions, self.theme, "Åbn mappe", self.open_incoming_folder, kind="ghost").pack(
             side="left", padx=(px(8), 0)
@@ -2380,11 +2384,21 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         )
 
         direct = section("Wi-Fi Direct")
+        self._build_direct_host(direct.body)
+        self._divider(direct.body)
+        tk.Label(
+            direct.body,
+            text="Kobl på telefonens netværk",
+            bg=c["card"],
+            fg=c["text"],
+            font=self.theme.font(10, "bold"),
+            anchor="w",
+        ).pack(fill="x")
         tk.Label(
             direct.body,
             text=(
-                "Del uden router: Tryk “Wi-Fi Direct” i h4xtor share på telefonen. Er telefonen "
-                "allerede forbundet, kobler PC'en selv på. Ellers indtast netværk og kode herunder."
+                "Tryk “Start Wi-Fi Direct” i h4xtor share på telefonen. Er telefonen allerede "
+                "forbundet, kobler PC'en selv på. Ellers indtast netværk og kode herunder."
             ),
             bg=c["card"],
             fg=c["muted"],
@@ -2392,30 +2406,20 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
             anchor="w",
             justify="left",
             wraplength=px(620),
-        ).pack(fill="x")
+        ).pack(fill="x", pady=(px(2), 0))
         wifi_row = tk.Frame(direct.body, bg=c["card"])
         wifi_row.pack(fill="x", pady=(px(10), 0))
         self.wifi_ssid_var = tk.StringVar(value="")
         self.wifi_pass_var = tk.StringVar(value="")
-        entry(wifi_row, self.theme, self.wifi_ssid_var, width=24).pack(side="left", ipady=px(6))
-        entry(wifi_row, self.theme, self.wifi_pass_var, width=20, show="•").pack(
-            side="left", padx=(px(8), 0), ipady=px(6)
-        )
+        self._labelled_entry(wifi_row, "Telefonens netværk (DIRECT-…)", self.wifi_ssid_var, 24)
+        self._labelled_entry(wifi_row, "Kode", self.wifi_pass_var, 14, gap=px(8), show="•")
         Button(
             wifi_row,
             self.theme,
             "Forbind",
             lambda: self.join_wifi_direct(self.wifi_ssid_var.get(), self.wifi_pass_var.get()),
             kind="primary",
-        ).pack(side="left", padx=(px(8), 0))
-        tk.Label(
-            direct.body,
-            text="Netværksnavn (DIRECT-…)        Adgangskode",
-            bg=c["card"],
-            fg=c["faint"],
-            font=self.theme.font(8),
-            anchor="w",
-        ).pack(fill="x", pady=(px(4), 0))
+        ).pack(side="left", padx=(px(8), 0), anchor="s")
 
         self.paired_section = section("Forbundne enheder")
         self._refresh_paired_list()
@@ -2680,6 +2684,21 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
             self.status_var.set(value)
         elif tag == "clipboard_broadcast":
             self._refresh_recent_clips()
+        elif tag == "direct_host_started":
+            self._direct_host_up(value)
+        elif tag == "direct_host_stopped":
+            self._direct_host_down(value)
+        elif tag == "direct_offered":
+            names = value
+            if names:
+                who = ", ".join(names)
+                self.toast.show(f"Sendt til {who} – tryk Forbind på telefonen", "success")
+        elif tag == "direct_phone_joined":
+            peer = value
+            self._upsert_peer(peer)
+            self.select_peer(peer.device_id)
+            self._refresh_direct_host()
+            self._notify(f"{peer.name} er forbundet direkte via Wi-Fi Direct", "success")
         elif tag == "wifi_joined":
             peer = value
             self._upsert_peer(peer)
@@ -2819,6 +2838,8 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
                 self._refresh_web_page()  # "Hentet ✓"
         elif isinstance(event, WifiDirectOffer):
             self._offer_wifi_direct(event)
+        elif isinstance(event, WifiDirectJoined):
+            self._phone_joined_direct(event)
 
     def _record_remote_text(self, peer_id: str, text: str, received: bool) -> None:
         peer = self.peers.get(peer_id)
@@ -3447,6 +3468,287 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
             raise RuntimeError(f"Telefonen svarer ikke på Wi-Fi Direct: {last}")
 
         self.runtime.submit(run(), "wifi_joined")
+
+    # ------------------------------------------- Wi-Fi Direct made by this PC
+    def _build_direct_host(self, body: tk.Frame) -> None:
+        """"Opret her på PC'en": name, code, start/stop, Wi-Fi QR and "Send til telefonen"."""
+        c = self.theme.c
+        px = self.theme.px
+        self.direct_host: wifidirect_host.DirectHost | None = None
+        stored = self.config_store.data.get("direct_host") or {}
+        name = stored.get("ssid") or wifidirect_host.default_name(self.config_store.device_name)
+        self.direct_name_var = tk.StringVar(value=str(name))
+        self.direct_pass_var = tk.StringVar(
+            value=str(stored.get("pass") or wifidirect_host.random_passphrase())
+        )
+        tk.Label(
+            body,
+            text="Opret netværk her på PC'en",
+            bg=c["card"],
+            fg=c["text"],
+            font=self.theme.font(10, "bold"),
+            anchor="w",
+        ).pack(fill="x")
+        tk.Label(
+            body,
+            text=(
+                "Ingen router? PC'en laver selv et lille netværk, som telefonen kobler direkte på. "
+                "PC'ens normale internet virker stadig, og telefonen beholder sin mobildata."
+            ),
+            bg=c["card"],
+            fg=c["muted"],
+            font=self.theme.font(9),
+            anchor="w",
+            justify="left",
+            wraplength=px(620),
+        ).pack(fill="x", pady=(px(2), 0))
+        row = tk.Frame(body, bg=c["card"])
+        row.pack(fill="x", pady=(px(10), 0))
+        self.direct_name_entry = self._labelled_entry(
+            row, "Netværksnavn (DIRECT-h4-…)", self.direct_name_var, 24
+        )
+        self.direct_pass_entry = self._labelled_entry(
+            row, "Kode (8–63 tegn)", self.direct_pass_var, 14, gap=px(8)
+        )
+        self.direct_toggle = Button(
+            row, self.theme, "Start netværk", self.toggle_direct_host, kind="primary"
+        )
+        self.direct_toggle.pack(side="left", padx=(px(8), 0), anchor="s")
+        self.direct_status = tk.Label(
+            body,
+            text="",
+            bg=c["card"],
+            fg=c["muted"],
+            font=self.theme.font(9, family=self.theme.mono),
+            anchor="w",
+            justify="left",
+        )
+        self.direct_status.pack(fill="x", pady=(px(8), 0))
+        actions = tk.Frame(body, bg=c["card"])
+        actions.pack(fill="x", pady=(px(8), 0))
+        self.direct_send = Button(
+            actions, self.theme, "Send til telefonen", self.offer_direct_host, size="sm"
+        )
+        self.direct_send.pack(side="left")
+        self.direct_qr = Button(
+            actions, self.theme, "Vis Wi-Fi-QR", self.show_direct_qr, kind="ghost", size="sm"
+        )
+        self.direct_qr.pack(side="left", padx=(px(8), 0))
+        self._refresh_direct_host()
+
+    def _labelled_entry(
+        self, row: tk.Frame, label: str, variable: tk.StringVar, width: int, gap: int = 0, **kwargs
+    ) -> tk.Entry:
+        c = self.theme.c
+        column = tk.Frame(row, bg=c["card"])
+        column.pack(side="left", padx=(gap, 0), anchor="s")
+        tk.Label(
+            column, text=label, bg=c["card"], fg=c["muted"], font=self.theme.font(8), anchor="w"
+        ).pack(fill="x", pady=(0, self.theme.px(3)))
+        field = entry(column, self.theme, variable, width=width, **kwargs)
+        field.pack(fill="x", ipady=self.theme.px(6))
+        return field
+
+    def _refresh_direct_host(self) -> None:
+        if not hasattr(self, "direct_status"):
+            return
+        host = self.direct_host
+        unsupported = wifidirect_host.supported()
+        running = host is not None and host.running
+        starting = host is not None and not running
+        if unsupported:
+            text = unsupported
+        elif running and host is not None:
+            phones = [
+                peer.name
+                for peer in self.peers.values()
+                if peer.transport == "wifi-direct" and peer.address in self._direct_clients
+            ]
+            joined = f"forbundet: {', '.join(phones)}" if phones else "venter på telefonen"
+            text = (
+                f"● Kører   {host.ssid}   kode {host.passphrase}\n"
+                f"  PC'ens adresse {', '.join(host.addresses[:2]) or '–'}   ·   {joined}"
+            )
+        elif starting:
+            text = "Starter Wi-Fi Direct …"
+        else:
+            text = "○ Slukket"
+        self.direct_status.configure(
+            text=text, fg=self.theme.c["success"] if running else self.theme.c["muted"]
+        )
+        self.direct_toggle.set_text("Stop netværk" if running else "Start netværk")
+        self.direct_toggle.set_enabled(not unsupported and not starting)
+        state = "disabled" if running or starting else "normal"
+        self.direct_name_entry.configure(state=state)
+        self.direct_pass_entry.configure(state=state)
+        self.direct_send.set_enabled(running)
+        self.direct_qr.set_enabled(running)
+
+    @property
+    def _direct_clients(self) -> set[str]:
+        return getattr(self, "_direct_client_addresses", set())
+
+    def toggle_direct_host(self) -> None:
+        host = self.direct_host
+        if host is not None and host.running:
+            self.stop_direct_host()
+        else:
+            self.start_direct_host()
+
+    def start_direct_host(self) -> None:
+        ssid = self.direct_name_var.get().strip()
+        passphrase = self.direct_pass_var.get().strip()
+        try:
+            host = wifidirect_host.DirectHost(ssid, passphrase)
+        except wifidirect.WifiDirectError as error:
+            self._show_error(error)
+            return
+        self.config_store.data["direct_host"] = {"ssid": ssid, "pass": passphrase}
+        self.config_store.save()
+        host.on_stopped = lambda line: self.event_queue.put(("direct_host_stopped", line))
+        self.direct_host = host
+        self._direct_client_addresses = set()
+        self._refresh_direct_host()
+        self.toast.show(f"Starter {ssid} …", duration_ms=8000)
+
+        async def run() -> list[str]:
+            try:
+                return await asyncio.to_thread(host.start)
+            except Exception:
+                self.direct_host = None
+                raise
+
+        self.runtime.submit(run(), "direct_host_started")
+
+    def stop_direct_host(self) -> None:
+        host, self.direct_host = self.direct_host, None
+        if host is not None:
+            host.on_stopped = None
+            host.stop()
+        self._leave_direct_peers()
+        self._refresh_direct_host()
+        self.toast.show("Wi-Fi Direct er slukket")
+
+    def _direct_host_up(self, addresses: list[str]) -> None:
+        self._refresh_direct_host()
+        host = self.direct_host
+        if host is None:
+            return
+        self.toast.show(f"{host.ssid} kører – tryk Forbind på telefonen", "success")
+        self.offer_direct_host(quiet=True)
+
+    def _direct_host_down(self, line: str) -> None:
+        if self.direct_host is None:
+            return
+        self.direct_host = None
+        self._leave_direct_peers()
+        self._refresh_direct_host()
+        self._show_error(RuntimeError(wifidirect_host.friendly_windows_error(line)))
+
+    def _leave_direct_peers(self) -> None:
+        # The health check marks the phones offline and finds them on the LAN again.
+        self._direct_client_addresses = set()
+
+    def _direct_phones(self) -> list[Peer]:
+        """Paired phones that can be told about this PC's network right now."""
+        out = []
+        for peer in self.peers.values():
+            status = self.peer_status.get(peer.device_id)
+            if (
+                peer.supports("wifi-direct-pc")
+                and self.config_store.is_trusted(peer.device_id)
+                and status is not None
+                and status.online
+            ):
+                out.append(peer)
+        return out
+
+    def offer_direct_host(self, quiet: bool = False) -> None:
+        host = self.direct_host
+        if host is None or not host.running:
+            return
+        phones = self._direct_phones()
+        if not phones:
+            if not quiet:
+                self.toast.show(
+                    "Ingen telefon er online lige nu. Scan Wi-Fi-QR'en med h4xtor share i stedet.",
+                    duration_ms=7000,
+                )
+            return
+
+        async def run() -> list[str]:
+            reached = []
+            for phone in phones:
+                with contextlib.suppress(Exception):
+                    await self.client.offer_pc_wifi_direct(
+                        phone, host.ssid, host.passphrase, host.addresses
+                    )
+                    reached.append(phone.name)
+            return reached
+
+        self.runtime.submit(run(), "direct_offered")
+
+    def show_direct_qr(self) -> None:
+        host = self.direct_host
+        if host is None or not host.running:
+            return
+        c = self.theme.c
+        px = self.theme.px
+        modal = Modal(self, self.theme, "Wi-Fi Direct", width=520)
+        modal.heading(
+            "Scan med telefonen",
+            "Åbn h4xtor share → Scan QR-kode. Telefonen kobler selv på netværket og finder PC'en. "
+            "Telefonens kamera-app virker også.",
+        )
+        layout = tk.Frame(modal.body, bg=c["bg"])
+        layout.pack(fill="x", pady=(px(16), 0))
+        card = Card(layout, self.theme, padding=12, fill="#FFFFFF", outline=c["border"])
+        card.pack(side="left", anchor="n")
+        qr = QrCanvas(card.body, self.theme, size=200)
+        qr.pack()
+        qr.show(qr_matrix(wifidirect_host.wifi_qr_payload(host.ssid, host.passphrase)))
+        tk.Label(
+            layout,
+            text=f"Netværk\n{host.ssid}\n\nKode\n{host.passphrase}",
+            bg=c["bg"],
+            fg=c["text"],
+            font=self.theme.font(11, family=self.theme.mono),
+            anchor="w",
+            justify="left",
+        ).pack(side="left", padx=(px(20), 0), anchor="n")
+        buttons = tk.Frame(modal.body, bg=c["bg"])
+        buttons.pack(fill="x", pady=(px(16), 0))
+        Button(buttons, self.theme, "Luk", modal.close, kind="ghost").pack(side="right")
+        modal.present()
+
+    def _phone_joined_direct(self, event: WifiDirectJoined) -> None:
+        """A phone joined our network: reach it at its new address."""
+        self._direct_client_addresses = {*self._direct_clients, event.address}
+
+        async def run() -> Peer:
+            last: Exception | None = None
+            for _attempt in range(6):
+                try:
+                    info = await self.client.get_info(event.address, event.port, timeout_seconds=3)
+                except Exception as error:  # noqa: BLE001
+                    last = error
+                    await asyncio.sleep(1)
+                    continue
+                if info.device_id != event.peer_id:
+                    raise RuntimeError("En anden enhed svarede på Wi-Fi Direct-adressen.")
+                return Peer(
+                    info.device_id,
+                    info.name,
+                    info.address,
+                    info.port,
+                    info.fingerprint,
+                    info.platform,
+                    "wifi-direct",
+                    info.capabilities,
+                )
+            raise RuntimeError(f"{event.peer_name} svarer ikke på Wi-Fi Direct: {last}")
+
+        self.runtime.submit(run(), "direct_phone_joined")
 
     # ------------------------------------------------------------- Bluetooth
     def connect_bluetooth(self, peer: Peer, manual: bool = False) -> None:
@@ -4158,6 +4460,16 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         self.batches[batch] = future
         self.show_page("transfers")
 
+    def stop_all_transfers(self) -> None:
+        """Stop every send that is still running (each can be sent again from the list)."""
+        running = [batch for batch, future in self.batches.items() if not future.done()]
+        if not running:
+            self.toast.show("Intet bliver sendt lige nu")
+            return
+        for batch in running:
+            self.cancel_batch(batch)
+        self.toast.show(f"Stoppede {_items(len(running))}")
+
     def cancel_batch(self, batch: str) -> None:
         future = self.batches.get(batch)
         if future is not None:
@@ -4732,6 +5044,10 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         if self._closing:
             return
         self._closing = True
+        host = getattr(self, "direct_host", None)
+        if host is not None:
+            with contextlib.suppress(Exception):
+                host.stop()
         try:
             future = asyncio.run_coroutine_threadsafe(self._stop_services(), self.runtime.loop)
             future.result(timeout=4)

@@ -193,4 +193,20 @@ public final class ShareLogicTest {
         assertNotNull(ShareLogic.p2pPassError(new String(new char[64]).replace('\0', 'a')));
         assertNotNull(ShareLogic.p2pPassError(null));
     }
+
+    @Test
+    public void wifiQrCodesFromThePcAreRead() {
+        String[] plain = ShareLogic.parseWifiQr("WIFI:T:WPA;S:DIRECT-h4-AdminPC;P:k7mx4pqa;;");
+        assertNotNull(plain);
+        assertEquals("DIRECT-h4-AdminPC", plain[0]);
+        assertEquals("k7mx4pqa", plain[1]);
+        String[] escaped = ShareLogic.parseWifiQr("WIFI:S:Kontor\\;PC;T:WPA;P:a\\:b\\\\c12345;;");
+        assertNotNull(escaped);
+        assertEquals("Kontor;PC", escaped[0]);
+        assertEquals("a:b\\c12345", escaped[1]);
+        assertNull(ShareLogic.parseWifiQr("WIFI:T:nopass;S:Cafe;;"));   // open network
+        assertNull(ShareLogic.parseWifiQr("WIFI:T:WPA;S:x;P:kort;;"));   // code too short
+        assertNull(ShareLogic.parseWifiQr("https://example.com"));
+        assertNull(ShareLogic.parseWifiQr(null));
+    }
 }

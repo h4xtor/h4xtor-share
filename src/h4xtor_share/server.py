@@ -31,6 +31,7 @@ from h4xtor_share.models import (
     PeerPaired,
     SmsReceived,
     TransferProgress,
+    WifiDirectJoined,
     WifiDirectOffer,
 )
 
@@ -145,6 +146,9 @@ class ShareServer:
         self.ssl_context = ssl_context
         self.fingerprint = fingerprint
         self.event_callback = event_callback
+        # Seconds to wait per received MB of a file. Always 0 in the app; the end-to-end
+        # tests raise it to keep a send running long enough to pause it.
+        self.receive_delay = 0.0
         self.pending_pairings: dict[str, dict[str, Any]] = {}
         self.pairing_failures: list[float] = []
         self.transfers: dict[str, dict[str, Any]] = {}
@@ -168,6 +172,7 @@ class ShareServer:
                 web.post("/api/v1/link", self.link),
                 web.post("/api/v1/speedtest", self.speedtest),
                 web.post("/api/v1/wifi-direct/offer", self.wifi_direct_offer),
+                web.post("/api/v1/wifi-direct/joined", self.wifi_direct_joined),
                 web.post("/api/v1/clipboard", self.clipboard),
                 web.post("/api/v1/notification", self.notification),
                 web.post("/api/v1/sms/incoming", self.sms_incoming),
@@ -582,6 +587,30 @@ class ShareServer:
         )
         return web.json_response({"accepted": True})
 
+    async def wifi_direct_joined(self, request: web.Request) -> web.Response:
+        """A phone joined the network this PC made: remember where it is now."""
+        peer_id, peer_name = self.authenticate(request)
+        payload = await request.json()
+        try:
+            port = int(payload.get("port") or self.config.port)
+        except (TypeError, ValueError) as error:
+            raise web.HTTPBadRequest(text="Invalid port.") from error
+        if not 0 < port < 65536:
+            raise web.HTTPBadRequest(text="Invalid port.")
+        address = remote_address(request)
+        if not address:
+            raise web.HTTPBadRequest(text="Unknown address.")
+        self.event_callback(
+            WifiDirectJoined(
+                peer_id=peer_id,
+                peer_name=peer_name,
+                address=address,
+                port=port,
+                ssid=str(payload.get("ssid") or "")[:32],
+            )
+        )
+        return web.json_response({"accepted": True, "address": address})
+
     async def file_init(self, request: web.Request) -> web.Response:
         peer_id, peer_name = self.authenticate(request)
         payload = await request.json()
@@ -650,6 +679,8 @@ class ShareServer:
                 actual_offset += len(chunk)
                 if actual_offset > transfer["size"]:
                     raise web.HTTPBadRequest(text="Received more bytes than declared.")
+                if self.receive_delay:
+                    await asyncio.sleep(self.receive_delay * len(chunk) / CHUNK_SIZE)
                 self.event_callback(
                     TransferProgress(
                         transfer_id=transfer_id,

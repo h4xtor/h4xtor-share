@@ -48,6 +48,12 @@ final class ShareLogic {
     private static final Pattern P2P_NAME = Pattern.compile("[A-Za-z0-9 _-]{1,22}");
     private static final Pattern P2P_PASS = Pattern.compile("[\\x20-\\x7E]{8,63}");
 
+    /**
+     * Where a PC that made its own Wi-Fi Direct network usually is: Windows gives itself
+     * 192.168.137.1, Linux (NetworkManager) 10.42.0.1. Tried after the network's own router.
+     */
+    static final String[] PC_DIRECT_ADDRESSES = {"192.168.137.1", "10.42.0.1"};
+
     /** Why the chosen name part cannot be used, or null when it is fine (max 32 bytes in total). */
     static String p2pNameError(String suffix) {
         if (suffix == null || suffix.trim().isEmpty()) {
@@ -68,6 +74,49 @@ final class ShareLogic {
             return "Koden må højst være 63 tegn og kun bruge tegn fra et almindeligt tastatur (ikke æ, ø, å).";
         }
         return null;
+    }
+
+    /**
+     * The network name and code from a Wi-Fi QR code ("WIFI:T:WPA;S:name;P:code;;"), as
+     * shown by h4xtor share on the PC and by phone cameras. Null when it is not one, or
+     * has no WPA code (an open network is never a h4xtor share network).
+     */
+    static String[] parseWifiQr(String value) {
+        if (value == null || !value.regionMatches(true, 0, "WIFI:", 0, 5)) {
+            return null;
+        }
+        String ssid = null;
+        String pass = null;
+        StringBuilder field = new StringBuilder();
+        String body = value.substring(5);
+        for (int index = 0; index <= body.length(); index++) {
+            char next = index < body.length() ? body.charAt(index) : ';';
+            if (next == '\\' && index + 1 < body.length()) {
+                field.append(body.charAt(++index));
+                continue;
+            }
+            if (next != ';') {
+                field.append(next);
+                continue;
+            }
+            String part = field.toString();
+            field.setLength(0);
+            int colon = part.indexOf(':');
+            if (colon <= 0) {
+                continue;
+            }
+            String key = part.substring(0, colon).toUpperCase(java.util.Locale.ROOT);
+            String text = part.substring(colon + 1);
+            if ("S".equals(key)) {
+                ssid = text;
+            } else if ("P".equals(key)) {
+                pass = text;
+            }
+        }
+        if (ssid == null || ssid.isEmpty() || ssid.length() > 32 || p2pPassError(pass) != null) {
+            return null;
+        }
+        return new String[]{ssid, pass};
     }
 
     // ----------------------------------------------------------- remote control

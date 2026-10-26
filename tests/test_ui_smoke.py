@@ -1065,3 +1065,108 @@ def test_bluetooth_search_explains_why_nothing_was_found(tmp_path, monkeypatch) 
         _pump(app, lambda: any("Tillad forbindelse via Bluetooth" in t for t in shown))
     finally:
         app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_pc_makes_wifi_direct_and_the_phone_joins(tmp_path, monkeypatch) -> None:
+    from h4xtor_share import wifidirect_host
+    from h4xtor_share.models import Peer, PeerStatus, WifiDirectJoined
+
+    started: list[str] = []
+    stopped: list[str] = []
+    monkeypatch.setattr(wifidirect_host, "supported", lambda: None)
+    monkeypatch.setattr(
+        wifidirect_host.DirectHost,
+        "start",
+        lambda self, timeout=25.0: (
+            started.append(self.ssid),
+            setattr(self, "started_at", 1.0),
+            setattr(self, "addresses", ["192.168.137.1"]),
+        )
+        and self.addresses,
+    )
+    monkeypatch.setattr(
+        wifidirect_host.DirectHost, "running", property(lambda self: self.started_at > 0)
+    )
+    monkeypatch.setattr(
+        wifidirect_host.DirectHost,
+        "stop",
+        lambda self: (stopped.append(self.ssid), setattr(self, "started_at", 0.0)),
+    )
+    app, peers = _paired_app(1, tmp_path, monkeypatch, ("wifi-direct-pc",))
+    phone = peers[0]
+    app.peer_status[phone.device_id] = PeerStatus(phone.device_id, True, 5.0)
+    offers = _recorder(app, "offer_pc_wifi_direct")
+    joined_phone = Peer(
+        phone.device_id, phone.name, "192.168.137.42", 47474, phone.fingerprint, "android",
+        capabilities=phone.capabilities,
+    )
+    info: list = []
+
+    async def get_info(address, port, timeout_seconds=5.0):
+        info.append((address, port))
+        return joined_phone
+
+    app.client.get_info = get_info
+    try:
+        app.show_page("settings")
+        app.direct_name_var.set("DIRECT-h4-Test")
+        app.direct_pass_var.set("hemmelig")
+        app.toggle_direct_host()
+        _pump(app, lambda: bool(offers))
+        assert started == ["DIRECT-h4-Test"]
+        assert "Kører" in app.direct_status.cget("text")
+        assert "192.168.137.1" in app.direct_status.cget("text")
+        assert offers[0][0].device_id == phone.device_id
+        assert offers[0][1:] == ("DIRECT-h4-Test", "hemmelig", ["192.168.137.1"])
+        stored = app.config_store.data["direct_host"]
+        assert stored == {"ssid": "DIRECT-h4-Test", "pass": "hemmelig"}
+
+        app._handle_event(
+            "core_event",
+            WifiDirectJoined(phone.device_id, phone.name, "192.168.137.42", 47474, "DIRECT-h4-T"),
+        )
+        _pump(app, lambda: app.peers[phone.device_id].transport == "wifi-direct")
+        assert info[0] == ("192.168.137.42", 47474)
+        assert app.peers[phone.device_id].address == "192.168.137.42"
+        assert "forbundet: Mobil" in app.direct_status.cget("text")
+
+        app.toggle_direct_host()
+        assert stopped == ["DIRECT-h4-Test"]
+        assert "Slukket" in app.direct_status.cget("text")
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_pc_wifi_direct_rejects_bad_names_before_starting(tmp_path, monkeypatch) -> None:
+    from h4xtor_share import wifidirect_host
+
+    monkeypatch.setattr(wifidirect_host, "supported", lambda: None)
+    app = _new_app()
+    errors: list[str] = []
+    app._show_error = lambda error: errors.append(str(error))
+    try:
+        app.direct_name_var.set("Mit netværk")
+        app.start_direct_host()
+        assert errors and "DIRECT-h4-" in errors[0]
+        assert app.direct_host is None
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_stop_all_cancels_every_running_send(tmp_path, monkeypatch) -> None:
+    from concurrent.futures import Future
+
+    app = _new_app()
+    try:
+        running, finished = Future(), Future()
+        finished.set_result(None)
+        app.batches.update(a=running, b=finished)
+        cancelled: list[str] = []
+        app.cancel_batch = cancelled.append
+        app.stop_all_transfers()
+        assert cancelled == ["a"]
+    finally:
+        app.close()
