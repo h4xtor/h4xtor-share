@@ -962,8 +962,13 @@ def main() -> None:
     tap_text("^Del$")
     time.sleep(1)
     assert scroll_to("^Vælg navn og kode$"), "Wi-Fi Direct 'Vælg navn og kode' missing"
-    tap_text("^Vælg navn og kode$")
-    time.sleep(1.5)
+    # A slow emulator can drop the tap while the page re-renders: tap again until it opens.
+    for _attempt in range(3):
+        tap_text("^Vælg navn og kode$")
+        if screen_has("^DIRECT-h4-$", 4):
+            break
+        print("WARN name/code dialog did not open, tapping again")
+    assert screen_has("^DIRECT-h4-$", 2), "Wi-Fi Direct name/code dialog never opened"
 
     def fill(index: int, value: str) -> None:
         # The dialog's fields: the EditTexts at or below its fixed "DIRECT-h4-" label.
