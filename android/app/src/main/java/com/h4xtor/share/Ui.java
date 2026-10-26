@@ -25,7 +25,7 @@ import java.util.Locale;
 
 /** Tiny design system: one palette (light + dark), rounded surfaces, typography. */
 public final class Ui {
-    public static final int ACCENT_LIGHT = Color.parseColor("#C6613F");
+    public static final int ACCENT_LIGHT = Color.parseColor("#2DD4BF");
 
     public final Context context;
     public final boolean dark;
@@ -52,50 +52,35 @@ public final class Ui {
 
     public Ui(Context context) {
         this.context = context;
-        int mode = context.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
-        dark = mode == Configuration.UI_MODE_NIGHT_YES;
+        // Mix design ("Aurora"): always the deep night-blue look with a teal → sky accent,
+        // translucent glass cards over a slowly drifting aurora background (AuroraView).
+        dark = true;
         density = context.getResources().getDisplayMetrics().density;
-        if (dark) {
-            bg = Color.parseColor("#262624");
-            surface = Color.parseColor("#30302E");
-            surfaceAlt = Color.parseColor("#383835");
-            border = Color.parseColor("#3E3E3A");
-            text = Color.parseColor("#F5F4EE");
-            muted = Color.parseColor("#A6A39A");
-            faint = Color.parseColor("#77736A");
-            accent = Color.parseColor("#D97757");
-            accentPressed = Color.parseColor("#E48B6D");
-            accentSoft = Color.parseColor("#3E2D25");
-            success = Color.parseColor("#4CC38A");
-            successSoft = Color.parseColor("#1F3529");
-            warning = Color.parseColor("#E2A84B");
-            warningSoft = Color.parseColor("#3A2F1C");
-            danger = Color.parseColor("#EF6B55");
-            dangerSoft = Color.parseColor("#3E2420");
-            neutralSoft = Color.parseColor("#33312D");
-            track = Color.parseColor("#3A3834");
-        } else {
-            bg = Color.parseColor("#FAF9F5");
-            surface = Color.parseColor("#FFFFFF");
-            surfaceAlt = Color.parseColor("#F5F4ED");
-            border = Color.parseColor("#E8E6DC");
-            text = Color.parseColor("#141413");
-            muted = Color.parseColor("#73726C");
-            faint = Color.parseColor("#A49F94");
-            accent = ACCENT_LIGHT;
-            accentPressed = Color.parseColor("#B0532F");
-            accentSoft = Color.parseColor("#F7E8E0");
-            success = Color.parseColor("#2E8B57");
-            successSoft = Color.parseColor("#E3F2E9");
-            warning = Color.parseColor("#B7791F");
-            warningSoft = Color.parseColor("#FBF0DC");
-            danger = Color.parseColor("#C2412D");
-            dangerSoft = Color.parseColor("#FBE5E1");
-            neutralSoft = Color.parseColor("#EFECE4");
-            track = Color.parseColor("#ECE8DE");
-        }
-        onAccent = Color.WHITE;
+        bg = Color.parseColor("#0E1022");
+        surface = Color.parseColor("#C4171B36");
+        surfaceAlt = Color.parseColor("#A31E2343");
+        border = Color.parseColor("#33FFFFFF");
+        text = Color.parseColor("#EEF2FF");
+        muted = Color.parseColor("#A3ABC6");
+        faint = Color.parseColor("#7C84A6");
+        accent = ACCENT_LIGHT;
+        accentPressed = Color.parseColor("#5EEAD4");
+        accentSoft = Color.parseColor("#332DD4BF");
+        success = Color.parseColor("#34D399");
+        successSoft = Color.parseColor("#3334D399");
+        warning = Color.parseColor("#FBBF24");
+        warningSoft = Color.parseColor("#33FBBF24");
+        danger = Color.parseColor("#F87171");
+        dangerSoft = Color.parseColor("#33F87171");
+        neutralSoft = Color.parseColor("#1FFFFFFF");
+        track = Color.parseColor("#26FFFFFF");
+        onAccent = Color.parseColor("#0A0B16");
     }
+
+    /** Sky blue: the second colour of the accent gradient. */
+    public static final int SKY = Color.parseColor("#38BDF8");
+    /** Warm orange: Bluetooth and the monkey's corner of the aurora. */
+    public static final int ORANGE = Color.parseColor("#FB923C");
 
     /** Edge-to-edge window with transparent system bars and correctly tinted icons. */
     @SuppressWarnings("deprecation")
@@ -129,18 +114,60 @@ public final class Ui {
         void apply(int top, int bottom);
     }
 
+    /** Like {@link #onInsets} but also says whether the on-screen keyboard is up. */
+    @SuppressWarnings("deprecation")
+    public static void onInsetsWithKeyboard(View root, KeyboardInsetsConsumer consumer) {
+        root.setOnApplyWindowInsetsListener((view, insets) -> {
+            boolean keyboard = android.os.Build.VERSION.SDK_INT >= 30
+                    ? insets.isVisible(android.view.WindowInsets.Type.ime())
+                    : insets.getSystemWindowInsetBottom() > view.getHeight() / 4;
+            consumer.apply(insets.getSystemWindowInsetTop(), insets.getSystemWindowInsetBottom(), keyboard);
+            return insets;
+        });
+        root.requestApplyInsets();
+    }
+
+    public interface KeyboardInsetsConsumer {
+        void apply(int top, int bottom, boolean keyboard);
+    }
+
     public int dp(float value) {
         return Math.round(value * density);
     }
 
     public GradientDrawable rounded(int fill, int stroke, float radiusDp) {
         GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(fill);
+        if (fill == surface || fill == surfaceAlt) {
+            // Aurora glass: a frosted sheen from the top-left corner fading into the
+            // translucent body, so the drifting aurora glows through every card.
+            drawable.setOrientation(GradientDrawable.Orientation.TL_BR);
+            drawable.setColors(new int[]{glassSheen(fill), fill, glassDeep(fill)});
+            if (stroke == border) {
+                stroke = GLASS_EDGE;
+            }
+        } else {
+            drawable.setColor(fill);
+        }
         drawable.setCornerRadius(dp(radiusDp));
         if (stroke != 0) {
             drawable.setStroke(Math.max(1, dp(1)), stroke);
         }
         return drawable;
+    }
+
+    /** The bright frosted edge of a glass card. */
+    public static final int GLASS_EDGE = Color.parseColor("#47FFFFFF");
+
+    private static int glassSheen(int fill) {
+        // A touch lighter and a touch more see-through than the card itself.
+        int a = Math.max(0, Color.alpha(fill) - 40);
+        return Color.argb(a, Math.min(255, Color.red(fill) + 34), Math.min(255, Color.green(fill) + 40),
+                Math.min(255, Color.blue(fill) + 52));
+    }
+
+    private static int glassDeep(int fill) {
+        int a = Math.max(0, Color.alpha(fill) - 70);
+        return Color.argb(a, Color.red(fill), Color.green(fill), Color.blue(fill));
     }
 
     public Drawable ripple(Drawable content, float radiusDp) {
@@ -164,8 +191,8 @@ public final class Ui {
     /** Serif display titles, like Claude.ai. */
     public TextView title(String value, float sizeSp) {
         TextView view = text(value, sizeSp, text, false);
-        view.setTypeface(Typeface.create(Typeface.SERIF, Typeface.NORMAL));
-        view.setLetterSpacing(-0.01f);
+        view.setTypeface(Typeface.create("sans-serif-black", Typeface.NORMAL));
+        view.setLetterSpacing(-0.03f);
         return view;
     }
 

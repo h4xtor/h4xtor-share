@@ -58,11 +58,13 @@ from h4xtor_share.server import ShareServer
 from h4xtor_share.tray import TrayIcon
 from h4xtor_share.udp import UdpDiscovery
 from h4xtor_share.ui_kit import (
+    AuroraBar,
     Avatar,
     Button,
     Card,
     Modal,
     Monkey,
+    OrbitMap,
     ProgressBar,
     QrCanvas,
     ScrollFrame,
@@ -669,17 +671,34 @@ class TransferRow:
 
 
 class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
-    NAV_ITEMS = (
-        ("share", "⇄", "Del"),
-        ("transfers", "↕", "Overførsler"),
-        ("clipboard", "⧉", "Udklipsholder"),
-        ("notifications", "◈", "Notifikationer"),
-        ("sms", "✉", "SMS"),
-        ("remote", "◎", "Fjernbetjening"),
-        ("history", "◷", "Historik"),
-        ("iphone", "▯", "iPhone"),
-        ("settings", "⚙", "Indstillinger"),
+    # Mix design: the menu in four small groups.
+    NAV_GROUPS = (
+        (
+            "DEL",
+            (
+                ("share", "⇄", "Send"),
+                ("transfers", "↕", "Overførsler"),
+                ("clipboard", "⧉", "Udklipsholder"),
+            ),
+        ),
+        (
+            "TELEFON",
+            (
+                ("notifications", "◈", "Notifikationer"),
+                ("sms", "✉", "SMS"),
+                ("remote", "◎", "Fjernbetjening"),
+            ),
+        ),
+        (
+            "FORBINDELSE",
+            (
+                ("connections", "≋", "Wi-Fi Direct & Bluetooth"),
+                ("iphone", "▯", "iPhone (browser)"),
+            ),
+        ),
+        ("ANDET", (("history", "◷", "Historik"), ("settings", "⚙", "Indstillinger"))),
     )
+    NAV_ITEMS = tuple(item for _group, items in NAV_GROUPS for item in items)
 
     def __init__(
         self,
@@ -885,9 +904,13 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         self.sidebar = tk.Frame(self, bg=c["sidebar"], width=px(236))
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
-        tk.Frame(self, bg=c["border"], width=1).pack(side="left", fill="y")
+        # Aurora glass: a softly shimmering aurora seam between menu and pages.
+        AuroraBar(self, self.theme, thickness=max(2, px(2)), vertical=True).pack(
+            side="left", fill="y"
+        )
         self.main = tk.Frame(self, bg=c["bg"])
         self.main.pack(side="left", fill="both", expand=True)
+        AuroraBar(self.main, self.theme, thickness=max(2, px(2))).pack(side="top", fill="x")
         self._build_sidebar()
 
         self.status_var = tk.StringVar(value="Starter…")
@@ -905,6 +928,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         self._build_history_page()
         self._build_iphone_page()
         self._build_settings_page()
+        self._build_connections_page()
         self.after(60000, self._notif_tick)
         for frame in self.pages.values():
             frame.grid(row=0, column=0, sticky="nsew")
@@ -919,28 +943,31 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         c = self.theme.c
         px = self.theme.px
         brand = tk.Frame(self.sidebar, bg=c["sidebar"])
-        brand.pack(fill="x", padx=px(18), pady=(px(20), px(18)))
+        brand.pack(fill="x", padx=px(16), pady=(px(18), px(16)))
+        Monkey(brand, self.theme, size=px(30), bg=c["sidebar"]).pack(side="left")
         tk.Label(
             brand,
-            text="✻",
-            bg=c["sidebar"],
-            fg=c["accent"],
-            font=self.theme.font(17, family=self.theme.symbol),
-        ).pack(side="left")
-        tk.Label(
-            brand,
-            text="h4xtor share",
+            text="h4xtor",
             bg=c["sidebar"],
             fg=c["text"],
             font=self.theme.title_font(15),
         ).pack(side="left", padx=(px(8), 0))
+        tk.Label(
+            brand,
+            text="share",
+            bg=c["sidebar"],
+            fg=c["accent"],
+            font=self.theme.title_font(15),
+        ).pack(side="left", padx=(px(4), 0))
 
         # "New chat"-style primary action at the top, like Claude.ai.
         new = tk.Frame(self.sidebar, bg=c["sidebar"], cursor="hand2")
         new.pack(fill="x", padx=px(10), pady=(0, px(10)))
         plus = tk.Canvas(new, width=px(26), height=px(26), bg=c["sidebar"], highlightthickness=0)
         plus.create_oval(1, 1, px(26) - 1, px(26) - 1, fill=c["accent"], outline=c["accent"])
-        plus.create_text(px(13), px(13), text="+", fill="#FFFFFF", font=self.theme.font(13, "bold"))
+        plus.create_text(
+            px(13), px(13), text="+", fill=c["accent_text"], font=self.theme.font(13, "bold")
+        )
         plus.pack(side="left", padx=(px(8), px(10)), pady=px(6))
         new_label = tk.Label(
             new,
@@ -963,7 +990,19 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
 
         self.nav_rows: dict[str, tuple[tk.Frame, tk.Label, tk.Label]] = {}
         self.nav_badges: dict[str, tk.Label] = {}
+        group_of = {key: group for group, items in self.NAV_GROUPS for key, _i, _l in items}
+        last_group = ""
         for key, icon, label in self.NAV_ITEMS:
+            if group_of[key] != last_group:
+                last_group = group_of[key]
+                tk.Label(
+                    self.sidebar,
+                    text=last_group,
+                    bg=c["sidebar"],
+                    fg=c["faint"],
+                    font=self.theme.font(8, family=self.theme.mono),
+                    anchor="w",
+                ).pack(fill="x", padx=px(20), pady=(px(10), px(2)))
             row = tk.Frame(self.sidebar, bg=c["sidebar"], cursor="hand2")
             row.pack(fill="x", padx=px(10), pady=px(1))
             icon_label = tk.Label(
@@ -1135,7 +1174,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         center.pack(fill="x", padx=px(48), pady=(px(26), px(30)))
 
         def recenter(event: tk.Event) -> None:
-            pad = max(px(32), (event.width - px(760)) // 2)
+            pad = max(px(28), (event.width - px(980)) // 2)
             center.pack_configure(padx=pad)
 
         scroll.canvas.bind("<Configure>", recenter, add="+")
@@ -1143,17 +1182,49 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         self.banner = tk.Frame(center, bg=c["bg"])
         self.banner.pack(fill="x")
 
+        # Mix design: the orbit map (the monkey is this computer) next to the headline.
         hero = tk.Frame(center, bg=c["bg"])
-        hero.pack(pady=(px(18), px(22)))
-        Monkey(hero, self.theme, size=px(72)).pack(side="left", padx=(0, px(16)))
-        self.greeting_label = tk.Label(
+        hero.pack(fill="x", pady=(px(4), px(18)))
+        self.orbit = OrbitMap(
             hero,
-            text="Velkommen til H4xtor Share",
+            self.theme,
+            size=px(320),
+            on_pick=self._orbit_pick,
+            on_add=self.show_qr_pairing,
+            label=f"{self.config_store.device_name} · klar",
+        )
+        self.orbit.pack(side="left")
+        words = tk.Frame(hero, bg=c["bg"])
+        words.pack(side="left", fill="both", expand=True, padx=(px(24), 0))
+        self.route_chips = tk.Frame(words, bg=c["bg"])
+        self.route_chips.pack(anchor="w", pady=(px(36), px(14)))
+        self.greeting_label = tk.Label(
+            words,
+            text="Slip noget herind.",
             bg=c["bg"],
             fg=c["text"],
             font=self.theme.title_font(26),
+            anchor="w",
         )
-        self.greeting_label.pack(side="left")
+        self.greeting_label.pack(fill="x")
+        self.greeting_sub = tk.Label(
+            words,
+            text="Aben bringer det frem.",
+            bg=c["bg"],
+            fg=c["accent"],
+            font=self.theme.title_font(17),
+            anchor="w",
+        )
+        self.greeting_sub.pack(fill="x", pady=(px(2), 0))
+        tk.Label(
+            words,
+            text="Træk filer ind overalt · Ctrl+V sender udklip · klik en enhed på kortet",
+            bg=c["bg"],
+            fg=c["faint"],
+            font=self.theme.font(9),
+            anchor="w",
+        ).pack(fill="x", pady=(px(10), 0))
+        self._sends_landed = 0
 
         # The composer: Claude's prompt box, but for files, links and text.
         self.composer = Card(center, self.theme, padding=14, radius=20, outline=c["border_strong"])
@@ -1443,6 +1514,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         for card in self.device_cards.values():
             card.update(card.peer)
         self._draw_drop_zone()
+        self._refresh_orbit()
 
     def _drop_target_peer(self) -> Peer | None:
         if self._all_selected():
@@ -1469,6 +1541,80 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         for card in self.device_cards.values():
             card.update(card.peer)
         self._draw_drop_zone()
+        self._refresh_orbit()
+
+    def _orbit_pick(self, device_id: str) -> None:
+        if self.config_store.is_trusted(device_id):
+            self.select_peer(device_id)
+
+    def _refresh_orbit(self) -> None:
+        """Feed the orbit map, the headline and the route chips from the current state."""
+        orbit = getattr(self, "orbit", None)
+        if orbit is None:
+            return
+        c = self.theme.c
+        target = self._drop_target_peer()
+        everyone = self._all_selected()
+        sending_names = {
+            state.peer_name
+            for state in self.transfers.values()
+            if state.direction == "send" and state.status == "active"
+        }
+        trusted = [p for p in self.peers.values() if self.config_store.is_trusted(p.device_id)]
+
+        def online(peer: Peer) -> bool:
+            status = self.peer_status.get(peer.device_id)
+            return status is not None and status.online
+
+        trusted.sort(key=lambda p: (0 if online(p) else 1, p.name.lower()))
+        nodes = []
+        sending = set()
+        for peer in trusted[:5]:
+            status = self.peer_status.get(peer.device_id)
+            if online(peer):
+                route = {"wifi-direct": "direct", "bluetooth": "bt"}.get(peer.transport, "wifi")
+                ping = f" · {int(status.rtt_ms)} ms" if status and status.rtt_ms else ""
+                sub = route + ping
+            else:
+                sub = "offline"
+            selected = everyone or (target is not None and target.device_id == peer.device_id)
+            nodes.append(
+                {"id": peer.device_id, "name": peer.name, "sub": sub,
+                 "online": online(peer), "selected": selected}
+            )
+            if peer.name in sending_names:
+                sending.add(peer.device_id)
+        orbit.set_nodes(nodes)
+        orbit.set_sending(sending)
+        name = self.config_store.device_name
+        orbit.set_label(f"{name} · sender…" if sending else f"{name} · klar")
+        who = "alle dine enheder" if everyone else target.name if target else "dine enheder"
+        self.greeting_sub.configure(text=f"Aben bringer det til {who}.")
+        # Route chips: LAN · Wi-Fi Direct · Bluetooth
+        for child in self.route_chips.winfo_children():
+            child.destroy()
+        addresses = _sorted_lan_addresses()
+        host = getattr(self, "direct_host", None)
+        chips = [
+            ("● LAN " + (addresses[0] if addresses else "–"), "accent" if addresses else "neutral"),
+            ("● DIRECT kører" if host is not None and host.running else "○ DIRECT slukket",
+             "accent" if host is not None and host.running else "neutral"),
+        ]
+        if bluetooth.supported():
+            chips.append(("● BT klar", "warning"))
+        for text, tone in chips:
+            fg = {"accent": c["accent"], "warning": c["accent3"]}.get(tone, c["muted"])
+            tk.Label(
+                self.route_chips,
+                text=f" {text} ",
+                bg=c["bg"],
+                fg=fg,
+                font=self.theme.font(9, family=self.theme.mono),
+                highlightthickness=1,
+                highlightbackground=fg if tone != "neutral" else c["border_strong"],
+                padx=self.theme.px(6),
+                pady=self.theme.px(3),
+            ).pack(side="left", padx=(0, self.theme.px(8)))
 
     # ---------------------------------------------------------- transfers page
     def _build_transfers_page(self) -> None:
@@ -2383,44 +2529,6 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
             side="right"
         )
 
-        direct = section("Wi-Fi Direct")
-        self._build_direct_host(direct.body)
-        self._divider(direct.body)
-        tk.Label(
-            direct.body,
-            text="Kobl på telefonens netværk",
-            bg=c["card"],
-            fg=c["text"],
-            font=self.theme.font(10, "bold"),
-            anchor="w",
-        ).pack(fill="x")
-        tk.Label(
-            direct.body,
-            text=(
-                "Tryk “Start Wi-Fi Direct” i h4xtor share på telefonen. Er telefonen allerede "
-                "forbundet, kobler PC'en selv på. Ellers indtast netværk og kode herunder."
-            ),
-            bg=c["card"],
-            fg=c["muted"],
-            font=self.theme.font(9),
-            anchor="w",
-            justify="left",
-            wraplength=px(620),
-        ).pack(fill="x", pady=(px(2), 0))
-        wifi_row = tk.Frame(direct.body, bg=c["card"])
-        wifi_row.pack(fill="x", pady=(px(10), 0))
-        self.wifi_ssid_var = tk.StringVar(value="")
-        self.wifi_pass_var = tk.StringVar(value="")
-        self._labelled_entry(wifi_row, "Telefonens netværk (DIRECT-…)", self.wifi_ssid_var, 24)
-        self._labelled_entry(wifi_row, "Kode", self.wifi_pass_var, 14, gap=px(8), show="•")
-        Button(
-            wifi_row,
-            self.theme,
-            "Forbind",
-            lambda: self.join_wifi_direct(self.wifi_ssid_var.get(), self.wifi_pass_var.get()),
-            kind="primary",
-        ).pack(side="left", padx=(px(8), 0), anchor="s")
-
         self.paired_section = section("Forbundne enheder")
         self._refresh_paired_list()
 
@@ -2951,6 +3059,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         self.paired_title.configure(
             text=f"Dine enheder  ·  {online} online" if paired else "Dine enheder"
         )
+        self._refresh_orbit()
         if paired:
             self.paired_empty.pack_forget()
         else:
@@ -3539,6 +3648,103 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         )
         self.direct_qr.pack(side="left", padx=(px(8), 0))
         self._refresh_direct_host()
+
+    def _build_connections_page(self) -> None:
+        """Mix design: Wi-Fi Direct (make it here or join the phone's) and Bluetooth, together."""
+        c = self.theme.c
+        px = self.theme.px
+        page, _actions = self._page(
+            "connections",
+            "Forbindelser",
+            "Aben vælger selv den hurtigste vej. Her laver du en direkte forbindelse uden router.",
+        )
+        scroll = ScrollFrame(page, self.theme)
+        scroll.pack(fill="both", expand=True, padx=(px(36), px(24)), pady=(0, px(16)))
+        inner = scroll.inner
+
+        def section(title: str) -> Card:
+            tk.Label(
+                inner,
+                text=title.upper(),
+                bg=c["bg"],
+                fg=c["faint"],
+                font=self.theme.font(8, family=self.theme.mono),
+                anchor="w",
+            ).pack(fill="x", pady=(px(6), px(8)))
+            card = Card(inner, self.theme, radius=20)
+            card.pack(fill="x", pady=(0, px(16)))
+            return card
+
+        direct = section("Wi-Fi Direct")
+        self._build_direct_host(direct.body)
+        self._divider(direct.body)
+        tk.Label(
+            direct.body,
+            text="Kobl på telefonens netværk",
+            bg=c["card"],
+            fg=c["text"],
+            font=self.theme.font(10, "bold"),
+            anchor="w",
+        ).pack(fill="x")
+        tk.Label(
+            direct.body,
+            text=(
+                "Tryk “Start Wi-Fi Direct” i h4xtor share på telefonen. Er telefonen allerede "
+                "forbundet, kobler PC'en selv på. Ellers indtast netværk og kode herunder."
+            ),
+            bg=c["card"],
+            fg=c["muted"],
+            font=self.theme.font(9),
+            anchor="w",
+            justify="left",
+            wraplength=px(620),
+        ).pack(fill="x", pady=(px(2), 0))
+        wifi_row = tk.Frame(direct.body, bg=c["card"])
+        wifi_row.pack(fill="x", pady=(px(10), 0))
+        self.wifi_ssid_var = tk.StringVar(value="")
+        self.wifi_pass_var = tk.StringVar(value="")
+        self._labelled_entry(wifi_row, "Telefonens netværk (DIRECT-…)", self.wifi_ssid_var, 24)
+        self._labelled_entry(wifi_row, "Kode", self.wifi_pass_var, 14, gap=px(8), show="•")
+        Button(
+            wifi_row,
+            self.theme,
+            "Forbind",
+            lambda: self.join_wifi_direct(self.wifi_ssid_var.get(), self.wifi_pass_var.get()),
+            kind="primary",
+        ).pack(side="left", padx=(px(8), 0), anchor="s")
+
+        blue = section("Bluetooth")
+        tk.Label(
+            blue.body,
+            text=(
+                "Nødvejen, når der hverken er Wi-Fi eller Wi-Fi Direct. Langsommere – "
+                "fint til tekst, links og billeder. Par telefonen i Windows' "
+                "Bluetooth-indstillinger først."
+            ),
+            bg=c["card"],
+            fg=c["muted"],
+            font=self.theme.font(9),
+            anchor="w",
+            justify="left",
+            wraplength=px(620),
+        ).pack(fill="x")
+        if bluetooth.supported():
+            Button(
+                blue.body,
+                self.theme,
+                "Søg via Bluetooth",
+                lambda: self.scan_bluetooth(manual=True),
+                size="sm",
+            ).pack(anchor="w", pady=(px(10), 0))
+        else:
+            tk.Label(
+                blue.body,
+                text="Bluetooth virker kun på Windows og Linux.",
+                bg=c["card"],
+                fg=c["faint"],
+                font=self.theme.font(9),
+                anchor="w",
+            ).pack(fill="x", pady=(px(8), 0))
 
     def _labelled_entry(
         self, row: tk.Frame, label: str, variable: tk.StringVar, width: int, gap: int = 0, **kwargs
@@ -4627,6 +4833,11 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
     def _update_transfer_badge(self) -> None:
         states = list(self.transfers.values())
         active = sum(1 for state in states if state.status == "active")
+        landed = sum(1 for s in states if s.direction == "send" and s.status == "done")
+        if landed > getattr(self, "_sends_landed", 0) and hasattr(self, "orbit"):
+            self.orbit.celebrate()  # the monkey hops when a send has landed
+        self._sends_landed = landed
+        self._refresh_orbit()
         self.transfer_badge.configure(text=str(active) if active else "")
         for key, label in TRANSFER_FILTERS:
             count = sum(1 for state in states if state.matches(key))

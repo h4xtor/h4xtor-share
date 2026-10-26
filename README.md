@@ -64,7 +64,7 @@ Derefter:
 
 1. Tryk **Start Wi-Fi Direct** i appen på telefonen.
 2. Er PC'en allerede parret, så tryk **Forbind <din PC> automatisk** – PC'en spørger og kobler selv på.
-   Ellers: skriv netværksnavn og kode under *Indstillinger → Wi-Fi Direct* på PC'en.
+   Ellers: skriv netværksnavn og kode under *Wi-Fi Direct & Bluetooth* i menuen på PC'en.
    Navnet er kort (fx `DIRECT-h4-427`), og koden er 8 tegn: små bogstaver og tal, uden tegn der ligner hinanden.
    Vil du selv bestemme? Tryk **Vælg navn og kode** på telefonen: navnet bliver `DIRECT-h4-` + det, du skriver
    (fx `DIRECT-h4-Lennart`, Android kræver den start), og koden skal være 8–63 tegn.
@@ -73,7 +73,7 @@ Derefter:
 Mens PC'en er på telefonens Wi-Fi Direct-netværk, har den normalt ikke internet via
 Wi-Fi. Knappen **Tilbage til <dit Wi-Fi>** skifter tilbage med ét klik.
 
-**Eller lad PC'en lave netværket** (Windows og Linux): *Indstillinger → Wi-Fi Direct →
+**Eller lad PC'en lave netværket** (Windows og Linux): *Wi-Fi Direct & Bluetooth →
 Opret netværk her på PC'en → Start netværk*. Er telefonen parret og online, får den med det
 samme kortet **"<PC> har lavet Wi-Fi Direct" → Forbind** (Android viser sin egen
 "Forbind"-boks én gang). Ellers tryk **Vis Wi-Fi-QR** på PC'en og scan den med h4xtor share
