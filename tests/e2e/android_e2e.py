@@ -629,13 +629,14 @@ def queue_checks(desktop: Desktop, phone: Peer) -> None:
         desktop.run(desktop.client.send_file(phone, source, lambda _p: None), timeout=120)
     uris = [media_uri(name) for name in names]
     desktop.events.clear()
-    desktop.server.receive_delay = 1.5  # ~6 s per file: long enough to see the queue and pause it
+    desktop.server.receive_delay = 8.0  # ~30 s per file: long enough to see the queue and pause it
+    # Share one file at a time like a user: each sheet starts sending, then "Fortsæt i
+    # baggrunden" closes it (a second `am start` would only bring the open sheet back).
     for uri in uris:
         shell("am start -W -a android.intent.action.SEND -t application/octet-stream "
               f"--eu android.intent.extra.STREAM {uri} -n {PKG}/.ShareTargetActivity")
+        tap_text("Fortsæt i baggrunden")
         time.sleep(0.5)
-    # "Fortsæt i baggrunden" on the last sheet, then open the app like the user does.
-    tap_text("Fortsæt i baggrunden")
     shell(f"am start -W -n {PKG}/.MainActivity")
     tap_text("^Overførsler$")
     assert screen_has(r"^I kø · nr\. 1$", 20), "queued files are not shown as waiting"
