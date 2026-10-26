@@ -336,8 +336,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                 Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
         toastParams.setMargins(ui.dp(20), 0, ui.dp(20), ui.dp(92));
         root.addView(toastView, toastParams);
-        Ui.onInsets(root, (top, bottom) -> {
-            column.setPadding(0, top, 0, 0);
+        Ui.onInsetsWithKeyboard(root, (top, bottom, keyboard) -> {
+            // While typing, the floating tab bar steps aside so it never covers Send.
+            column.setPadding(0, top, 0, keyboard ? bottom : 0);
+            navHolder.setVisibility(keyboard ? View.GONE : View.VISIBLE);
             navHolder.setPadding(ui.dp(12), ui.dp(6), ui.dp(12), ui.dp(12) + bottom);
             FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) toastView.getLayoutParams();
             params.bottomMargin = ui.dp(92) + bottom;

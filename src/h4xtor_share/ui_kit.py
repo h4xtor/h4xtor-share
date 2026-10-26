@@ -572,7 +572,8 @@ class Card(tk.Canvas):
     ) -> None:
         self.theme = theme
         self.fill = fill or theme.c["card"]
-        self.outline = outline or theme.c["border"]
+        # Default glass frame: the border with a hint of aurora sky in it.
+        self.outline = outline or mix_color(theme.c["border"], theme.c["accent2"], 0.18)
         self.radius = theme.px(radius)
         self.padding = theme.px(padding)
         # The body must be (partly) visible inside the canvas, otherwise Tk never
@@ -613,7 +614,7 @@ class Card(tk.Canvas):
         height = self.winfo_height()
         if width < 4 or height < 4:
             return
-        item = round_rect(
+        round_rect(
             self,
             1,
             1,
@@ -624,7 +625,17 @@ class Card(tk.Canvas):
             outline=self.outline,
             tags=("bg",),
         )
-        self.tag_lower(item)
+        # Glass: light catching the top edge, brightest in the middle, fading at the corners.
+        r = self.radius
+        span = width - 2 * r
+        segments = 24
+        for index in range(segments):
+            f = index / segments
+            glow = 1 - abs(f - 0.4) * 1.6  # the light source sits a little left of centre
+            x1 = r + f * span
+            self.create_line(x1, 1, x1 + span / segments + 1, 1, tags=("bg",), width=1,
+                             fill=mix_color("#FFFFFF", self.outline, 1 - 0.38 * max(0.0, glow)))
+        self.tag_lower("bg")
 
 
 class ScrollFrame(tk.Frame):
@@ -918,6 +929,105 @@ def mix_color(a: str, b: str, amount: float) -> str:
     return f"#{red:02x}{green:02x}{blue:02x}"
 
 
+AURORA = ("#2DD4BF", "#38BDF8", "#8B5CF6", "#FB923C")
+
+
+def aurora_glow(
+    canvas: tk.Canvas, cx: float, cy: float, radius: float, color: str, base: str,
+    strength: float = 0.32, steps: int = 14, tag: str = "aurora",
+) -> None:
+    """A soft radial glow (Tk has no alpha: concentric ovals fading into *base*)."""
+    for index in range(steps):
+        f = 1 - index / steps  # 1 = outermost
+        r = radius * f
+        amount = 1 - strength * (1 - f) ** 1.6  # faint at the edge, strongest inside
+        canvas.create_oval(cx - r, cy - r, cx + r, cy + r, outline="",
+                           fill=mix_color(color, base, amount), tags=(tag,))
+
+
+def glass_orb(
+    canvas: tk.Canvas, x: float, y: float, r: float, fill: str, outline: str,
+    tags: tuple[str, ...], width: int = 2,
+) -> None:
+    """A frosted glass bubble: body, a bright rim and a light sheen at the top-left."""
+    canvas.create_oval(x - r, y - r, x + r, y + r, fill=fill, outline=outline, width=width,
+                       tags=tags)
+    # The sheen: a hairline inner rim over the upper half, like light on curved glass.
+    sheen = mix_color("#FFFFFF", fill, 0.84)
+    inner = r - max(3, r * 0.1)
+    canvas.create_arc(x - inner, y - inner, x + inner, y + inner, start=20, extent=140,
+                      style="arc", outline=sheen, width=1, tags=tags)
+
+
+class AuroraBar(tk.Canvas):
+    """A thin glowing stripe in the aurora colours (teal → sky → violet → orange).
+
+    It shimmers slowly: the colours glide along the stripe.
+    """
+
+    FRAME_MS = 120
+
+    def __init__(self, parent: tk.Misc, theme: Theme, thickness: int = 3,
+                 vertical: bool = False) -> None:
+        self.theme = theme
+        self.vertical = vertical
+        self.base = parent.cget("bg")
+        size = {"width": thickness} if vertical else {"height": thickness}
+        super().__init__(parent, bg=self.base, highlightthickness=0, bd=0, **size)
+        self._shift = 0.0
+        self._after: str | None = None
+        self.bind("<Configure>", lambda _e: self._draw(), add="+")
+        self.bind("<Map>", lambda _e: self._start(), add="+")
+        self.bind("<Destroy>", lambda _e: self._stop(), add="+")
+
+    @staticmethod
+    def color_at(f: float) -> str:
+        stops = (*AURORA, AURORA[0])
+        pos = (f % 1.0) * (len(stops) - 1)
+        index = int(pos)
+        return mix_color(stops[index], stops[index + 1], pos - index)
+
+    def _draw(self) -> None:
+        self.delete("all")
+        length = self.winfo_height() if self.vertical else self.winfo_width()
+        thick = self.winfo_width() if self.vertical else self.winfo_height()
+        if length < 4:
+            return
+        segments = 48
+        step = length / segments
+        for index in range(segments):
+            f = index / segments
+            edge = min(1.0, min(f, 1 - f) * 6)  # fade the ends so the stripe floats
+            color = mix_color(self.color_at(f * 0.75 + self._shift), self.base, (1 - edge) * 0.85)
+            a, b = index * step, (index + 1) * step + 1
+            if self.vertical:
+                self.create_rectangle(0, a, thick, b, fill=color, outline="")
+            else:
+                self.create_rectangle(a, 0, b, thick, fill=color, outline="")
+
+    def _start(self) -> None:
+        if self._after is None:
+            self._after = self.after(self.FRAME_MS, self._frame)
+
+    def _stop(self) -> None:
+        if self._after is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._after)
+            self._after = None
+
+    def _frame(self) -> None:
+        self._after = None
+        try:
+            if not self.winfo_exists():
+                return
+            if self.winfo_ismapped():
+                self._shift = (self._shift + 0.006) % 1.0
+                self._draw()
+        except tk.TclError:
+            return
+        self._after = self.after(self.FRAME_MS, self._frame)
+
+
 class OrbitMap(tk.Canvas):
     """The mix design's device map: the monkey (this computer) in the middle, devices on an orbit.
 
@@ -998,6 +1108,16 @@ class OrbitMap(tk.Canvas):
         px = self.theme.px
         self.delete("all")
         mid = self.center
+        # Aurora behind the map: three soft glows that drift slowly (see _animate).
+        s = self.size
+        # Glows stay inside the canvas (with room to drift) so no hard edge shows.
+        aurora_glow(self, s * 0.34, s * 0.32, s * 0.29, AURORA[0], self.base, 0.42,
+                    tag="aurora-a")
+        aurora_glow(self, s * 0.70, s * 0.36, s * 0.25, AURORA[2], self.base, 0.38,
+                    tag="aurora-b")
+        aurora_glow(self, s * 0.56, s * 0.70, s * 0.25, AURORA[1], self.base, 0.34,
+                    tag="aurora-c")
+        self._drift = [0.0] * 6
         ring = self.size * 0.43
         for index in range(36):  # dashed outer orbit (rotated each frame)
             self.create_arc(mid - ring, mid - ring, mid + ring, mid + ring, start=index * 10,
@@ -1013,8 +1133,11 @@ class OrbitMap(tk.Canvas):
             self.create_line(mid, mid, x, y, fill=c["accent"] if live else c["border"],
                              width=2 if live else 1, dash=(4, 6), tags=("beam",))
         hub = self.size * 0.17
-        self.create_oval(mid - hub, mid - hub, mid + hub, mid + hub, fill=c["card"],
-                         outline=c["accent"], width=2)
+        for step in range(1, 5):  # a soft halo around the monkey
+            r = hub + step * self.theme.px(2)
+            self.create_oval(mid - r, mid - r, mid + r, mid + r, width=2, tags=("halo",),
+                             outline=mix_color(c["accent"], self.base, 0.55 + step * 0.1))
+        glass_orb(self, mid, mid, hub, c["card"], c["accent"], ("hub",))
         draw_monkey(self, mid, mid, hub * 1.35, "monkey")
         self.create_text(mid, mid + hub + px(14), text=self.label, fill=c["muted"],
                          font=self.theme.font(9, family=self.theme.mono), tags=("hub-label",))
@@ -1025,9 +1148,13 @@ class OrbitMap(tk.Canvas):
                 c["accent"] if node.get("selected") else
                 c["accent2"] if node["id"] in self.sending else c["border_strong"]
             )
-            self.create_oval(x - node_r, y - node_r, x + node_r, y + node_r,
-                             fill=c["card"] if node.get("online") else c["sidebar"],
-                             outline=ring_color, width=2, tags=(tag, "node"))
+            if node.get("online") and node.get("selected"):
+                for step in range(1, 4):
+                    r = node_r + step * px(2)
+                    self.create_oval(x - r, y - r, x + r, y + r, width=2, tags=(tag, "node"),
+                                     outline=mix_color(ring_color, self.base, 0.55 + step * 0.13))
+            glass_orb(self, x, y, node_r, c["card"] if node.get("online") else c["sidebar"],
+                      ring_color, (tag, "node"))
             name = node["name"] if len(node["name"]) <= 11 else node["name"][:10] + "…"
             self.create_text(x, y - px(6), text=name, tags=(tag, "node"),
                              fill=c["text"] if node.get("online") else c["muted"],
@@ -1087,6 +1214,15 @@ class OrbitMap(tk.Canvas):
         c = self.theme.c
         self._tick += 1
         mid = self.center
+        if self._tick % 4 == 0:  # the aurora drifts on slow sine paths
+            import math
+
+            amp = self.size * 0.04
+            for index, tag in enumerate(("aurora-a", "aurora-b", "aurora-c")):
+                t = self._tick / (90 + index * 25)
+                nx, ny = amp * math.sin(t + index * 2), amp * math.cos(t * 0.8 + index)
+                self.move(tag, nx - self._drift[index * 2], ny - self._drift[index * 2 + 1])
+                self._drift[index * 2], self._drift[index * 2 + 1] = nx, ny
         for index, item in enumerate(self.find_withtag("orbit")):
             self.itemconfigure(item, start=(index * 10 + self._tick * 0.6) % 360)
         phase = (self._tick % 60) / 60.0  # pulse every 3 s

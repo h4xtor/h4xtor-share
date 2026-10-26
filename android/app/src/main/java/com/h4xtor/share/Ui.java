@@ -57,8 +57,8 @@ public final class Ui {
         dark = true;
         density = context.getResources().getDisplayMetrics().density;
         bg = Color.parseColor("#0E1022");
-        surface = Color.parseColor("#D9171B36");
-        surfaceAlt = Color.parseColor("#B31E2343");
+        surface = Color.parseColor("#C4171B36");
+        surfaceAlt = Color.parseColor("#A31E2343");
         border = Color.parseColor("#33FFFFFF");
         text = Color.parseColor("#EEF2FF");
         muted = Color.parseColor("#A3ABC6");
@@ -114,18 +114,60 @@ public final class Ui {
         void apply(int top, int bottom);
     }
 
+    /** Like {@link #onInsets} but also says whether the on-screen keyboard is up. */
+    @SuppressWarnings("deprecation")
+    public static void onInsetsWithKeyboard(View root, KeyboardInsetsConsumer consumer) {
+        root.setOnApplyWindowInsetsListener((view, insets) -> {
+            boolean keyboard = android.os.Build.VERSION.SDK_INT >= 30
+                    ? insets.isVisible(android.view.WindowInsets.Type.ime())
+                    : insets.getSystemWindowInsetBottom() > view.getHeight() / 4;
+            consumer.apply(insets.getSystemWindowInsetTop(), insets.getSystemWindowInsetBottom(), keyboard);
+            return insets;
+        });
+        root.requestApplyInsets();
+    }
+
+    public interface KeyboardInsetsConsumer {
+        void apply(int top, int bottom, boolean keyboard);
+    }
+
     public int dp(float value) {
         return Math.round(value * density);
     }
 
     public GradientDrawable rounded(int fill, int stroke, float radiusDp) {
         GradientDrawable drawable = new GradientDrawable();
-        drawable.setColor(fill);
+        if (fill == surface || fill == surfaceAlt) {
+            // Aurora glass: a frosted sheen from the top-left corner fading into the
+            // translucent body, so the drifting aurora glows through every card.
+            drawable.setOrientation(GradientDrawable.Orientation.TL_BR);
+            drawable.setColors(new int[]{glassSheen(fill), fill, glassDeep(fill)});
+            if (stroke == border) {
+                stroke = GLASS_EDGE;
+            }
+        } else {
+            drawable.setColor(fill);
+        }
         drawable.setCornerRadius(dp(radiusDp));
         if (stroke != 0) {
             drawable.setStroke(Math.max(1, dp(1)), stroke);
         }
         return drawable;
+    }
+
+    /** The bright frosted edge of a glass card. */
+    public static final int GLASS_EDGE = Color.parseColor("#47FFFFFF");
+
+    private static int glassSheen(int fill) {
+        // A touch lighter and a touch more see-through than the card itself.
+        int a = Math.max(0, Color.alpha(fill) - 40);
+        return Color.argb(a, Math.min(255, Color.red(fill) + 34), Math.min(255, Color.green(fill) + 40),
+                Math.min(255, Color.blue(fill) + 52));
+    }
+
+    private static int glassDeep(int fill) {
+        int a = Math.max(0, Color.alpha(fill) - 70);
+        return Color.argb(a, Color.red(fill), Color.green(fill), Color.blue(fill));
     }
 
     public Drawable ripple(Drawable content, float radiusDp) {

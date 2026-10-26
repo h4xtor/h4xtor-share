@@ -58,6 +58,7 @@ from h4xtor_share.server import ShareServer
 from h4xtor_share.tray import TrayIcon
 from h4xtor_share.udp import UdpDiscovery
 from h4xtor_share.ui_kit import (
+    AuroraBar,
     Avatar,
     Button,
     Card,
@@ -903,9 +904,13 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         self.sidebar = tk.Frame(self, bg=c["sidebar"], width=px(236))
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
-        tk.Frame(self, bg=c["border"], width=1).pack(side="left", fill="y")
+        # Aurora glass: a softly shimmering aurora seam between menu and pages.
+        AuroraBar(self, self.theme, thickness=max(2, px(2)), vertical=True).pack(
+            side="left", fill="y"
+        )
         self.main = tk.Frame(self, bg=c["bg"])
         self.main.pack(side="left", fill="both", expand=True)
+        AuroraBar(self.main, self.theme, thickness=max(2, px(2))).pack(side="top", fill="x")
         self._build_sidebar()
 
         self.status_var = tk.StringVar(value="Starter…")

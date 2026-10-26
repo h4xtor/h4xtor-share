@@ -145,8 +145,19 @@ public final class OrbitView extends View {
                 }
             }
             float r = 31 * d;
-            fill.setColor(node.online ? Color.parseColor("#E6141834") : Color.parseColor("#E60E1124"));
+            if (node.online) {
+                // Glass orb: an aurora glow behind it, a frosted body, a light sheen on top.
+                fill.setShader(new android.graphics.RadialGradient(x, y, r * 1.7f,
+                        Color.argb(node.selected ? 90 : 50, 45, 212, 191), Color.TRANSPARENT,
+                        android.graphics.Shader.TileMode.CLAMP));
+                canvas.drawCircle(x, y, r * 1.7f, fill);
+            }
+            fill.setShader(new android.graphics.LinearGradient(x - r, y - r, x + r, y + r,
+                    node.online ? Color.parseColor("#B32A3160") : Color.parseColor("#A0181C38"),
+                    node.online ? Color.parseColor("#C0101429") : Color.parseColor("#C00B0E1F"),
+                    android.graphics.Shader.TileMode.CLAMP));
             canvas.drawCircle(x, y, r, fill);
+            fill.setShader(null);
             stroke.setStrokeWidth(2 * d);
             stroke.setColor(node.selected ? TEAL : node.sending ? SKY : Color.argb(60, 203, 213, 225));
             canvas.drawCircle(x, y, r, stroke);
