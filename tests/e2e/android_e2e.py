@@ -961,9 +961,15 @@ def main() -> None:
     time.sleep(2)
     tap_text("^Del$")
     time.sleep(1)
-    assert scroll_to("^Vælg navn og kode$"), "Wi-Fi Direct 'Vælg navn og kode' missing"
-    tap_text("^Vælg navn og kode$")
-    time.sleep(1.5)
+    # The live device list can re-render between the UI dump and the tap, so the tap
+    # sometimes lands on nothing: open the dialog again until its fixed label is up.
+    for _ in range(3):
+        assert scroll_to("^Vælg navn og kode$"), "Wi-Fi Direct 'Vælg navn og kode' missing"
+        tap_text("^Vælg navn og kode$")
+        if screen_has("^DIRECT-h4-$", 5):
+            break
+    else:
+        raise AssertionError("Wi-Fi Direct name dialog did not open")
 
     def fill(index: int, value: str) -> None:
         # The dialog's fields: the EditTexts at or below its fixed "DIRECT-h4-" label.
