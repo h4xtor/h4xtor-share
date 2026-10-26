@@ -2686,6 +2686,10 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
             self._refresh_recent_clips()
         elif tag == "direct_host_started":
             self._direct_host_up(value)
+        elif tag == "direct_host_failed":
+            if self.direct_host is value:
+                self.direct_host = None
+            self._refresh_direct_host()
         elif tag == "direct_host_stopped":
             self._direct_host_down(value)
         elif tag == "direct_offered":
@@ -3615,7 +3619,9 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
             try:
                 return await asyncio.to_thread(host.start)
             except Exception:
-                self.direct_host = None
+                # Back on the UI thread: clear the half-started host so the fields and
+                # "Start netværk" work again for a retry.
+                self.event_queue.put(("direct_host_failed", host))
                 raise
 
         self.runtime.submit(run(), "direct_host_started")

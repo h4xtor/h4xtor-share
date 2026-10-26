@@ -126,6 +126,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         Runnable retry;
         Runnable startNow;
         volatile boolean pauseRequested;
+        volatile boolean busy;
         long runs;
         public volatile long startedAt = SystemClock.elapsedRealtime();
         public volatile long finishedAt;
@@ -1611,31 +1612,53 @@ public final class ShareService extends Service implements H4xtorServer.Listener
             }
             item.status = "active";
         }
-        item.startedAt = SystemClock.elapsedRealtime();
-        item.lastTime = item.startedAt;
-        item.lastSent = item.sent;
-        item.speed = 0;
-        changed();
-        main.post(() -> updateTransferNotification(true));
+        // "Fortsæt" right after "Pause": let the previous run finish closing first, so two runs
+        // never upload the same file at once.
+        long until = SystemClock.elapsedRealtime() + 15_000;
+        while (item.busy && SystemClock.elapsedRealtime() < until) {
+            SystemClock.sleep(50);
+        }
+        item.busy = true;
         try {
-            job.run(item);
-            item.status = "done";
-            item.sent = item.total;
-            finished(item);
-        } catch (H4xtorClient.CancelledException error) {
-            item.status = item.pauseRequested ? "paused" : "cancelled";
-        } catch (Exception error) {
-            if (item.cancel.isCancelled()) {
-                item.status = item.pauseRequested ? "paused" : "cancelled";
-            } else {
-                item.status = "failed";
-                item.error = H4xtorClient.safeMessage(error);
-                android.util.Log.w("h4xtor", "transfer " + item.name + " failed", error);
-                message("Overførsel fejlede: " + item.error, true);
+            item.startedAt = SystemClock.elapsedRealtime();
+            item.lastTime = item.startedAt;
+            item.lastSent = item.sent;
+            item.speed = 0;
+            changed();
+            main.post(() -> updateTransferNotification(true));
+            try {
+                job.run(item);
+                if (settle(item, run, "done")) {
+                    item.sent = item.total;
+                    finished(item);
+                }
+            } catch (H4xtorClient.CancelledException error) {
+                settle(item, run, item.pauseRequested ? "paused" : "cancelled");
+            } catch (Exception error) {
+                if (item.cancel.isCancelled()) {
+                    settle(item, run, item.pauseRequested ? "paused" : "cancelled");
+                } else if (settle(item, run, "failed")) {
+                    item.error = H4xtorClient.safeMessage(error);
+                    android.util.Log.w("h4xtor", "transfer " + item.name + " failed", error);
+                    message("Overførsel fejlede: " + item.error, true);
+                }
             }
+        } finally {
+            item.busy = false;
         }
         changed();
         main.post(() -> updateTransferNotification(true));
+    }
+
+    /** Publish how a run ended, unless the user already started a newer run of the same file. */
+    private static boolean settle(TransferItem item, long run, String status) {
+        synchronized (item) {
+            if (item.runs != run) {
+                return false;
+            }
+            item.status = status;
+            return true;
+        }
     }
 
     /** Sending, waiting in the queue, or receiving: the work is not finished yet. */

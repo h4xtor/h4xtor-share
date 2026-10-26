@@ -1170,3 +1170,28 @@ def test_stop_all_cancels_every_running_send(tmp_path, monkeypatch) -> None:
         assert cancelled == ["a"]
     finally:
         app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_pc_wifi_direct_can_be_retried_after_a_failed_start(tmp_path, monkeypatch) -> None:
+    from h4xtor_share import wifidirect, wifidirect_host
+
+    def fail(self, timeout=25.0):
+        raise wifidirect.WifiDirectError("NetworkManager kunne ikke lave netværket: nej")
+
+    monkeypatch.setattr(wifidirect_host, "supported", lambda: None)
+    monkeypatch.setattr(wifidirect_host.DirectHost, "start", fail)
+    app = _new_app()
+    errors: list[str] = []
+    app._show_error = lambda error: errors.append(str(error))
+    try:
+        app.direct_name_var.set("DIRECT-h4-Test")
+        app.direct_pass_var.set("hemmelig")
+        app.start_direct_host()
+        _pump(app, lambda: bool(errors) and app.direct_host is None)
+        assert "NetworkManager" in errors[0]
+        assert "Slukket" in app.direct_status.cget("text")
+        assert str(app.direct_name_entry.cget("state")) == "normal"
+        assert app.direct_toggle.enabled
+    finally:
+        app.close()
