@@ -4,6 +4,18 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
+## 1.3.9 – 2026-10-26
+### Nyt
+- Wi-Fi Direct fra PC'en: under Indstillinger → Wi-Fi Direct kan PC'en nu selv lave netværket ("Opret netværk her på PC'en"). Telefonen får kortet "PC'en har lavet Wi-Fi Direct" og forbinder med ét tryk – eller scan PC'ens Wi-Fi-QR. PC'en beholder sit internet, og telefonen sin mobildata. Virker på Windows og Linux.
+- Telefonen: "Pause", "Fortsæt" og "Start nu" på hver fil, og "Pause alle", "Fortsæt alle" og "Stop alle" øverst i Overførsler.
+- PC'en: "Stop alle" i Overførsler.
+### Forbedret
+- Tydelig status på hver overførsel på telefonen: Sender, Modtager, I kø · nr. 2, På pause, Færdig, Fejlet eller Stoppet.
+- Kortet "Overfører nu" og notifikationen viser også, hvor mange filer der venter i kø.
+### Rettet
+- Når man sendte mange filer og trykkede "Fortsæt i baggrunden", stod de fleste på 0 %, når appen blev åbnet igen. De ventede faktisk i kø (tre sendes ad gangen) – nu står der "I kø", og de kan startes med det samme.
+- Telefonen: en fil, der blev sat på pause og fortsat, sendes videre fra hvor den slap.
+
 ## 1.3.8 – 2026-10-22
 ### Rettet
 - En fil sendt fra telefonen til PC'en kunne hænge i appen. Over Bluetooth hoppede bjælken til næsten 100 % og stod så stille i flere minutter – nu sendes filen i små bidder, så bjælken viser, hvor langt den reelt er, og arket lukker selv, når filen er fremme.

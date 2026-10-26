@@ -221,9 +221,16 @@ def v12_checks(desktop: Desktop, phone: Peer) -> None:
     assert "flag_sms_enabled\" value=\"true" in prefs(), "SMS toggle not saved"
     shot("21-sms-enabled")
     desktop.events.clear()
+    # The emulator's modem sometimes drops the first fake SMS right after boot: send it
+    # again once if nothing arrived (the phone app itself is not involved in that).
     adb("emu", "sms", "send", "4512345678", "Hej fra mor", check=False)
-    sms: SmsReceived = desktop.wait_for(SmsReceived, timeout=60,
-                                        match=lambda event: "Hej fra mor" in event.body)
+    try:
+        sms: SmsReceived = desktop.wait_for(SmsReceived, timeout=40,
+                                            match=lambda event: "Hej fra mor" in event.body)
+    except AssertionError:
+        adb("emu", "sms", "send", "4512345678", "Hej fra mor", check=False)
+        sms = desktop.wait_for(SmsReceived, timeout=60,
+                               match=lambda event: "Hej fra mor" in event.body)
     ok("new SMS is pushed to the PC right away")
     threads = desktop.run(desktop.client.sms_threads(phone))
     assert any(str(t.get("thread_id")) == sms.thread_id for t in threads), threads
@@ -600,6 +607,68 @@ def update_checks() -> None:
     server.shutdown()
 
 
+def media_uri(name: str) -> str:
+    for _ in range(15):
+        out = shell("content query --uri content://media/external/downloads --projection _id "
+                    f"--where \"_display_name='{name}'\"", check=False)
+        match = re.search(r"_id=(\d+)", out)
+        if match:
+            return f"content://media/external/downloads/{match.group(1)}"
+        time.sleep(1)
+    raise AssertionError(f"{name} is not in MediaStore")
+
+
+def queue_checks(desktop: Desktop, phone: Peer) -> None:
+    """Five files shared at once: three send, two wait "I kø"; Pause alle / Fortsæt alle work."""
+    names = [f"koe{index}.bin" for index in range(1, 6)]
+    sources = {}
+    for name in names:
+        source = WORK / name
+        source.write_bytes(os.urandom(4 * 1024 * 1024))
+        sources[name] = source
+        desktop.run(desktop.client.send_file(phone, source, lambda _p: None), timeout=120)
+    uris = [media_uri(name) for name in names]
+    desktop.events.clear()
+    desktop.server.receive_delay = 8.0  # ~30 s per file: long enough to see the queue and pause it
+    # Share one file at a time like a user: each sheet starts sending, then "Fortsæt i
+    # baggrunden" closes it (a second `am start` would only bring the open sheet back).
+    for uri in uris:
+        shell("am start -W -a android.intent.action.SEND -t application/octet-stream "
+              f"--eu android.intent.extra.STREAM {uri} -n {PKG}/.ShareTargetActivity")
+        tap_text("Fortsæt i baggrunden")
+        time.sleep(0.5)
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    tap_text("^Overførsler$")
+    assert screen_has(r"^I kø · nr\. 1$", 20), "queued files are not shown as waiting"
+    assert screen_has("^Sender$", 5), "running files are not shown as sending"
+    shot("30-queue")
+    ok("five files at once: three send, the rest wait as 'I kø' (no row stuck at 0 %)")
+
+    tap_text("^Pause alle$")
+    if not screen_has("^På pause$", 8) and screen_has("^Pause alle$", 2):
+        tap_text("^Pause alle$")  # a slow emulator can drop a tap; once more
+    assert screen_has("^På pause$", 15), "Pause alle did not pause"
+    assert not screen_has("^Sender$", 3), "a file kept sending after Pause alle"
+    shot("31-paused")
+    ok("Pause alle pauses every send")
+
+    desktop.server.receive_delay = 0.0
+    tap_text("^Fortsæt alle$")
+    if screen_has("^Fortsæt alle$", 5) and not screen_has("^(Sender|I kø)", 1):
+        tap_text("^Fortsæt alle$")
+    received = [desktop.wait_for(FileReceived, timeout=120) for _ in names]
+    by_name = {event.path.name: event.path for event in received}
+    for name, source in sources.items():
+        stem = name.removesuffix(".bin")
+        got = next((path for key, path in by_name.items() if key.startswith(stem)), None)
+        assert got is not None, f"{name} never arrived ({sorted(by_name)})"
+        assert got.read_bytes() == source.read_bytes(), f"{name} changed after pause and resume"
+    assert not screen_has(r"^(I kø|Sender|På pause)", 5), "a row is still open after all arrived"
+    shot("32-resumed-done")
+    ok("Fortsæt alle continues where each file stopped; all five byte-identical on the PC")
+    tap_text("^Del$")  # the next steps start from the Del tab (the app reopens on the last tab)
+
+
 def main() -> None:
     adb("wait-for-device")
     adb("install", "-r", "-g", str(APK), timeout=240)
@@ -762,6 +831,7 @@ def main() -> None:
     assert received.path.name.startswith("ferie"), received.path
     assert received.path.read_bytes() == payload.read_bytes(), "file changed on the way"
     ok("share sheet file phone -> PC (3 MB, byte-identical)")
+    queue_checks(desktop, phone)
 
     # ---- A second PC: the share sheet now asks where to send ----------------
     laptop = Desktop("Bærbar", 47478)
@@ -928,6 +998,21 @@ def main() -> None:
     assert 'flag_p2p_custom" value="true"' in stored
     assert scroll_to("^Skift navn og kode$"), "button did not change to 'Skift navn og kode'"
     ok("Wi-Fi Direct: own network name and code are checked and stored")
+
+    # ---- Wi-Fi Direct made by the PC: the phone shows "Forbind" at the top of Del ----------
+    assert "wifi-direct-pc" in phone.capabilities, phone.capabilities
+    assert scroll_to("^Scan PC'ens Wi-Fi-QR$"), "no way to join the PC's own network on the card"
+    desktop.run(desktop.client.offer_pc_wifi_direct(
+        phone, "DIRECT-h4-AdminPC", "hemmelig", ["192.168.137.1"]))
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    tap_text("^Del$")
+    time.sleep(2)
+    assert scroll_to("^AdminPC har lavet Wi-Fi Direct$"), "offer card missing on the phone"
+    assert screen_has("DIRECT-h4-AdminPC", 3)
+    shot("26c-pc-wifi-offer")
+    tap_text("^Ikke nu$")
+    assert not screen_has("^AdminPC har lavet Wi-Fi Direct$", 3), "offer card did not go away"
+    ok("Wi-Fi Direct made by the PC: the phone gets a 'Forbind' card (and can say 'Ikke nu')")
 
     bluetooth_checks(desktop, phone)
 

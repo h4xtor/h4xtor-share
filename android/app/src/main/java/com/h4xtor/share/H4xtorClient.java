@@ -299,6 +299,13 @@ public final class H4xtorClient {
                 .put("port", AppIdentity.PORT), 15_000);
     }
 
+    /** Tell a PC that made its own Wi-Fi Direct network that this phone has joined it. */
+    public void announceDirect(Peer peer, String ssid) throws Exception {
+        authedPost(peer, "/api/v1/wifi-direct/joined", new JSONObject()
+                .put("ssid", ssid)
+                .put("port", AppIdentity.PORT), 4_000);
+    }
+
     /** v1.2: mirror a phone notification (posted/removed) to a PC that supports "notifications". */
     public void pushNotification(Peer peer, JSONObject payload) throws Exception {
         authedPost(peer, "/api/v1/notification", payload, 10_000);

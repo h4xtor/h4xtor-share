@@ -45,6 +45,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private static final int REQUEST_MEDIA_PERMISSION = 2005;
     private static final int REQUEST_SMS_PERMISSION = 2006;
     private static final int REQUEST_BLUETOOTH_PERMISSION = 2007;
+    private static final int REQUEST_JOIN_PERMISSION = 2008;
     /** pendingPeerId value meaning "every paired, online device". */
     private static final String ALL_ID = "*";
 
@@ -65,6 +66,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     /** The composer sends to every online device instead of the selected one (this session only). */
     private boolean sendToAll;
     private String pendingInvite;
+    private Runnable pendingJoin;
     private boolean resumed;
 
     private ScrollView scroll;
@@ -78,6 +80,8 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private android.widget.ImageView sendButton;
     private String dismissedClip;
     private boolean renderPending;
+    /** A finger is on the screen: live progress waits, so a button is never rebuilt mid-tap. */
+    private boolean touching;
 
     // ---------------------------------------------------------------- lifecycle
     @Override
@@ -247,6 +251,15 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                 toast("Wi-Fi Direct kræver tilladelse til enheder i nærheden", true);
             }
         }
+        if (requestCode == REQUEST_JOIN_PERMISSION) {
+            Runnable join = pendingJoin;
+            pendingJoin = null;
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED && join != null) {
+                join.run();
+            } else {
+                toast("Wi-Fi Direct kræver tilladelse til enheder i nærheden", true);
+            }
+        }
         if (requestCode == REQUEST_BLUETOOTH_PERMISSION && service != null) {
             boolean granted = grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED;
             if (granted) {
@@ -376,6 +389,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     // ------------------------------------------------------------------ render
     @Override
     public void onStateChanged() {
+        if (touching) {
+            renderPending = true;
+            return;
+        }
         if (composerInput != null && composerInput.hasFocus() && PAGE_DEVICES.equals(page)) {
             // Never rebuild the screen under the user's fingers while typing.
             renderPending = true;
@@ -387,6 +404,28 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         } else {
             renderNav();
         }
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(android.view.MotionEvent event) {
+        int action = event.getActionMasked();
+        if (action == android.view.MotionEvent.ACTION_DOWN) {
+            touching = true;
+        }
+        boolean handled = super.dispatchTouchEvent(event);
+        if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
+            touching = false;
+            if (renderPending) {
+                // After the click has run; a scroll that is still flinging is left alone.
+                content.postDelayed(() -> {
+                    if (!touching && renderPending && service != null) {
+                        renderPending = false;
+                        onStateChanged();
+                    }
+                }, 350);
+            }
+        }
+        return handled;
     }
 
     private void render() {
@@ -471,6 +510,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         content.addView(topBar(), ui.matchWrap());
         Peer target = selectedPeer();
         content.addView(greeting(target), ui.margins(2, 22, 0, 18));
+        View offer = pcWifiOfferCard();
+        if (offer != null) {
+            content.addView(offer, ui.margins(0, 0, 0, 12));
+        }
         View live = liveTransfersCard();
         if (live != null) {
             content.addView(live, ui.margins(0, 0, 0, 12));
@@ -538,12 +581,15 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     /** "Overfører nu" with live progress, right on the home screen. */
     private View liveTransfersCard() {
         List<ShareService.TransferItem> active = new ArrayList<>();
+        int waiting = 0;
         for (ShareService.TransferItem item : service.transfers()) {
             if ("active".equals(item.status)) {
                 active.add(item);
+            } else if ("queued".equals(item.status)) {
+                waiting++;
             }
         }
-        if (active.isEmpty()) {
+        if (active.isEmpty() && waiting == 0) {
             return null;
         }
         LinearLayout card = ui.card();
@@ -554,7 +600,8 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             render();
         });
         LinearLayout head = ui.row();
-        head.addView(ui.label("Overfører nu · " + active.size()), ui.weight(1));
+        head.addView(ui.label("Overfører nu · " + active.size() + (waiting > 0 ? " · " + waiting + " i kø" : "")),
+                ui.weight(1));
         double total = 0;
         for (ShareService.TransferItem item : active) {
             total += item.speed;
@@ -583,6 +630,11 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                     + (eta.isEmpty() ? "" : " · " + eta), 12f, ui.muted, false);
             sub.setFontFeatureSettings("tnum");
             card.addView(sub, ui.margins(0, 4, 0, 0));
+        }
+        if (active.isEmpty()) {
+            card.addView(ui.text(waiting == 1 ? "1 fil venter på at starte…" : waiting + " filer venter på at starte…",
+                    13f, ui.muted, false), ui.margins(0, 8, 0, 0));
+            return card;
         }
         SpeedGraph graph = new SpeedGraph(this, ui.accent, ui.border);
         graph.setSamples(active.get(0).samples());
@@ -1060,6 +1112,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             });
             card.addView(start, ui.margins(0, 14, 0, 0));
             card.addView(wifiDirectChooseButton(direct), ui.margins(0, 10, 0, 0));
+            addPcWifiSection(card);
             return card;
         }
         LinearLayout info = ui.column();
@@ -1103,10 +1156,79 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         card.addView(ui.text("Slukker af sig selv efter 10 minutter uden brug, så din normale Wi-Fi "
                 + "derhjemme ikke bliver forstyrret.", 12.5f, ui.muted, false), ui.margins(0, 10, 0, 0));
         if (desktops.isEmpty()) {
-            card.addView(ui.text("På PC'en: Indstillinger → Wi-Fi Direct → skriv netværk og kode.",
+            card.addView(ui.text("På PC'en: Wi-Fi Direct → \"Kobl på telefonens\" → skriv netværk og kode.",
                     12.5f, ui.muted, false), ui.margins(0, 10, 0, 0));
         }
         return card;
+    }
+
+    /** "AdminPC har lavet Wi-Fi Direct" with one tap to join, at the top of Del. */
+    private View pcWifiOfferCard() {
+        ShareService.PcWifiOffer offer = service.pcOffer();
+        if (offer == null) {
+            return null;
+        }
+        LinearLayout card = ui.card();
+        card.setBackground(ui.rounded(ui.surface, ui.accent, 20));
+        LinearLayout top = ui.row();
+        top.addView(ui.iconBadge(R.drawable.ic_wifi, 40, ui.accentSoft, ui.accent));
+        LinearLayout texts = ui.column();
+        texts.addView(ui.text(offer.peerName + " har lavet Wi-Fi Direct", 15.5f, ui.text, true));
+        texts.addView(ui.text("Netværk " + offer.ssid + ". Hurtig direkte forbindelse – din mobildata "
+                + "virker stadig.", 12.5f, ui.muted, false));
+        LinearLayout.LayoutParams params = ui.weight(1);
+        params.setMargins(ui.dp(14), 0, 0, 0);
+        top.addView(texts, params);
+        card.addView(top);
+        LinearLayout buttons = ui.row();
+        TextView join = ui.button("Forbind", "primary");
+        join.setOnClickListener(v -> joinPcWifi(offer.ssid, offer.passphrase, offer.peerId, offer.addresses()));
+        buttons.addView(join, ui.weight(1));
+        TextView later = ui.button("Ikke nu", "ghost");
+        later.setOnClickListener(v -> service.dismissPcOffer());
+        LinearLayout.LayoutParams laterParams = ui.weight(1);
+        laterParams.setMargins(ui.dp(10), 0, 0, 0);
+        buttons.addView(later, laterParams);
+        card.addView(buttons, ui.margins(0, 14, 0, 0));
+        return card;
+    }
+
+    /** Ask for the nearby-devices permission once, then let Android show its "Forbind" box. */
+    private void joinPcWifi(String ssid, String pass, String peerId, List<String> addresses) {
+        Runnable join = () -> service.joinPcWifi(ssid, pass, peerId, addresses);
+        String permission = Build.VERSION.SDK_INT >= 33
+                ? Manifest.permission.NEARBY_WIFI_DEVICES : Manifest.permission.ACCESS_FINE_LOCATION;
+        if (checkSelfPermission(permission) == PackageManager.PERMISSION_GRANTED) {
+            join.run();
+            return;
+        }
+        pendingJoin = join;
+        requestPermissions(new String[]{permission}, REQUEST_JOIN_PERMISSION);
+    }
+
+    /** The part of the Wi-Fi Direct card about a network the PC made. */
+    private void addPcWifiSection(LinearLayout card) {
+        WifiJoinController join = service.wifiJoin();
+        View divider = new View(this);
+        divider.setBackgroundColor(ui.border);
+        card.addView(divider, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 1));
+        if (join.isJoined()) {
+            card.addView(ui.text("Forbundet til PC'ens netværk", 14.5f, ui.text, true), ui.margins(0, 12, 0, 0));
+            TextView ssid = ui.text(join.ssid(), 14f, ui.success, true);
+            ssid.setTypeface(android.graphics.Typeface.MONOSPACE);
+            card.addView(ssid, ui.margins(0, 2, 0, 0));
+            TextView leave = ui.button("Afbryd", "ghost");
+            leave.setOnClickListener(v -> service.leavePcWifi());
+            card.addView(leave, ui.margins(0, 8, 0, 0));
+            return;
+        }
+        card.addView(ui.text(join.isConnecting() ? "Forbinder til " + join.ssid() + "…"
+                : "Eller: kobl på PC'ens eget netværk", 14.5f, ui.text, true), ui.margins(0, 12, 0, 0));
+        card.addView(ui.text("På PC'en: Wi-Fi Direct → \"Opret her\". Tryk \"Send til telefonen\" der, "
+                + "eller scan PC'ens Wi-Fi-QR her.", 12.5f, ui.muted, false), ui.margins(0, 2, 0, 0));
+        TextView scan = ui.button("Scan PC'ens Wi-Fi-QR", "secondary");
+        scan.setOnClickListener(v -> scanQr());
+        card.addView(scan, ui.margins(0, 10, 0, 0));
     }
 
     private View bluetoothCard() {
@@ -1250,6 +1372,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             content.addView(empty);
             return;
         }
+        View controls = transferControls();
+        if (controls != null) {
+            content.addView(controls, ui.margins(0, 0, 0, 12));
+        }
         String summary = transferSummary(items);
         if (!summary.isEmpty()) {
             TextView totals = ui.text(summary, 13f, ui.muted, false);
@@ -1289,7 +1415,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
 
     private boolean matchesFilter(ShareService.TransferItem item) {
         switch (transferFilter) {
-            case "active": return "active".equals(item.status);
+            case "active": return ShareService.isOpen(item);
             case "received": return !item.outgoing;
             case "sent": return item.outgoing;
             default: return true;
@@ -1318,6 +1444,53 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         return out.toString();
     }
 
+    /** {label, tone} for the status pill on a transfer row. */
+    private String[] transferState(ShareService.TransferItem item) {
+        switch (item.status) {
+            case "active": return new String[]{item.outgoing ? "Sender" : "Modtager", "accent"};
+            case "queued": return new String[]{"I kø · nr. " + Math.max(1, service.queuePosition(item)), "neutral"};
+            case "paused": return new String[]{"På pause", "warning"};
+            case "done": return new String[]{"Færdig", "success"};
+            case "failed": return new String[]{"Fejlet", "danger"};
+            case "cancelled": return new String[]{"Stoppet", "neutral"};
+            default: return new String[]{item.status, "neutral"};
+        }
+    }
+
+    /** "Pause alle · Fortsæt alle · Stop alle" while something is sending, queued or paused. */
+    private View transferControls() {
+        int[] counts = service.controlCounts();
+        int running = counts[0];
+        int paused = counts[1];
+        if (running == 0 && paused == 0) {
+            return null;
+        }
+        LinearLayout row = ui.row();
+        if (running > 0) {
+            TextView pauseAll = ui.button("Pause alle", "secondary");
+            pauseAll.setOnClickListener(v -> toast(service.pauseAll() + " sat på pause", false));
+            row.addView(pauseAll, ui.weight(1));
+        }
+        if (paused > 0) {
+            TextView resumeAll = ui.button("Fortsæt alle", "soft");
+            resumeAll.setOnClickListener(v -> toast(service.resumeAll() + " fortsætter", false));
+            LinearLayout.LayoutParams params = ui.weight(1);
+            params.setMargins(row.getChildCount() > 0 ? ui.dp(8) : 0, 0, 0, 0);
+            row.addView(resumeAll, params);
+        }
+        TextView stopAll = ui.button("Stop alle", "danger");
+        stopAll.setOnClickListener(v -> new AlertDialog.Builder(this)
+                .setTitle("Stop alle overførsler?")
+                .setMessage((running + paused) + " filer bliver stoppet. Du kan fortsætte dem igen bagefter.")
+                .setNegativeButton("Annullér", null)
+                .setPositiveButton("Stop alle", (dialog, which) -> toast(service.stopAll() + " stoppet", false))
+                .show());
+        LinearLayout.LayoutParams stopParams = ui.weight(1);
+        stopParams.setMargins(ui.dp(8), 0, 0, 0);
+        row.addView(stopAll, stopParams);
+        return row;
+    }
+
     private LinearLayout.LayoutParams gap(int left) {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -1337,6 +1510,8 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private View transferCard(ShareService.TransferItem item) {
         LinearLayout card = ui.card();
         boolean active = "active".equals(item.status);
+        boolean queued = "queued".equals(item.status);
+        boolean paused = "paused".equals(item.status);
         LinearLayout row = ui.row();
         row.addView(ui.iconBadge(item.folder ? R.drawable.ic_folder : R.drawable.ic_file, 40,
                 item.outgoing ? ui.accentSoft : ui.successSoft, item.outgoing ? ui.accent : ui.success));
@@ -1364,13 +1539,16 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             default:
                 detail = direction + " · " + Ui.formatBytes(item.sent) + " af " + Ui.formatBytes(item.total);
         }
+        String[] state = transferState(item);
+        texts.addView(ui.pill(state[0], state[1]), ui.wrap(0, 6, 0, 2));
         TextView meta = ui.text(detail, 12.5f, "failed".equals(item.status) ? ui.danger : ui.muted, false);
         texts.addView(meta, ui.margins(0, 2, 0, 0));
         LinearLayout.LayoutParams params = ui.weight(1);
         params.setMargins(ui.dp(14), 0, ui.dp(6), 0);
         row.addView(texts, params);
-        if (active) {
-            TextView percent = ui.text(Math.round(item.fraction() * 100) + "%", 22f, ui.text, true);
+        if (active || paused) {
+            TextView percent = ui.text(Math.round(item.fraction() * 100) + "%", 22f,
+                    paused ? ui.muted : ui.text, true);
             percent.setTypeface(android.graphics.Typeface.create("sans-serif-medium",
                     android.graphics.Typeface.NORMAL));
             percent.setFontFeatureSettings("tnum");
@@ -1378,12 +1556,12 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         }
         card.addView(row);
 
-        if (active || "failed".equals(item.status) || "cancelled".equals(item.status)) {
+        if (active || paused || queued || "failed".equals(item.status) || "cancelled".equals(item.status)) {
             ProgressBar bar = ui.progress();
             bar.setProgress((int) Math.round(item.fraction() * 1000));
             if (!active) {
                 bar.setProgressTintList(android.content.res.ColorStateList.valueOf(
-                        "failed".equals(item.status) ? ui.danger : ui.faint));
+                        "failed".equals(item.status) ? ui.danger : paused ? ui.warning : ui.faint));
             }
             card.addView(bar, ui.margins(0, 12, 0, 0));
         }
@@ -1411,17 +1589,29 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         }
         LinearLayout actions = ui.row();
         actions.setGravity(Gravity.END);
-        if ("active".equals(item.status) && item.outgoing) {
-            TextView cancel = ui.button("Annullér", "ghost");
-            cancel.setMinHeight(ui.dp(36));
-            cancel.setOnClickListener(v -> service.cancel(item.id));
-            actions.addView(cancel);
+        if (item.outgoing && queued) {
+            TextView now = ui.button("Start nu", "soft");
+            now.setMinHeight(ui.dp(36));
+            now.setOnClickListener(v -> service.startNow(item.id));
+            actions.addView(now);
         }
-        if (item.outgoing && ("failed".equals(item.status) || "cancelled".equals(item.status))) {
+        if (item.outgoing && (active || queued)) {
+            TextView pause = ui.button("Pause", "ghost");
+            pause.setMinHeight(ui.dp(36));
+            pause.setOnClickListener(v -> service.pause(item.id));
+            actions.addView(pause, gap(4));
+        }
+        if (item.outgoing && (paused || "failed".equals(item.status) || "cancelled".equals(item.status))) {
             TextView retry = ui.button("Fortsæt", "soft");
             retry.setMinHeight(ui.dp(36));
-            retry.setOnClickListener(v -> service.retry(item.id));
+            retry.setOnClickListener(v -> service.resume(item.id));
             actions.addView(retry);
+        }
+        if (item.outgoing && ShareService.isOpen(item)) {
+            TextView stop = ui.button("Stop", "danger");
+            stop.setMinHeight(ui.dp(36));
+            stop.setOnClickListener(v -> service.cancel(item.id));
+            actions.addView(stop, gap(4));
         }
         boolean canOpenSent = item.outgoing && !item.folder && !item.uri.isEmpty();
         if ("done".equals(item.status) && (!item.outgoing || canOpenSent)) {
@@ -1442,7 +1632,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             delete.setOnClickListener(v -> confirmDeleteTransfer(item));
             actions.addView(delete, gap(8));
         }
-        if (!active) {
+        if (!ShareService.isOpen(item)) {
             TextView remove = ui.button("Fjern", "ghost");
             remove.setMinHeight(ui.dp(36));
             remove.setContentDescription("Fjern fra listen");
@@ -2338,8 +2528,11 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         QrScanner.scan(this, new QrScanner.Result() {
             @Override
             public void onScanned(String value) {
+                String[] wifi = ShareLogic.parseWifiQr(value);
                 if (PairingInvite.looksLikeInvite(value)) {
                     service.pairWithInvite(value);
+                } else if (wifi != null) {
+                    joinPcWifi(wifi[0], wifi[1], null, null);
                 } else if (Ui.isLink(value)) {
                     toast("Det er et almindeligt link – ikke en h4xtor share-kode", true);
                 } else {
