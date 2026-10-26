@@ -180,6 +180,29 @@ def test_scrollframe_wheel_works_over_child_widgets() -> None:
         root.destroy()
 
 
+def test_monkey_hops_while_busy_and_lands_again() -> None:
+    import tkinter as tk
+
+    from h4xtor_share.ui_kit import Monkey, Theme
+
+    try:
+        root = tk.Tk()
+    except tk.TclError as error:
+        pytest.skip(f"Tk unavailable: {error}".splitlines()[0])
+    try:
+        monkey = Monkey(root, Theme(root, dark=False), size=100)
+        ground = monkey.bbox("all")[1]
+        monkey.set_busy(True)
+        for _ in range(3):
+            monkey._hop()
+        assert monkey.bbox("all")[1] < ground  # off the ground
+        monkey.set_busy(False)
+        monkey._hop()
+        assert monkey.bbox("all")[1] == ground
+    finally:
+        root.destroy()
+
+
 @pytest.mark.skipif(
     not _can_build_ui(),
     reason="Tk/tkdnd display server unavailable",

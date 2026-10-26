@@ -75,6 +75,9 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private AlertDialog qrDialog;
     private EditText composerInput;
     private android.widget.ImageView sendButton;
+    /** Kept across renders so the hop is not restarted every progress tick. */
+    private android.widget.ImageView monkeyView;
+    private android.animation.ObjectAnimator monkeyHop;
     private String dismissedClip;
     private boolean renderPending;
 
@@ -180,6 +183,9 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     @Override
     protected void onPause() {
         resumed = false;
+        if (monkeyHop != null) {
+            monkeyHop.cancel();  // no hopping in the background
+        }
         if (service != null) {
             service.removeListener(this);
         }
@@ -614,13 +620,12 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private View greeting(Peer target) {
         LinearLayout box = ui.column();
         LinearLayout headline = ui.row();
+        box.setClipChildren(false);  // the hopping monkey leaves the row
+        headline.setClipChildren(false);
         headline.addView(ui.title("Velkommen til\nH4xtor Share", 31), ui.weight(1));
-        android.widget.ImageView monkey = new android.widget.ImageView(this);
-        monkey.setImageResource(R.drawable.ic_monkey);
-        monkey.setContentDescription("H4xtor Share-aben");
         LinearLayout.LayoutParams monkeyParams = new LinearLayout.LayoutParams(ui.dp(84), ui.dp(84));
         monkeyParams.setMargins(ui.dp(12), 0, 0, 0);
-        headline.addView(monkey, monkeyParams);
+        headline.addView(monkey(), monkeyParams);
         box.addView(headline);
         if (target != null) {
             boolean online = service.isOnline(target.deviceId);
@@ -630,6 +635,33 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                     ui.margins(0, 8, 0, 0));
         }
         return box;
+    }
+
+    /** The mascot, reused across renders, hopping while files are moving. */
+    private android.widget.ImageView monkey() {
+        if (monkeyView == null) {
+            monkeyView = new android.widget.ImageView(this);
+            monkeyView.setImageResource(R.drawable.ic_monkey);
+            monkeyView.setContentDescription("H4xtor Share-aben");
+        } else if (monkeyView.getParent() instanceof ViewGroup) {
+            ((ViewGroup) monkeyView.getParent()).removeView(monkeyView);
+        }
+        boolean busy = service != null && service.activeTransfers() > 0;
+        if (busy) {
+            if (monkeyHop == null) {
+                monkeyHop = android.animation.ObjectAnimator.ofFloat(
+                        monkeyView, "translationY", 0f, -ui.dp(14), 0f, 0f);
+                monkeyHop.setDuration(700);
+                monkeyHop.setRepeatCount(android.animation.ValueAnimator.INFINITE);
+            }
+            if (!monkeyHop.isStarted()) {
+                monkeyHop.start();
+            }
+        } else if (monkeyHop != null && monkeyHop.isStarted()) {
+            monkeyHop.cancel();
+            monkeyView.setTranslationY(0f);
+        }
+        return monkeyView;
     }
 
     private EditText composerInput() {

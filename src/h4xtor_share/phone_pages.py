@@ -307,7 +307,8 @@ class PhonePagesMixin:
         c = self.theme.c
         if item.icon_png:
             try:
-                photo = tk.PhotoImage(data=base64.b64encode(item.icon_png))
+                # master=parent: the icon belongs to this window, not to Tk's default root.
+                photo = tk.PhotoImage(master=parent, data=base64.b64encode(item.icon_png))
                 factor = max(1, -(-photo.width() // size))
                 if factor > 1:
                     photo = photo.subsample(factor)

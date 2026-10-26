@@ -1061,7 +1061,8 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
 
         hero = tk.Frame(center, bg=c["bg"])
         hero.pack(pady=(px(18), px(22)))
-        Monkey(hero, self.theme, size=px(72)).pack(side="left", padx=(0, px(16)))
+        self.monkey = Monkey(hero, self.theme, size=px(72))
+        self.monkey.pack(side="left", padx=(0, px(16)))
         self.greeting_label = tk.Label(
             hero,
             text="Velkommen til H4xtor Share",
@@ -3949,6 +3950,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         states = list(self.transfers.values())
         active = sum(1 for state in states if state.status == "active")
         self.transfer_badge.configure(text=str(active) if active else "")
+        self.monkey.set_busy(active > 0)
         for key, label in TRANSFER_FILTERS:
             count = sum(1 for state in states if state.matches(key))
             text = f"{label}  {count}" if count else label

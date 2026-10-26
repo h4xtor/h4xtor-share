@@ -11,6 +11,8 @@ Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 - Har PC'en selv to netkort (fx Wi-Fi + USB-deling fra en telefon), bruges begge.
 - Godt at vide: én forbindelse bruger altid ét link, så en enkelt stor download bliver ikke hurtigere. Websider, apps, opdateringer og downloads med flere forbindelser bliver.
 - Lukker du appen, kører internettet helt normalt videre uden den.
+### Forbedret
+- Aben hopper nu, mens der sendes eller modtages – både på PC'en og på telefonens forside. Den lander igen, når alt er ovre.
 
 ## 1.3.4 – 2026-10-21
 ### Forbedret

@@ -858,11 +858,47 @@ class Monkey(tk.Canvas):
     INNER = "#E9B98F"
     DARK = "#3B2A20"
 
+    # One hop: fraction of the widget height the monkey is lifted, then a short rest.
+    HOP = (0.0, 0.05, 0.085, 0.1, 0.085, 0.05, 0.0, 0.0, 0.0)
+
     def __init__(self, parent: tk.Misc, theme: Theme, size: int = 64) -> None:
         super().__init__(
             parent, width=size, height=size, bg=theme.c["bg"], highlightthickness=0, bd=0
         )
+        self._size = size
+        self._busy = False
+        self._hopping = False
+        self._step = 0
+        self._offset = 0.0
+        self._pending: str | None = None
         self._draw(size / 100.0)
+
+    def set_busy(self, busy: bool) -> None:
+        """Hop while something is being sent or received; land again when it stops."""
+        self._busy = busy
+        if busy and not self._hopping:
+            self._hopping = True
+            self._step = 0
+            self._hop()
+
+    def _hop(self) -> None:
+        try:
+            if self._pending is not None:
+                with contextlib.suppress(tk.TclError):
+                    self.after_cancel(self._pending)
+                self._pending = None
+            if not self._busy:
+                self.move("all", 0, self._offset)
+                self._offset = 0.0
+                self._hopping = False
+                return
+            lift = self.HOP[self._step % len(self.HOP)] * self._size
+            self.move("all", 0, self._offset - lift)
+            self._offset = lift
+            self._step += 1
+            self._pending = self.after(60, self._hop)
+        except tk.TclError:  # the window closed mid-hop
+            self._hopping = False
 
     def _circle(self, x: float, y: float, r: float, s: float, fill: str) -> None:
         self.create_oval((x - r) * s, (y - r) * s, (x + r) * s, (y + r) * s, fill=fill, outline="")
