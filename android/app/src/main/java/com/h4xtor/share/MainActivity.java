@@ -395,6 +395,9 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         }
         renderNav();
+        if (!PAGE_DEVICES.equals(page) && monkeyHop != null) {
+            monkeyHop.cancel();  // the mascot is off-screen on the other pages
+        }
         content.removeAllViews();
         switch (page) {
             case PAGE_TRANSFERS: renderTransfers(); break;
@@ -642,12 +645,12 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         if (monkeyView == null) {
             monkeyView = new android.widget.ImageView(this);
             monkeyView.setImageResource(R.drawable.ic_monkey_tap);
-            monkeyView.setContentDescription("H4xtor Share-aben");
+            monkeyView.setContentDescription("H4xtor Share-aben – tryk for at hilse");
             monkeyView.setOnClickListener(v -> grin());
         } else if (monkeyView.getParent() instanceof ViewGroup) {
             ((ViewGroup) monkeyView.getParent()).removeView(monkeyView);
         }
-        boolean busy = service != null && service.activeTransfers() > 0;
+        boolean busy = service != null && service.activeTransfers() > 0 && !animationsOff();
         if (busy) {
             if (monkeyHop == null) {
                 monkeyHop = android.animation.ObjectAnimator.ofFloat(
@@ -663,6 +666,12 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             monkeyView.setTranslationY(0f);
         }
         return monkeyView;
+    }
+
+    /** The phone is set to show no animations: decoration stays still. */
+    private boolean animationsOff() {
+        return android.provider.Settings.Global.getFloat(getContentResolver(),
+                android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f;
     }
 
     /** Tapped: the mascot opens its mouth and perks up its ears, once. */
