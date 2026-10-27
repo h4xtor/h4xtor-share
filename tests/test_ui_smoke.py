@@ -1248,7 +1248,7 @@ def test_pc_wifi_direct_can_be_retried_after_a_failed_start(tmp_path, monkeypatc
 
 
 @pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
-def test_send_page_orbit_shows_devices_and_picks_one(tmp_path, monkeypatch) -> None:
+def test_send_page_hero_and_tiles_follow_the_selection(tmp_path, monkeypatch) -> None:
     from h4xtor_share.app import TransferState
     from h4xtor_share.models import PeerStatus
 
@@ -1258,23 +1258,110 @@ def test_send_page_orbit_shows_devices_and_picks_one(tmp_path, monkeypatch) -> N
             app.peer_status[peer.device_id] = PeerStatus(peer.device_id, True, 4.0)
         app._reorder_cards()
         app.update()
-        names = [node["name"] for node in app.orbit.nodes]
-        assert sorted(names) == ["Bærbar", "Mobil"]
-        assert all(node["sub"] == "wifi · 4 ms" for node in app.orbit.nodes)
-        app._orbit_pick(peers[1].device_id)  # a click on a node on the map
+        tiles = {node["id"]: node for node in app.device_tiles.nodes}
+        assert tiles["*"]["name"] == "Alle enheder"  # two devices: an "all" tile first
+        assert sorted(n["name"] for k, n in tiles.items() if k != "*") == ["Bærbar", "Mobil"]
+        assert all(n["sub"] == "Wi-Fi · 4 ms" for k, n in tiles.items() if k != "*")
+
+        app._tile_pick(peers[1].device_id)  # a click on a tile
         assert app.selected_id == peers[1].device_id
-        assert "Bærbar" in app.greeting_sub.cget("text")
-        assert [n["id"] for n in app.orbit.nodes if n["selected"]] == [peers[1].device_id]
+        eyebrow, title, status, _dot, _hint = app.hero._words
+        assert (eyebrow, title) == ("SEND TIL", "BÆRBAR")
+        assert status.startswith("Online")
+        assert [n["id"] for n in app.device_tiles.nodes if n["selected"]] == [peers[1].device_id]
+        assert app.hero_send._text == "SEND FILER"
+
+        app._tile_pick("*")
+        assert app._all_selected() and app.hero._words[1] == "ALLE ENHEDER"
+
         app.transfers["t"] = TransferState("t", "ferie.mp4", "send", "Bærbar", total=10, sent=4)
         app._update_transfer_badge()
-        assert app.orbit.sending == {peers[1].device_id}
-        app.orbit._animate()  # one frame of the motion (ring, pulse, beams, lights, blink)
+        assert app.hero.actor.busy  # the monkey hops while files move
+        sub = {n["id"]: n["sub"] for n in app.device_tiles.nodes}
+        assert sub[peers[1].device_id] == "Sender …"
+        app.hero._animate()  # one frame: embers drift, the monkey moves
         app.transfers["t"].status = "done"
         app._update_transfer_badge()
-        assert app.orbit._hop > 0  # the monkey hops when the send has landed
-        assert app.orbit.sending == set()
+        assert app.hero.actor.gesture == "hops"  # a happy hop when the send has landed
+        assert len(app.hero._sparks) == 18  # and a ring of sparks
+        for _ in range(25):
+            app.hero._animate_sparks()
+        assert app.hero._sparks == [] and not app.hero.find_withtag("spark")
+        assert not app.hero.actor.busy
     finally:
         app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_send_page_first_run_offers_to_connect() -> None:
+    app = _new_app()
+    try:
+        app.update()
+        assert app.hero._words[:2] == ("KOM I GANG", "FORBIND DIN TELEFON")
+        assert app.hero_send._text == "FORBIND NY ENHED"
+        opened = []
+        app.show_qr_pairing = lambda: opened.append(True)
+        app.hero_send.command()
+        assert opened == [True]
+        assert [n["id"] for n in app.device_tiles.nodes] == []  # only the "+" tile
+    finally:
+        app.close()
+
+
+def test_monkey_actor_hops_grins_points_and_nods() -> None:
+    import tkinter as tk
+
+    from h4xtor_share.ui_kit import MonkeyActor
+
+    try:
+        root = tk.Tk()
+    except tk.TclError as error:
+        pytest.skip(f"Tk unavailable: {error}".splitlines()[0])
+    try:
+        canvas = tk.Canvas(root, width=300, height=300)
+        actor = MonkeyActor(canvas, "m")
+        actor.place(150, 150, 120)
+        head_top = canvas.bbox("m")[1]
+
+        def frames(count: int) -> None:
+            for _ in range(count):
+                actor.tick()
+
+        arm = canvas.find_withtag("m-arm")[0]
+        assert canvas.itemcget(arm, "state") == "hidden"
+        actor.point()
+        frames(4)
+        assert canvas.itemcget(arm, "state") == "normal"  # the arm is out
+        frames(len(actor.POINT))
+        assert canvas.itemcget(arm, "state") == "hidden" and actor.gesture == ""
+
+        mouth = canvas.find_withtag("m-mouth")[0]
+        ear = canvas.find_withtag("m-ear")[0]
+        ear_height = canvas.coords(ear)[3] - canvas.coords(ear)[1]
+        actor.grin()
+        frames(3)
+        assert canvas.itemcget(mouth, "style") == "chord"  # mouth open
+        assert canvas.coords(ear)[3] - canvas.coords(ear)[1] > ear_height * 1.2  # ears up
+        frames(len(actor.GRIN))
+        assert canvas.itemcget(mouth, "style") == "arc"
+        assert abs(canvas.coords(ear)[3] - canvas.coords(ear)[1] - ear_height) < 0.01
+
+        actor.nod()
+        frames(3)
+        assert canvas.bbox("m")[1] > head_top + 4  # head dips
+        frames(len(actor.NOD))
+
+        actor.set_busy(True)
+        tops = []
+        for _ in range(14):
+            actor.tick()
+            tops.append(canvas.bbox("m")[1])
+        assert min(tops) < head_top - 8  # off the ground
+        actor.set_busy(False)
+        frames(30)
+        assert abs(canvas.bbox("m")[1] - head_top) <= 3  # back on the ground (breathing only)
+    finally:
+        root.destroy()
 
 
 @pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")

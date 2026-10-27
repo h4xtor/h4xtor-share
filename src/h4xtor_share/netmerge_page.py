@@ -290,6 +290,9 @@ class NetMergePageMixin:
 
     async def _netmerge_start(self) -> dict[str, Any] | str:
         await self.netmerge.start()
+        if getattr(self, "_closing", False):  # the app is quitting: never leave a proxy set
+            await self.netmerge.stop()
+            return "closing"
         try:
             return await asyncio.to_thread(sysproxy.apply, self.netmerge.pac_url)
         except Exception as error:  # noqa: BLE001 - the proxy still works when set by hand
@@ -304,6 +307,8 @@ class NetMergePageMixin:
 
     async def _netmerge_resume(self) -> None:
         """At start-up: switch back on, or undo a system proxy left by a crash."""
+        if getattr(self, "_closing", False) or self.netmerge.running:
+            return  # quitting already, or switched on by hand while the app was starting
         if self.netmerge_enabled:
             result = await self._netmerge_start()
             self.event_queue.put(("phone_call", (self._netmerge_switched, True, result)))
