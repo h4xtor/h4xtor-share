@@ -4,6 +4,13 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
+## 1.7.0 – 2026-10-27
+### Nyt
+- Telefonens skærm på PC'en: vælg "Vis og styr skærmen…" i telefonens menu på PC'en, så ser du skærmen live i et vindue.
+- Styr telefonen med musen: klik er et tryk, træk er et swipe, hjulet ruller, og højreklik går tilbage. Knapper til Tilbage, Hjem og Apps, og et felt der skriver tekst på telefonen.
+- Sikkert: slået fra, til du selv slår "Vis og styr skærmen fra PC'en" til på telefonen. Telefonen spørger hver gang, og en besked viser hele tiden, at PC'en ser med – ét tryk på den stopper det.
+- Virker på Android. Apple tillader ikke, at andre apps ser eller styrer en iPhone.
+
 ## 1.6.0 – 2026-10-27
 ### Nyt
 - Telefonens batteri på PC'en: kortet for din telefon viser, hvor meget strøm den har, og ⚡ når den lader.
