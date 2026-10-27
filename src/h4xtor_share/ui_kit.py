@@ -223,6 +223,23 @@ def round_rect(
     return canvas.create_polygon(points, smooth=True, splinesteps=24, **kwargs)
 
 
+def soft_rect(
+    canvas: tk.Canvas, x1: float, y1: float, x2: float, y2: float, radius: float, **kwargs: Any
+) -> int:
+    """A rectangle with true quarter-circle corners of ``radius`` (round_rect's spline only
+    rounds about half of its radius)."""
+    import math
+
+    radius = max(0.0, min(radius, (x2 - x1) / 2, (y2 - y1) / 2))
+    points: list[float] = []
+    for cx, cy, start in ((x2 - radius, y1 + radius, -90), (x2 - radius, y2 - radius, 0),
+                          (x1 + radius, y2 - radius, 90), (x1 + radius, y1 + radius, 180)):
+        for step in range(7):
+            a = math.radians(start + step * 15)
+            points += [cx + radius * math.cos(a), cy + radius * math.sin(a)]
+    return canvas.create_polygon(points, **kwargs)
+
+
 def set_dark_titlebar(window: tk.Misc, dark: bool) -> None:
     """Match the Windows 10/11 title bar to the app theme."""
     if platform.system() != "Windows":
@@ -349,15 +366,15 @@ class Button(tk.Canvas):
         self.delete("all")
         width = max(self.winfo_width(), self._width) if self.winfo_ismapped() else self._width
         fill, outline, foreground = self._colors()
-        radius = self.theme.px(4)
-        round_rect(self, 1, 1, width - 1, self._height - 1, radius, fill=fill, outline=outline)
+        radius = self.theme.px(18)  # soft corners, not hard squares
+        soft_rect(self, 1, 1, width - 1, self._height - 1, radius, fill=fill, outline=outline)
         if self.kind == "primary" and self.enabled and not self._pressed:
             # Launcher buttons catch the light on their top edge.
             shine = mix_color("#FFFFFF", fill, 0.72)
             self.create_line(radius + 1, 2, width - radius - 1, 2, fill=shine)
         if self._focused:
             ring = self.theme.c["accent2"] if self.kind == "primary" else self.theme.c["accent"]
-            round_rect(self, 2, 2, width - 2, self._height - 2, radius, fill="", outline=ring,
+            soft_rect(self, 2, 2, width - 2, self._height - 2, radius, fill="", outline=ring,
                        width=2)
         nudge = 1 if self._pressed else 0  # pressed text sinks a pixel
         self.create_text(
@@ -1552,13 +1569,17 @@ class HeroBanner(tk.Canvas):
                              anchor="nw", width=int(width * 0.55), tags=("words",))
 
     def refresh_buttons(self) -> None:
-        """The buttons row takes the art's colour behind it (Tk widgets are opaque)."""
+        """The buttons take the art's colour behind each of them (Tk widgets are opaque, and
+        it shows in their round corners)."""
         x, y = self.coords(self._buttons_item)
-        color = self.color_at(x + self.theme.px(100), y + self.theme.px(24))
-        widgets = [self.buttons, *self.buttons.winfo_children()]
-        for widget in widgets:
+        mid = y + self.theme.px(24)
+        with contextlib.suppress(tk.TclError):
+            self.buttons.configure(bg=self.color_at(x + self.theme.px(100), mid))
+        self.buttons.update_idletasks()  # place the buttons first, to know where each one is
+        for widget in self.buttons.winfo_children():
             with contextlib.suppress(tk.TclError):
-                widget.configure(bg=color)
+                centre = x + widget.winfo_x() + widget.winfo_width() / 2
+                widget.configure(bg=self.color_at(centre, mid))
                 if isinstance(widget, Button):
                     widget._draw()
 
