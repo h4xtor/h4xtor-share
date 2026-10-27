@@ -1018,11 +1018,14 @@ def test_bluetooth_finds_and_pairs_a_phone_never_seen_on_wifi(tmp_path, monkeypa
     app = _new_app()
     opened: list[tuple[str, str | None]] = []
     phone_ends: list[bluetooth.Bridge] = []
+    in_range = [True]
 
     def fake_open_bridge(address, device_id, local_port, expected_id=None, on_closed=None):
         opened.append((address, expected_id))
         if address != "22:22:22:22:22:22":  # the headphones: no h4xtor share there
             raise OSError(10108, "service not found")
+        if not in_range[0]:  # out of range: the app's own retry must not reach it either
+            raise OSError(10060, "connection timed out")
         left, right = socket.socketpair()
         phone_ends.append(
             bluetooth.Bridge(right, phone_id, phone_config.port, odd=False).start()
@@ -1087,12 +1090,16 @@ def test_bluetooth_finds_and_pairs_a_phone_never_seen_on_wifi(tmp_path, monkeypa
                    for e in phone_events)
 
         # Out of range: the phone stays in the list (offline) instead of vanishing…
+        in_range[0] = False
         phone_ends[0].close()
         _pump(app, lambda: phone_id not in app._bt_bridges)
         kept = app.peers[phone_id]
         assert (kept.address, kept.transport) == ("", "bluetooth")
         assert not app.peer_status[phone_id].online
         # …and comes back on Bluetooth by itself (the remembered MAC first).
+        _pump(app, lambda: phone_id not in app._bt_trying)  # an out-of-range retry is over
+        in_range[0] = True
+        app._bt_last_try.pop(phone_id, None)  # …and would hold the next try back for a minute
         app.event_queue.put(("bt_maybe", kept))
         _pump(app, lambda: phone_id in app._bt_bridges, 15)
         assert opened[-1] == ("22:22:22:22:22:22", phone_id)
