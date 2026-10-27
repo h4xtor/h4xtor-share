@@ -1627,18 +1627,25 @@ class HeroBanner(tk.Canvas):
         it shows in their round corners)."""
         x, y = self.coords(self._buttons_item)
         mid = y + self.theme.px(24)
+        fallback = self.color_at(x + self.theme.px(100), mid)
         with contextlib.suppress(tk.TclError):
-            self.buttons.configure(bg=self.color_at(x + self.theme.px(100), mid))
-        self.buttons.update_idletasks()  # place the buttons first, to know where each one is
+            self.buttons.configure(bg=fallback)
+        # No update_idletasks() here to place them first: on macOS that re-entered layout
+        # without end. A button not placed yet takes the fallback; the next refresh fixes it.
         for widget in self.buttons.winfo_children():
             with contextlib.suppress(tk.TclError):
+                if widget.winfo_width() <= 1:
+                    widget.configure(bg=fallback)
+                    continue
                 left, top = x + widget.winfo_x(), y + widget.winfo_y()
                 right, bottom = left + widget.winfo_width() - 1, top + widget.winfo_height() - 1
                 widget.configure(bg=self.color_at((left + right) / 2, (top + bottom) / 2))
                 if isinstance(widget, Button):
-                    widget.backdrop = (self.color_at(left, top), self.color_at(right, top),
-                                       self.color_at(left, bottom), self.color_at(right, bottom))
-                    widget._draw()
+                    backdrop = (self.color_at(left, top), self.color_at(right, top),
+                                self.color_at(left, bottom), self.color_at(right, bottom))
+                    if backdrop != widget.backdrop:
+                        widget.backdrop = backdrop
+                        widget._draw()
 
     def _spawn_embers(self, width: int, height: int) -> None:
         import random
