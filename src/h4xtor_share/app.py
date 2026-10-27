@@ -35,6 +35,7 @@ from h4xtor_share.crypto import ensure_certificate, server_ssl_context
 from h4xtor_share.discovery import DiscoveryService, local_ipv4_addresses
 from h4xtor_share.history import HistoryStore, is_link
 from h4xtor_share.local_api import LOCAL_API_PORT_OFFSET, LocalApi
+from h4xtor_share.mirror_window import open_mirror
 from h4xtor_share.models import (
     DESKTOP_CAPABILITIES,
     ClipboardReceived,
@@ -511,6 +512,10 @@ class DeviceCard:
                 label="Send udklipsholder", command=lambda: app.send_clipboard(self.peer)
             )
             menu.add_command(label="Fjernbetjening", command=lambda: app.open_remote(self.peer))
+            if self.peer.supports("screen-mirror") and app.config_store.get_flag(
+                    "screen_mirror", True):
+                menu.add_command(label="Vis og styr skærmen…",
+                                 command=lambda: open_mirror(app, self.peer))
             if self.peer.device_id in app._bt_bridges:
                 menu.add_command(
                     label="Afbryd Bluetooth", command=lambda: app.disconnect_bluetooth(self.peer)
@@ -2641,6 +2646,16 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             "løbe tør eller er fuldt opladet.",
             self.config_store.get_flag("phone_status", True),
             self._set_phone_status,
+        )
+
+        self._divider(extras.body)
+        self._toggle_row(
+            extras.body,
+            "Telefonens skærm på PC'en",
+            "Se din Android-telefons skærm i et vindue og styr den med musen og tastaturet "
+            "(enhedens menu → \"Vis og styr skærmen\"). Skal også slås til på telefonen.",
+            self.config_store.get_flag("screen_mirror", True),
+            lambda value: self.config_store.set_flag("screen_mirror", value),
         )
 
         behaviour = section("Opførsel")

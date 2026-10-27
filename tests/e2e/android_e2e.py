@@ -8,6 +8,7 @@ from the emulator as 10.0.2.2; the phone's server is reached through
 from __future__ import annotations
 
 import asyncio
+import base64
 import os
 import re
 import subprocess
@@ -310,6 +311,40 @@ def v12_checks(desktop: Desktop, phone: Peer) -> None:
     ok("screenshot on demand arrives on the PC as a PNG")
     desktop.run(desktop.client.set_wallpaper(phone, picture.path))
     ok("wallpaper set from the PC")
+
+    # ---- The live screen on the PC: off by default, then seen and steered ------
+    assert phone.supports("screen-mirror"), "phone does not advertise screen-mirror"
+    try:
+        desktop.run(desktop.client.mirror_start(phone, "png"))
+        raise AssertionError("the screen was shared while the switch is off")
+    except RuntimeError as error:
+        assert "slået fra" in str(error), error
+    ok("screen sharing to the PC is off by default")
+    open_settings_row("^Vis og styr skærmen fra PC'en$")
+    assert "flag_screen_control\" value=\"true" in prefs(), "screen toggle not saved"
+    desktop.run(desktop.client.mirror_start(phone, "png"))
+    time.sleep(3)
+    tap_text("(?i)^(start now|start|share screen|start nu|del skærm)$", timeout=20)
+    deadline, frame = time.time() + 40, {}
+    while time.time() < deadline:
+        frame = desktop.run(desktop.client.mirror_frame(phone, 0))
+        if frame.get("active") and frame.get("image"):
+            break
+    assert frame.get("image"), f"no live frame: {frame}"
+    assert base64.b64decode(frame["image"])[:8] == b"\x89PNG\r\n\x1a\n", "frame is not a PNG"
+    ok(f"live screen on the PC ({frame['width']}x{frame['height']} frames)")
+    # A click on the PC's picture of the "Del" tab opens it on the phone.
+    width, height = map(int, re.findall(r"(\d+)x(\d+)", shell("wm size"))[-1])
+    tab = next(n for n in reversed(ui_nodes()) if re.search("^Del$", n.get("text") or ""))
+    x1, y1, x2, y2 = map(int, re.findall(r"\d+", tab.get("bounds", "")))
+    desktop.run(desktop.client.mirror_input(
+        phone, {"type": "tap", "x": (x1 + x2) / 2 / width, "y": (y1 + y2) / 2 / height}))
+    assert screen_has("^SEND TIL$", 10), "the PC's click did not reach the phone"
+    shot("24-steered-from-pc")
+    ok("a click on the PC taps the phone (the Del tab opened)")
+    desktop.run(desktop.client.mirror_stop(phone))
+    assert not desktop.run(desktop.client.mirror_frame(phone, 0)).get("active")
+    ok("stopping from the PC ends the sharing")
 
 
 def bluetooth_checks(desktop: Desktop, phone: Peer) -> None:

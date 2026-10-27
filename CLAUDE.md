@@ -80,7 +80,7 @@ phone: the "Telefon på PC'en" card), a test, and the glass look (PC: `glass_ima
 5. Scan papir til PDF: PC asks, the phone's camera shoots, a straight PDF lands on the PC
 6. Tænd/lås PC'en fra telefonen: Wake-on-LAN, lock, sleep, shut down
 7. Del Wi-Fi med gæster: QR code with the Wi-Fi password on PC and phone
-8. Telefonens skærm på PC'en: live mirror with mouse control
+8. Telefonens skærm på PC'en: live mirror with mouse control — **v1.7.0** (`ScreenMirror`, `mirror_window.py`; next: AI control via the local API, iPhone view via AirPlay)
 9. Svævende abe på skrivebordet: always-on-top drop target (drag a file → phone; click → clipboard)
 10. Hvem ringer? på PC'en: caller name pops up, reject or quick SMS reply
 

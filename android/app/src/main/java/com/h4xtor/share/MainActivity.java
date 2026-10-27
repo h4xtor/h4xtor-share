@@ -2632,6 +2632,17 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                         + "Skærmbilleder fra PC'en spørger altid dig først.",
                 identity.flag("remote_control", true), value -> identity.setFlag("remote_control", value)));
         card.addView(ui.divider());
+        card.addView(toggleRow("Vis og styr skærmen fra PC'en",
+                "PC'en kan se din skærm og trykke, swipe og skrive med musen. Du skal sige ja "
+                        + "hver gang, og en besked viser det, mens det står på. Styring kræver "
+                        + "h4xtor share under Indstillinger → Tilgængelighed.",
+                identity.flag("screen_control", false), value -> {
+                    identity.setFlag("screen_control", value);
+                    if (!value && service != null) {
+                        service.stopMirror();
+                    }
+                }));
+        card.addView(ui.divider());
         card.addView(toggleRow("Batteri og signal på PC'en",
                 "PC'en viser, hvor meget strøm telefonen har, og siger til, når den skal lades op.",
                 identity.flag("share_status", true), value -> identity.setFlag("share_status", value)));
