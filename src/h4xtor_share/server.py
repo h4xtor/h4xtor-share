@@ -155,6 +155,9 @@ class ShareServer:
         # Finished file transfers (id -> size): a sender that lost our last answer (slow
         # Bluetooth, Wi-Fi switch) and tries again gets "complete", not a second copy.
         self.finished: dict[str, int] = {}
+        # The request writing each transfer's .part file. A paused or cut-off send can still
+        # be appending bytes the old connection had buffered when the sender resumes.
+        self.uploads: dict[str, asyncio.Task[Any]] = {}
         self.folders: dict[str, dict[str, Any]] = {}
         self.qr_secrets: dict[str, float] = {}
         self.capabilities: tuple[str, ...] = DESKTOP_CAPABILITIES
@@ -611,6 +614,14 @@ class ShareServer:
         )
         return web.json_response({"accepted": True, "address": address})
 
+    async def _stop_old_upload(self, transfer_id: str) -> None:
+        """End the earlier request still writing this transfer, so two never append to the
+        same .part file (a resumed send would otherwise be interleaved with the old one)."""
+        previous = self.uploads.pop(transfer_id, None)
+        if previous is not None and previous is not asyncio.current_task() and not previous.done():
+            previous.cancel()
+            await asyncio.wait({previous})
+
     async def file_init(self, request: web.Request) -> web.Response:
         peer_id, peer_name = self.authenticate(request)
         payload = await request.json()
@@ -627,6 +638,7 @@ class ShareServer:
 
         if self.finished.get(transfer_id) == total_size:
             return web.json_response({"transfer_id": transfer_id, "offset": total_size})
+        await self._stop_old_upload(transfer_id)  # so the offset below is final
         incoming = self.config.incoming_directory
         incoming.mkdir(parents=True, exist_ok=True)
         part_path = incoming / f".h4xtor-{transfer_id}.part"
@@ -662,6 +674,10 @@ class ShareServer:
             )
         if not transfer:
             raise web.HTTPNotFound(text="Transfer was not initialized.")
+        await self._stop_old_upload(transfer_id)
+        current = asyncio.current_task()
+        if current is not None:
+            self.uploads[transfer_id] = current
 
         part_path: Path = transfer["part_path"]
         actual_offset = part_path.stat().st_size if part_path.exists() else 0
@@ -709,6 +725,7 @@ class ShareServer:
             )
             del self.transfers[transfer_id]
             self.finished[transfer_id] = transfer["size"]
+            self.uploads.pop(transfer_id, None)
 
         return web.json_response(
             {

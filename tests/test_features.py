@@ -256,6 +256,56 @@ async def test_file_transfer_resumes_from_partial_offset(tmp_path: Path) -> None
 
 
 @pytest.mark.asyncio
+async def test_pause_and_quick_resume_never_mixes_the_bytes(tmp_path: Path) -> None:
+    """A paused send's old request can still be appending bytes its connection had buffered
+    when the sender resumes; the resumed bytes must not be interleaved with them."""
+    import asyncio
+
+    receiver_config = Config(tmp_path / "receiver" / "config.json")
+    receiver_config.data["device_name"] = "Receiver"
+    receiver_config.data["port"] = available_tcp_port()
+    receiver_config.data["incoming_directory"] = str(tmp_path / "received")
+    receiver_config.save()
+    certificate, key, fingerprint = ensure_certificate(
+        receiver_config.path.parent, receiver_config.device_name)
+    events: list[object] = []
+    server = ShareServer(receiver_config, server_ssl_context(certificate, key), fingerprint,
+                         events.append, host="127.0.0.1")
+    await server.start()
+    try:
+        sender_config = Config(tmp_path / "sender" / "config.json")
+        sender_config.data["device_name"] = "Sender"
+        sender_config.save()
+        client = PeerClient(sender_config)
+        peer = await client.get_info("127.0.0.1", receiver_config.port)
+        pairing = await client.request_pairing(peer)
+        prompt = next(event for event in events if isinstance(event, PairingPrompt))
+        await client.confirm_pairing(peer, str(pairing["pairing_id"]), prompt.code)
+
+        payload = bytes((i * 7) % 251 for i in range(6 * 1024 * 1024))
+        source = tmp_path / "paused.bin"
+        source.write_bytes(payload)
+        part = tmp_path / "received" / f".h4xtor-{'34' * 16}.part"
+        client._resumable[(peer.device_id, str(source.resolve()))] = "34" * 16
+        server.receive_delay = 0.05  # slow, so the old request is still writing when we resume
+        first = asyncio.create_task(client.send_file(peer, source, lambda _p: None))
+        for _ in range(200):
+            await asyncio.sleep(0.02)
+            if part.exists() and part.stat().st_size >= 512 * 1024:
+                break
+        first.cancel()  # "Pause"
+        with pytest.raises(asyncio.CancelledError):
+            await first
+        server.receive_delay = 0.0
+        await client.send_file(peer, source, lambda _p: None)  # "Fortsæt" right away
+
+        received = next(event for event in events if isinstance(event, FileReceived))
+        assert received.path.read_bytes() == payload
+    finally:
+        await server.stop()
+
+
+@pytest.mark.asyncio
 async def test_failed_send_is_remembered_for_resume(tmp_path: Path) -> None:
     sender_config = Config(tmp_path / "sender" / "config.json")
     sender_config.data["device_name"] = "Sender"

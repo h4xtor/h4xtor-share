@@ -13,6 +13,8 @@ Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 - Tænd/sluk-knapperne på PC'en er bløde og glatte ligesom de andre knapper.
 - Send-siden på PC'en er ryddet op: én "Tilføj enhed"-knap samler QR-kode, Wi-Fi-søgning, Bluetooth og IP-adresse, og dine enheder står kun ét sted (som fliser).
 - Kort, fliser og status-mærker har fået bløde, runde hjørner og et let glas-look.
+### Rettet
+- En fil, der blev sat på pause og fortsat hurtigt, kunne komme forkert frem på PC'en, fordi den gamle og den nye del blev skrevet oven i hinanden. Nu venter PC'en, til den gamle del er helt færdig.
 
 ## 1.5.1 – 2026-10-27
 ### Nyt
