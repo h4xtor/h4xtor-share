@@ -2279,8 +2279,6 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         content.addView(ui.label("Wi-Fi + 5G"), ui.margins(4, 0, 0, 8));
         content.addView(netShareCard(identity), ui.margins(0, 0, 0, 18));
 
-        content.addView(ui.label("Nørd-panel"), ui.margins(4, 0, 0, 8));
-        content.addView(nerdPanel(), ui.margins(0, 0, 0, 18));
 
         content.addView(ui.label("Forbundne enheder"), ui.margins(4, 0, 0, 8));
         LinearLayout paired = ui.card();
@@ -2333,7 +2331,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         TextView manual = ui.button("Tilføj enhed via IP-adresse", "ghost");
         manual.setOnClickListener(v -> addByIp());
         about.addView(manual, ui.margins(0, 10, 0, 0));
-        content.addView(about);
+        content.addView(about, ui.margins(0, 0, 0, 18));
+        // The technical corner comes last: speed test, addresses, ports.
+        content.addView(ui.label("Nørd-panel"), ui.margins(4, 0, 0, 8));
+        content.addView(nerdPanel());
     }
 
     private boolean hasMediaPermission() {
