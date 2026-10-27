@@ -27,6 +27,7 @@ final class ScreenshotCapture {
 
     /** The first frame can take several seconds on a slow phone right after the consent dialog. */
     private static final long TIMEOUT_MS = 15_000L;
+    private static final long NUDGE_MS = 2_500L;
 
     private ScreenshotCapture() {
     }
@@ -43,11 +44,13 @@ final class ScreenshotCapture {
         VirtualDisplay[] display = new VirtualDisplay[1];
 
         Runnable[] timeout = new Runnable[1];
+        Runnable[] nudge = new Runnable[1];
         java.util.function.BiConsumer<File, String> finish = (file, error) -> {
             if (!finished.compareAndSet(false, true)) {
                 return;
             }
             handler.removeCallbacks(timeout[0]);
+            handler.removeCallbacks(nudge[0]);
             if (display[0] != null) {
                 display[0].release();
             }
@@ -57,6 +60,15 @@ final class ScreenshotCapture {
             callback.done(file, error);
         };
         timeout[0] = () -> finish.accept(null, "Intet billede fra skærmen");
+        // A mirror only gets a frame when the screen is composed again; on a still screen that
+        // may never happen. Re-attaching the surface makes the system send the current one.
+        nudge[0] = () -> {
+            if (!finished.get() && display[0] != null) {
+                display[0].setSurface(null);
+                display[0].setSurface(reader.getSurface());
+                handler.postDelayed(nudge[0], NUDGE_MS);
+            }
+        };
 
         try {
             // Android 14+ requires a callback before the first virtual display.
@@ -82,6 +94,7 @@ final class ScreenshotCapture {
                     metrics.densityDpi, DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                     reader.getSurface(), null, handler);
             handler.postDelayed(timeout[0], TIMEOUT_MS);
+            handler.postDelayed(nudge[0], NUDGE_MS);
         } catch (Exception error) {
             finish.accept(null, H4xtorClient.safeMessage(error));
         }

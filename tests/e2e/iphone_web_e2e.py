@@ -118,8 +118,13 @@ def main() -> None:
             lambda: (incoming / "IMG_0042.jpg").exists() and (incoming / "Kvittering.pdf").exists(),
         )
         assert (incoming / "IMG_0042.jpg").read_bytes() == photo.read_bytes()
-        rows = [state for state in app.transfers.values() if state.peer_name == "iPhone"]
-        assert len(rows) == 2 and all(state.status == "done" for state in rows), rows
+
+        def rows() -> list:
+            return [state for state in app.transfers.values() if state.peer_name == "iPhone"]
+
+        # The files land before the app has processed the last progress event for them.
+        wait_until(app, "both uploads listed as done on the PC",
+                   lambda: len(rows()) == 2 and all(state.status == "done" for state in rows()))
         page_shot(page, "iphone-uploaded")
 
         # iPhone → PC: text and a link land on the PC clipboard.

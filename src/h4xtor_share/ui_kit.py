@@ -259,16 +259,16 @@ def glass_image(
         qy = abs(y + 0.5 - half_h) - (half_h - radius)
         left = [a + (b - a) * v for a, b in zip(corners[0], corners[2], strict=True)]
         right = [a + (b - a) * v for a, b in zip(corners[1], corners[3], strict=True)]
-        row = []
-        for x in range(width):
+
+        def pixel(x: int, qy: float = qy, v: float = v, base: list[float] = base,
+                  left: list[float] = left, right: list[float] = right) -> str:
             qx = abs(x + 0.5 - half_w) - (half_w - radius)
             d = math.hypot(max(qx, 0.0), max(qy, 0.0)) + min(max(qx, qy), 0.0) - radius
             cover = 0.5 - d
             u = (x + 0.5) / width
             back = [a + (b - a) * u for a, b in zip(left, right, strict=True)]
             if cover <= 0:
-                row.append("#" + "".join(_HEX[int(c)] for c in back))
-                continue
+                return "#" + "".join(_HEX[int(c)] for c in back)
             color = base
             if ring and d > -ring_width - 0.5:  # the outline, smoothed on its inner side
                 k = min(1.0, d + ring_width + 0.5)
@@ -278,7 +278,14 @@ def glass_image(
                 color = [a + (255 - a) * k for a in base]
             if cover < 1:
                 color = [b + (a - b) * cover for a, b in zip(color, back, strict=True)]
-            row.append("#" + "".join(_HEX[max(0, min(255, int(c)))] for c in color))
+            return "#" + "".join(_HEX[max(0, min(255, int(c)))] for c in color)
+
+        # Only the round ends need working out pixel by pixel: in between, every pixel of a
+        # row is the same (fully covered, same distance to the top and bottom edges).
+        edge = min(width // 2, int(radius) + 3)
+        middle = [pixel(width // 2)] * (width - 2 * edge)
+        row = [pixel(x) for x in range(edge)] + middle + [
+            pixel(x) for x in range(width - edge, width)]
         rows.append("{" + " ".join(row) + "}")
     image = tk.PhotoImage(master=master, width=width, height=height)
     image.put(" ".join(rows))
