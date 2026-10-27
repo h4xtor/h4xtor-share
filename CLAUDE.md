@@ -10,9 +10,10 @@ desktop app, an Android app and a Chrome extension. Everything is local; nothing
 - **Test everything before handing anything over.** He does not want near-finished apps.
   Design and every sharing function must work.
 - When waiting on CI or builds, check back after **at most 10 minutes**, and always report the status.
-  Every message sent while waiting starts with a digital-looking progress bar in inline code (monospace), 20 cells,
-  e.g. `▕████████████░░░░░░░░▏ 60%`
-  (estimate it from finished steps and how long CI jobs usually take).
+  No text progress bars in chat. Progress lives in the live-status artifact
+  https://claude.ai/artifact/B1o9t1UX1NCj4oM3pAzGe1: write its db doc `status/live`
+  (`task`, `from`, `to` in %, `since`/`eta` ISO times it glides between, `updated`, `note`,
+  `steps` = [{label, state: done|run|todo}]) at the start of a wait and at every check-in.
 - GitHub (`h4xtor/h4xtor-share`, branch `main`) is the source of truth. You may commit, push and tag.
 
 ## Working folder
