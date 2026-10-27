@@ -508,11 +508,16 @@ class Toggle(tk.Canvas):
         self.delete("all")
         c = self.theme.c
         track = c["accent"] if self.value else c["track"]
-        round_rect(self, 0, 0, self._tw, self._th, self._th / 2, fill=track, outline=track)
         margin = self.theme.px(3)
         diameter = self._th - 2 * margin
         x = self._tw - margin - diameter if self.value else margin
-        self.create_oval(x, margin, x + diameter, margin + diameter, fill="#FFFFFF", outline="")
+        # Smooth edges like the buttons: a glassy track and a soft white knob.
+        self._images = (
+            glass_image(self, self._tw, self._th, self._th / 2, track, self.cget("bg")),
+            glass_image(self, diameter, diameter, diameter / 2, "#FFFFFF", track, shine=False),
+        )
+        self.create_image(0, 0, image=self._images[0], anchor="nw")
+        self.create_image(x, margin, image=self._images[1], anchor="nw")
 
     def toggle(self) -> None:
         self.set(not self.value)

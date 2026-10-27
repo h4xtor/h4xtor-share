@@ -2631,6 +2631,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                 "PC'en kan få telefonen til at ringe, skifte lydstyrke, læse tekst højt og skifte baggrund. "
                         + "Skærmbilleder fra PC'en spørger altid dig først.",
                 identity.flag("remote_control", true), value -> identity.setFlag("remote_control", value)));
+        card.addView(ui.divider());
+        card.addView(toggleRow("Batteri og signal på PC'en",
+                "PC'en viser, hvor meget strøm telefonen har, og siger til, når den skal lades op.",
+                identity.flag("share_status", true), value -> identity.setFlag("share_status", value)));
         return card;
     }
 

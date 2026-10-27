@@ -285,6 +285,11 @@ class PeerClient:
         self._require(peer, "sms")
         await self._authed_post(peer, "/api/v1/sms/send", {"address": address, "text": text})
 
+    async def phone_status(self, peer: Peer) -> dict[str, Any]:
+        """Battery and signal: {"battery": 0-100, "charging", "network", "signal": 0-4 or -1}."""
+        self._require(peer, "phone-status")
+        return await self._authed_post(peer, "/api/v1/status", {}, timeout_seconds=6)
+
     async def request_screenshot(self, peer: Peer) -> None:
         self._require(peer, "screenshot-request")
         await self._authed_post(peer, "/api/v1/screenshot", {})

@@ -95,6 +95,34 @@ SEND_CONCURRENCY = 3
 MAX_TRANSFER_ROWS = 80
 QR_REFRESH_MS = 240_000
 
+LOW_BATTERY = 15
+
+
+def battery_text(state: dict[str, Any] | None) -> str:
+    """ "82 %", with a ⚡ while it charges; "" when the phone did not say."""
+    level = (state or {}).get("battery", -1)
+    if not isinstance(level, int) or level < 0:
+        return ""
+    return f"{level} %" + (" ⚡" if state.get("charging") else "")
+
+
+def phone_state_alert(
+    name: str, before: dict[str, Any] | None, now: dict[str, Any]
+) -> tuple[str, str] | None:
+    """What to tell the user about a phone's new battery state (message, tone), if anything:
+    once when it drops to LOW_BATTERY without a charger, once when it is full on one."""
+    level, charging = now.get("battery", -1), bool(now.get("charging"))
+    if not isinstance(level, int) or level < 0:
+        return None
+    was = before.get("battery", -1) if before else -1
+    was_charging = bool(before.get("charging")) if before else False
+    if level <= LOW_BATTERY and not charging and (was > LOW_BATTERY or was_charging or was < 0):
+        return f"{name} har kun {level} % strøm – sæt den til opladning", "danger"
+    if level >= 100 and charging and before is not None and (was < 100 or not was_charging):
+        return f"{name} er fuldt opladet", "success"
+    return None
+
+
 PLATFORM_LABELS = {
     "android": "Android",
     "windows": "Windows",
@@ -780,6 +808,8 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
 
         self.peers: dict[str, Peer] = {}
         self.peer_status: dict[str, PeerStatus] = {}
+        self.phone_state: dict[str, dict[str, Any]] = {}  # battery and signal per phone
+        self._phone_state_asked: dict[str, float] = {}
         self.peer_misses: dict[str, int] = {}
         self.device_cards: dict[str, DeviceCard] = {}
         self.selected_id: str | None = None
@@ -1621,7 +1651,8 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             way = {"wifi-direct": "Wi-Fi Direct", "bluetooth": "Bluetooth"}.get(
                 peer.transport, "Wi-Fi")
             ping = f" · {int(status.rtt_ms)} ms" if status and status.rtt_ms else ""
-            return way + ping
+            battery = battery_text(self.phone_state.get(peer.device_id))
+            return way + ping + (f" · {battery}" if battery else "")
 
         trusted.sort(key=lambda p: (0 if online(p) else 1, p.name.lower()))
         nodes = []
@@ -2587,6 +2618,16 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             side="left", padx=(px(6), 0)
         )
 
+        extras = section("Ekstra funktioner")
+        self._toggle_row(
+            extras.body,
+            "Telefonens batteri",
+            "Se batteri og opladning på dine telefoner, og få besked, når batteriet er ved at "
+            "løbe tør eller er fuldt opladet.",
+            self.config_store.get_flag("phone_status", True),
+            self._set_phone_status,
+        )
+
         behaviour = section("Opførsel")
         self._toggle_row(
             behaviour.body,
@@ -2791,6 +2832,13 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         except Exception:  # noqa: BLE001
             return False
 
+    def _set_phone_status(self, value: bool) -> None:
+        self.config_store.set_flag("phone_status", value)
+        if not value:
+            self.phone_state.clear()
+            self._phone_state_asked.clear()
+        self._refresh_hero()
+
     def _set_autostart(self, value: bool) -> None:
         try:
             integration.set_autostart(value)
@@ -2966,6 +3014,8 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             self._mark_batch(value, "cancelled")
         elif tag == "peer_status":
             self._update_peer_status(value)
+        elif tag == "phone_state":
+            self._update_phone_state(*value)
         elif tag == "status":
             self.status_var.set(value)
         elif tag == "clipboard_broadcast":
@@ -3322,6 +3372,19 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         self._reorder_cards()
         self._draw_drop_zone()
 
+    def _update_phone_state(self, device_id: str, state: dict[str, Any]) -> None:
+        """A phone's battery and signal came in: show it, and speak up when it runs low or
+        is fully charged (once each, not on every check)."""
+        peer = self.peers.get(device_id)
+        if peer is None or not self.config_store.get_flag("phone_status", True):
+            return
+        before = self.phone_state.get(device_id)
+        self.phone_state[device_id] = state
+        message = phone_state_alert(peer.name, before, state)
+        if message:
+            self._notify(*message)
+        self._refresh_hero()
+
     def _update_peer_status(self, status: PeerStatus) -> None:
         peer = self.peers.get(status.device_id)
         if peer is None:
@@ -3369,6 +3432,16 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
                 self.event_queue.put(("peer_status", PeerStatus(peer.device_id, True, result)))
         if not any(not isinstance(result, BaseException) for result in results):
             self.event_queue.put(("bt_maybe", None))  # nothing online: look on Bluetooth
+        if self.config_store.get_flag("phone_status", True):
+            now = time.monotonic()
+            for peer, result in zip(peers, results, strict=True):
+                if (isinstance(result, BaseException) or not peer.supports("phone-status")
+                        or now - self._phone_state_asked.get(peer.device_id, -1e9) < 60):
+                    continue
+                self._phone_state_asked[peer.device_id] = now
+                with contextlib.suppress(Exception):  # switched off on the phone, or gone
+                    state = await self.client.phone_status(peer)
+                    self.event_queue.put(("phone_state", (peer.device_id, state)))
         # On Bluetooth: as soon as the phone answers on Wi-Fi again, go back to the faster path.
         for device_id, before in list(self._bt_before.items()):
             if device_id in self._bt_bridges:

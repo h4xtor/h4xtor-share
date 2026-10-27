@@ -293,6 +293,9 @@ def v12_checks(desktop: Desktop, phone: Peer) -> None:
     assert desktop.run(desktop.client.set_volume(phone, 40)) in range(30, 51)
     desktop.run(desktop.client.speak(phone, "Hej fra PC'en"))
     ok("remote volume and read-aloud")
+    state = desktop.run(desktop.client.phone_status(phone))
+    assert 0 <= state["battery"] <= 100 and state["network"], state
+    ok(f"battery and signal on the PC ({state['battery']} %, {state['network']})")
 
     # ---- Screenshot on demand: the user allows it, the PNG lands on the PC -----
     desktop.events.clear()
