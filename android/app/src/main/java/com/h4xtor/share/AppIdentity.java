@@ -29,7 +29,7 @@ public final class AppIdentity {
             "clipboard", "files", "resume", "folders", "links", "mutual-pair", "qr-pair",
             "unpair", "wifi-direct-host", "notifications", "sms", "screenshot-request",
             "find-phone", "remote-control", "bluetooth", "wifi-direct-pc", "net-gateway",
-            "phone-status"
+            "phone-status", "screen-mirror"
     };
     private static final String PREFS = "h4xtor_share";
     // v1: EC P-256. The original RSA key only allowed PKCS#1 signatures, which TLS 1.3

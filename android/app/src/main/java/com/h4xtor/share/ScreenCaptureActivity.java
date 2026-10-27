@@ -11,14 +11,15 @@ import android.widget.Toast;
  * screenshot, then hands the result to {@link ShareService}.
  */
 public final class ScreenCaptureActivity extends Activity {
+    static final String EXTRA_MIRROR = "mirror";
     private static final int REQUEST_CAPTURE = 7001;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         ShareService service = ShareService.get();
-        if (service == null || !service.hasScreenshotRequest()) {
-            Toast.makeText(this, "Anmodningen om skærmbillede er udløbet", Toast.LENGTH_SHORT).show();
+        if (service == null || !service.hasCaptureRequest(getIntent().getBooleanExtra(EXTRA_MIRROR, false))) {
+            Toast.makeText(this, "Anmodningen om at se skærmen er udløbet", Toast.LENGTH_SHORT).show();
             finish();
             return;
         }
@@ -40,7 +41,9 @@ public final class ScreenCaptureActivity extends Activity {
         if (requestCode == REQUEST_CAPTURE) {
             ShareService service = ShareService.get();
             if (service != null) {
-                if (resultCode == RESULT_OK && data != null) {
+                if (resultCode == RESULT_OK && data != null && getIntent().getBooleanExtra(EXTRA_MIRROR, false)) {
+                    service.startMirror(resultCode, data);
+                } else if (resultCode == RESULT_OK && data != null) {
                     service.startScreenCapture(resultCode, data);
                 } else {
                     service.screenshotDeclined();

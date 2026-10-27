@@ -90,6 +90,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     public static final String ACTION_STOP = "com.h4xtor.share.STOP";
     public static final String ACTION_START = "com.h4xtor.share.START";
     public static final String ACTION_FIND_STOP = "com.h4xtor.share.FIND_STOP";
+    public static final String ACTION_MIRROR_STOP = "com.h4xtor.share.MIRROR_STOP";
     /** Carries shared URIs so their read grant lives as long as the service. */
     public static final String ACTION_HOLD = "com.h4xtor.share.HOLD";
 
@@ -100,6 +101,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     private static final int NOTIFICATION_TRANSFERS = 2;
     private static final int NOTIFICATION_SCREENSHOT = 201;
     private static final int NOTIFICATION_PC_WIFI = 202;
+    private static final int NOTIFICATION_MIRROR = 203;
     private static final long SCREENSHOT_REQUEST_TTL_MS = 5 * 60_000L;
     private static final int CLIPBOARD_SUPPRESS_MS = 3000;
     private static final long WIFI_DIRECT_IDLE_MS = 10 * 60_000L;
@@ -205,6 +207,9 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     private NetGateway gateway;
     private volatile String screenshotPeerId;
     private volatile long screenshotRequestedAt;
+    private volatile String mirrorPeerId;  // a PC waiting for "Start" to see the screen
+    private volatile boolean mirrorPng;
+    private volatile ScreenMirror mirror;
     private NotificationManager notifications;
     private ClipboardManager clipboard;
     private ClipboardManager.OnPrimaryClipChangedListener clipListener;
@@ -307,6 +312,10 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         }
         if (intent != null && ACTION_FIND_STOP.equals(intent.getAction())) {
             remote.stopFind();
+            return START_STICKY;
+        }
+        if (intent != null && ACTION_MIRROR_STOP.equals(intent.getAction())) {
+            stopMirror();
             return START_STICKY;
         }
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
@@ -1421,6 +1430,12 @@ public final class ShareService extends Service implements H4xtorServer.Listener
                 .put("charging", charging).put("network", network).put("signal", signal);
     }
 
+    private void requireMirror() throws H4xtorServer.HttpError {
+        if (!identity.flag("screen_control", false)) {
+            throw new H4xtorServer.HttpError(403, "\"Vis og styr skærmen fra PC'en\" er slået fra på telefonen.");
+        }
+    }
+
     private void requireRemote() throws H4xtorServer.HttpError {
         if (!remote.enabled(identity)) {
             throw new H4xtorServer.HttpError(403, "Fjernbetjening er slået fra på telefonen.");
@@ -1437,6 +1452,41 @@ public final class ShareService extends Service implements H4xtorServer.Listener
                 }
                 NotificationMirrorService.perform(
                         body.optString("key", ""), body.optString("action", ""), body.optString("text", ""));
+                return ok();
+            case "/api/v1/mirror/start":
+                requireMirror();
+                if (mirror != null && mirror.active()) {
+                    return new JSONObject().put("active", true);
+                }
+                mirrorPng = "png".equals(body.optString("format"));
+                requestCapture(peerId, true);
+                return new JSONObject().put("accepted", true);
+            case "/api/v1/mirror/frame": {
+                requireMirror();
+                ScreenMirror live = mirror;
+                if (live == null || !live.active()) {
+                    return new JSONObject().put("active", false).put("waiting", hasCaptureRequest(true));
+                }
+                Object[] newest = live.await(body.optInt("after", 0), Math.min(2000, body.optLong("wait_ms", 1500)));
+                byte[] image = (byte[]) newest[1];
+                return new JSONObject().put("active", true).put("seq", newest[0])
+                        .put("width", live.width).put("height", live.height)
+                        .put("format", live.png ? "png" : "jpeg")
+                        .put("image", image == null ? "" : android.util.Base64.encodeToString(image, android.util.Base64.NO_WRAP));
+            }
+            case "/api/v1/mirror/input": {
+                requireMirror();
+                if (mirror == null || !mirror.active()) {
+                    throw new H4xtorServer.HttpError(409, "Skærmdelingen er ikke startet.");
+                }
+                String error = CopyWatchService.perform(body);
+                if (error != null) {
+                    throw new H4xtorServer.HttpError(409, error);
+                }
+                return ok();
+            }
+            case "/api/v1/mirror/stop":
+                stopMirror();
                 return ok();
             case "/api/v1/status":
                 if (!identity.flag("share_status", true)) {
@@ -1545,13 +1595,26 @@ public final class ShareService extends Service implements H4xtorServer.Listener
 
     // ------------------------------------------------- screenshot on demand
     private void requestScreenshot(String peerId) {
-        screenshotPeerId = peerId;
+        requestCapture(peerId, false);
+    }
+
+    /** A PC wants a screenshot, or (mirror) to see the screen live: ask the user first. */
+    private void requestCapture(String peerId, boolean live) {
+        if (live) {
+            mirrorPeerId = peerId;
+        } else {
+            screenshotPeerId = peerId;
+        }
         screenshotRequestedAt = SystemClock.elapsedRealtime();
-        Intent consent = new Intent(this, ScreenCaptureActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        Intent consent = new Intent(this, ScreenCaptureActivity.class)
+                .putExtra(ScreenCaptureActivity.EXTRA_MIRROR, live)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         // Android often blocks activities started from the background, so the tap-able
         // notification is always posted too; the activity removes it when it opens.
-        notifyEvent(NOTIFICATION_SCREENSHOT, "PC'en vil tage et skærmbillede – tryk for at tillade",
-                "Du bliver spørgt, om skærmen må deles én gang.",
+        notifyEvent(NOTIFICATION_SCREENSHOT, live ? "PC'en vil se din skærm – tryk for at tillade"
+                        : "PC'en vil tage et skærmbillede – tryk for at tillade",
+                live ? "Du bliver spørgt, om skærmen må deles, til du stopper den."
+                        : "Du bliver spørgt, om skærmen må deles én gang.",
                 PendingIntent.getActivity(this, 5, consent,
                         PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
         main.post(() -> {
@@ -1563,14 +1626,15 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         });
     }
 
-    /** True while a PC is waiting for the user to allow a screenshot. */
-    boolean hasScreenshotRequest() {
-        return screenshotPeerId != null
+    /** True while a PC is waiting for the user to allow a screenshot (or the live screen). */
+    boolean hasCaptureRequest(boolean live) {
+        return (live ? mirrorPeerId : screenshotPeerId) != null
                 && SystemClock.elapsedRealtime() - screenshotRequestedAt < SCREENSHOT_REQUEST_TTL_MS;
     }
 
     void screenshotDeclined() {
         screenshotPeerId = null;
+        mirrorPeerId = null;
         notifications.cancel(NOTIFICATION_SCREENSHOT);
         message("Skærmbilledet blev ikke delt", false);
     }
@@ -1579,7 +1643,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     void startScreenCapture(int resultCode, Intent data) {
         String peerId = screenshotPeerId;
         notifications.cancel(NOTIFICATION_SCREENSHOT);
-        if (peerId == null || !hasScreenshotRequest()) {
+        if (peerId == null || !hasCaptureRequest(false)) {
             screenshotPeerId = null;
             return;
         }
@@ -1604,6 +1668,52 @@ public final class ShareService extends Service implements H4xtorServer.Listener
                 finishScreenshot(peerId, null, H4xtorClient.safeMessage(error));
             }
         }, 600);
+    }
+
+    /** The user allowed the live screen: mirror it until the PC or the user stops it. */
+    void startMirror(int resultCode, Intent data) {
+        String peerId = mirrorPeerId;
+        mirrorPeerId = null;
+        notifications.cancel(NOTIFICATION_SCREENSHOT);
+        if (peerId == null) {
+            return;
+        }
+        try {
+            startForeground(NOTIFICATION_SERVICE, buildServiceNotification(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+                            | ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION);
+            MediaProjection projection = getSystemService(MediaProjectionManager.class)
+                    .getMediaProjection(resultCode, data);
+            mirror = new ScreenMirror(projection, mirrorPng, () -> main.post(this::stopMirror));
+        } catch (Exception error) {
+            message("Skærmdeling mislykkedes: " + H4xtorClient.safeMessage(error), true);
+            startForegroundCompat();
+            return;
+        }
+        Peer viewer = peer(peerId);
+        // Always visible while a PC sees (and may steer) the screen; one tap stops it.
+        notifyEvent(NOTIFICATION_MIRROR, (viewer == null ? "PC'en" : viewer.name) + " ser din skærm",
+                "Tryk her for at stoppe skærmdelingen.",
+                PendingIntent.getService(this, 6, new Intent(this, ShareService.class).setAction(ACTION_MIRROR_STOP),
+                        PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+        changed();
+    }
+
+    void stopMirror() {
+        ScreenMirror live = mirror;
+        mirror = null;
+        if (live != null) {
+            live.stop();
+            notifications.cancel(NOTIFICATION_MIRROR);
+            startForegroundCompat(); // drop the mediaProjection type again
+            message("Skærmdelingen er stoppet", false);
+            changed();
+        }
+    }
+
+    public boolean mirroring() {
+        ScreenMirror live = mirror;
+        return live != null && live.active();
     }
 
     private void finishScreenshot(String peerId, File file, String error) {

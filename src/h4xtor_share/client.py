@@ -290,6 +290,27 @@ class PeerClient:
         self._require(peer, "phone-status")
         return await self._authed_post(peer, "/api/v1/status", {}, timeout_seconds=6)
 
+    # The phone's screen, live (capability "screen-mirror"). shortcut: one HTTPS request per
+    # frame (~5-8 a second on Wi-Fi); a streaming response would be smoother if needed.
+    async def mirror_start(self, peer: Peer, image_format: str = "jpeg") -> dict[str, Any]:
+        self._require(peer, "screen-mirror")
+        return await self._authed_post(peer, "/api/v1/mirror/start", {"format": image_format})
+
+    async def mirror_frame(self, peer: Peer, after: int) -> dict[str, Any]:
+        """The newest frame after ``after``: {active, waiting, seq, width, height, format,
+        image (base64)}; the phone holds the request up to 1.5 s for a new one."""
+        self._require(peer, "screen-mirror")
+        return await self._authed_post(peer, "/api/v1/mirror/frame",
+                                       {"after": after, "wait_ms": 1500}, timeout_seconds=8)
+
+    async def mirror_input(self, peer: Peer, action: dict[str, Any]) -> None:
+        """A tap, swipe, back/home/recents or text on the phone (x/y as screen fractions)."""
+        self._require(peer, "screen-mirror")
+        await self._authed_post(peer, "/api/v1/mirror/input", action, timeout_seconds=6)
+
+    async def mirror_stop(self, peer: Peer) -> None:
+        await self._authed_post(peer, "/api/v1/mirror/stop", {}, timeout_seconds=6)
+
     async def request_screenshot(self, peer: Peer) -> None:
         self._require(peer, "screenshot-request")
         await self._authed_post(peer, "/api/v1/screenshot", {})

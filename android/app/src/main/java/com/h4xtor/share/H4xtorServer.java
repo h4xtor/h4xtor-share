@@ -374,7 +374,11 @@ public final class H4xtorServer {
             case "POST /api/v1/remote/speak":
             case "POST /api/v1/wifi-direct/pc-offer":
             case "POST /api/v1/net/status":
-            case "POST /api/v1/status": {
+            case "POST /api/v1/status":
+            case "POST /api/v1/mirror/start":
+            case "POST /api/v1/mirror/frame":
+            case "POST /api/v1/mirror/input":
+            case "POST /api/v1/mirror/stop": {
                 JSONObject body = readJsonBody(request, input);
                 sendJson(output, 200, command(auth, path, body));
                 return;
