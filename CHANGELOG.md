@@ -13,6 +13,7 @@ Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 - Lukker du appen, kører internettet helt normalt videre uden den.
 ### Forbedret
 - Aben hopper nu, mens der sendes eller modtages – både på PC'en og på telefonens forside. Den lander igen, når alt er ovre.
+- Trykker du på aben (med fingeren eller musen), åbner den munden og spidser ører.
 
 ## 1.3.4 – 2026-10-21
 ### Forbedret

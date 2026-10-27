@@ -641,8 +641,9 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private android.widget.ImageView monkey() {
         if (monkeyView == null) {
             monkeyView = new android.widget.ImageView(this);
-            monkeyView.setImageResource(R.drawable.ic_monkey);
+            monkeyView.setImageResource(R.drawable.ic_monkey_tap);
             monkeyView.setContentDescription("H4xtor Share-aben");
+            monkeyView.setOnClickListener(v -> grin());
         } else if (monkeyView.getParent() instanceof ViewGroup) {
             ((ViewGroup) monkeyView.getParent()).removeView(monkeyView);
         }
@@ -662,6 +663,16 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             monkeyView.setTranslationY(0f);
         }
         return monkeyView;
+    }
+
+    /** Tapped: the mascot opens its mouth and perks up its ears, once. */
+    private void grin() {
+        if (monkeyView.getDrawable() instanceof android.graphics.drawable.AnimatedVectorDrawable) {
+            android.graphics.drawable.AnimatedVectorDrawable grin =
+                    (android.graphics.drawable.AnimatedVectorDrawable) monkeyView.getDrawable();
+            grin.stop();  // a second tap restarts it instead of being swallowed
+            grin.start();
+        }
     }
 
     private EditText composerInput() {

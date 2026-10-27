@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The smile deepens and fills in, so it reads as an open mouth, then closes again. -->
+<set xmlns:android="http://schemas.android.com/apk/res/android">
+    <objectAnimator
+        android:propertyName="pathData"
+        android:valueFrom="M41,67Q50,75 59,67"
+        android:valueTo="M40,65Q50,86 60,65"
+        android:valueType="pathType"
+        android:duration="220"
+        android:repeatCount="1"
+        android:repeatMode="reverse"
+        android:interpolator="@android:interpolator/accelerate_decelerate" />
+    <objectAnimator
+        android:propertyName="fillColor"
+        android:valueFrom="#003B2A20"
+        android:valueTo="#FF3B2A20"
+        android:valueType="colorType"
+        android:duration="220"
+        android:repeatCount="1"
+        android:repeatMode="reverse" />
+</set>

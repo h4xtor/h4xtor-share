@@ -860,6 +860,8 @@ class Monkey(tk.Canvas):
 
     # One hop: fraction of the widget height the monkey is lifted, then a short rest.
     HOP = (0.0, 0.05, 0.085, 0.1, 0.085, 0.05, 0.0, 0.0, 0.0)
+    # One tap: how wide the mouth is open and how much bigger the ears are (0–1).
+    GRIN = (0.4, 0.8, 1.0, 1.0, 1.0, 0.75, 0.4, 0.0)
 
     def __init__(self, parent: tk.Misc, theme: Theme, size: int = 64) -> None:
         super().__init__(
@@ -871,7 +873,14 @@ class Monkey(tk.Canvas):
         self._step = 0
         self._offset = 0.0
         self._pending: str | None = None
-        self._draw(size / 100.0)
+        self._scale = size / 100.0
+        self._ears: list[tuple[int, float, float, float]] = []
+        self._mouth = 0
+        self._grin_step = len(self.GRIN)
+        self._grin_pending: str | None = None
+        self._draw(self._scale)
+        self.configure(cursor="hand2")
+        self.bind("<Button-1>", self._tapped)
 
     def set_busy(self, busy: bool) -> None:
         """Hop while something is being sent or received; land again when it stops."""
@@ -900,13 +909,47 @@ class Monkey(tk.Canvas):
         except tk.TclError:  # the window closed mid-hop
             self._hopping = False
 
-    def _circle(self, x: float, y: float, r: float, s: float, fill: str) -> None:
-        self.create_oval((x - r) * s, (y - r) * s, (x + r) * s, (y + r) * s, fill=fill, outline="")
+    def _tapped(self, _event: tk.Event) -> None:
+        """Tap or click: the monkey opens its mouth and perks up its ears."""
+        self._grin_step = 0
+        if self._grin_pending is None:
+            self._grin()
+
+    def _grin(self) -> None:
+        try:
+            self._grin_pending = None
+            if self._grin_step >= len(self.GRIN):
+                return
+            self._set_face(self.GRIN[self._grin_step])
+            self._grin_step += 1
+            self._grin_pending = self.after(55, self._grin)
+        except tk.TclError:  # the window closed mid-grin
+            self._grin_pending = None
+
+    def _set_face(self, factor: float) -> None:
+        s = self._scale
+        dy = -self._offset  # the hop moved every shape; these coords are absolute
+        for item, x, y, r in self._ears:
+            # 0.14 sideways: more and the outer ear would be clipped by the widget edge.
+            wide, tall = r * (1 + 0.14 * factor), r * (1 + 0.35 * factor)
+            self.coords(
+                item, (x - wide) * s, (y - tall) * s + dy, (x + wide) * s, (y + tall) * s + dy
+            )
+        self.coords(self._mouth, 40 * s, 58 * s + dy, 60 * s, (74 + 12 * factor) * s + dy)
+        if factor > 0.15:  # a filled chord reads as an open mouth, the plain arc as a smile
+            self.itemconfigure(self._mouth, style="chord", fill=self.DARK)
+        else:
+            self.itemconfigure(self._mouth, style="arc", fill="")
+
+    def _circle(self, x: float, y: float, r: float, s: float, fill: str) -> int:
+        return self.create_oval(
+            (x - r) * s, (y - r) * s, (x + r) * s, (y + r) * s, fill=fill, outline=""
+        )
 
     def _draw(self, s: float) -> None:
         for x in (16, 84):  # ears
-            self._circle(x, 50, 14, s, self.BROWN)
-            self._circle(x, 50, 8, s, self.INNER)
+            for r, fill in ((14, self.BROWN), (8, self.INNER)):
+                self._ears.append((self._circle(x, 50, r, s, fill), x, 50, r))
         self._circle(50, 50, 33, s, self.BROWN)  # head
         self.create_line(44 * s, 19 * s, 50 * s, 11 * s, 55 * s, 18 * s, fill=self.BROWN,
                          width=max(2, 4 * s), smooth=True, capstyle="round")
@@ -918,5 +961,5 @@ class Monkey(tk.Canvas):
             self._circle(x + 1.4, 43.4, 1.4, s, "#FFFFFF")
         for x in (46, 54):  # nostrils
             self._circle(x, 60, 1.6, s, self.DARK)
-        self.create_arc(40 * s, 58 * s, 60 * s, 74 * s, start=200, extent=140, style="arc",
-                        outline=self.DARK, width=max(1.5, 2.6 * s))
+        self._mouth = self.create_arc(40 * s, 58 * s, 60 * s, 74 * s, start=200, extent=140,
+                                      style="arc", outline=self.DARK, width=max(1.5, 2.6 * s))

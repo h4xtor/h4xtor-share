@@ -203,6 +203,35 @@ def test_monkey_hops_while_busy_and_lands_again() -> None:
         root.destroy()
 
 
+def test_monkey_opens_mouth_and_ears_on_click() -> None:
+    import tkinter as tk
+
+    from h4xtor_share.ui_kit import Monkey, Theme
+
+    try:
+        root = tk.Tk()
+    except tk.TclError as error:
+        pytest.skip(f"Tk unavailable: {error}".splitlines()[0])
+    try:
+        monkey = Monkey(root, Theme(root, dark=False), size=100)
+        monkey.pack()
+        root.update()  # an unmapped widget gets no mouse events
+        ear, mouth = monkey._ears[0][0], monkey._mouth
+        ear_at_rest = monkey.coords(ear)
+        mouth_at_rest = monkey.coords(mouth)
+        monkey.event_generate("<Button-1>", x=10, y=10)  # a click, as the user does it
+        monkey._grin()
+        assert monkey.coords(ear)[3] > ear_at_rest[3]  # taller ears
+        assert monkey.coords(mouth)[3] > mouth_at_rest[3]  # mouth open
+        assert monkey.itemcget(mouth, "style") == "chord"
+        for _ in monkey.GRIN:
+            monkey._grin()
+        assert monkey.coords(ear) == ear_at_rest
+        assert monkey.itemcget(mouth, "style") == "arc"
+    finally:
+        root.destroy()
+
+
 @pytest.mark.skipif(
     not _can_build_ui(),
     reason="Tk/tkdnd display server unavailable",
