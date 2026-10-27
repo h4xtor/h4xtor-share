@@ -1384,3 +1384,110 @@ def test_menu_groups_and_connections_page() -> None:
         assert app.direct_status.winfo_toplevel() is app
     finally:
         app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_every_button_and_menu_entry_runs(tmp_path, monkeypatch) -> None:
+    """Press every button on every page (and in the dialogs they open) and run every
+    entry of the menus they show: none may raise. Pickers return nothing."""
+    import time
+    import tkinter as tk
+    import tkinter.filedialog as filedialog
+
+    from h4xtor_share import app as app_module
+    from h4xtor_share.models import TransferProgress
+    from h4xtor_share.ui_kit import Button
+
+    for name in ("askopenfilenames", "askopenfilename", "asksaveasfilename"):
+        monkeypatch.setattr(filedialog, name, lambda **_k: "")
+    monkeypatch.setattr(filedialog, "askdirectory", lambda **_k: "")
+    monkeypatch.setattr(app_module, "open_path", lambda *_a, **_k: None)
+    monkeypatch.setattr(app_module, "reveal_in_folder", lambda *_a, **_k: None)
+    monkeypatch.setattr("webbrowser.open", lambda *_a, **_k: True)
+    app, peers = _paired_app(1, tmp_path, monkeypatch, ("notifications", "sms", "remote-control"))
+    problems: list[str] = []
+    app.report_callback_exception = lambda *exc: problems.append(f"Tk callback: {exc[1]!r}")
+    phone = peers[0]
+    app._update_transfer(TransferProgress("a" * 32, "x.bin", 5, 10, "send", peer_name=phone.name))
+    picture = tmp_path / "photo.jpg"
+    picture.write_bytes(b"x" * 100)
+    app.history.record_received_file(phone, picture.name, 100, str(picture))
+    app.history.record_received_text(phone, "https://example.com")
+    app.history.record_sent_file(phone, picture.name, 100, str(picture))
+    app._refresh_history()
+
+    def settle(seconds: float = 0.05) -> None:
+        end = time.time() + seconds
+        while time.time() < end:
+            app.update()
+            time.sleep(0.01)
+
+    def dialogs() -> list[tk.Toplevel]:
+        return [w for w in app.winfo_children() if isinstance(w, tk.Toplevel)]
+
+    def buttons_in(widget: tk.Misc) -> list[Button]:
+        found = []
+        for child in widget.winfo_children():
+            if isinstance(child, Button):
+                found.append(child)
+            found.extend(buttons_in(child))
+        return found
+
+    def press(button: Button, where: str) -> bool:
+        if not button.winfo_exists() or not button.enabled or button.command is None:
+            return False
+        try:
+            button.command()
+        except Exception as error:  # noqa: BLE001 - collected and reported below
+            problems.append(f"{where} {button._text or button._icon!r}: {error!r}")
+        settle()
+        return True
+
+    menu_entries: list[str] = []
+
+    def run_menu(menu: tk.Menu, _x: int, _y: int, _entry: str = "") -> None:
+        last = menu.index("end")
+        for index in range(0 if last is None else last + 1):
+            if menu.type(index) != "command":
+                continue
+            label = menu.entrycget(index, "label")
+            try:
+                menu.invoke(index)
+            except Exception as error:  # noqa: BLE001
+                problems.append(f"menu {label!r}: {error!r}")
+            menu_entries.append(label)
+            settle()
+            for dialog in dialogs():
+                dialog.destroy()
+
+    monkeypatch.setattr(tk.Menu, "tk_popup", run_menu)
+    pressed = 0
+    try:
+        settle(0.3)
+        for name in list(app.pages):
+            app.show_page(name)
+            settle()
+            for button in buttons_in(app.pages[name]):
+                label = button._text or button._icon
+                if not press(button, f"{name}:"):
+                    continue
+                pressed += 1
+                for dialog in dialogs():  # one level down: the dialog it opened
+                    for inner in buttons_in(dialog):
+                        pressed += press(inner, f"{name}: dialog from {label!r}:")
+                        for extra in dialogs():
+                            if extra is not dialog:
+                                extra.destroy()
+                for dialog in dialogs():
+                    dialog.destroy()
+                app.show_page(name)
+        for button in buttons_in(app.sidebar):
+            pressed += press(button, "menu:")
+            for dialog in dialogs():
+                dialog.destroy()
+        settle(0.3)
+    finally:
+        monkeypatch.undo()
+        app.close()
+    assert not problems, "\n".join(problems)
+    assert pressed > 40 and len(menu_entries) > 10, (pressed, menu_entries)
