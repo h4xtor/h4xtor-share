@@ -65,7 +65,7 @@ gradle -p android testDebugUnitTest lintDebug assembleDebug
    a `.sha256` per binary and `CHANGELOG.md` (fixed names: the in-app updater looks for them), and uses
    the changelog entry as release notes.
 
-The latest release is **v1.5.0**. Without tag-push rights, start a release from Actions → Release → Run workflow (tag input).
+The latest release is **v1.6.0**. Without tag-push rights, start a release from Actions → Release → Run workflow (tag input).
 
 
 ## Lennart's wish list (build in this order, one release each)
