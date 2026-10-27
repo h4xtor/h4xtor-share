@@ -1,15 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- h4xtor share's monkey mascot (original artwork, vector). -->
+<!-- h4xtor share's monkey mascot (original artwork, vector).
+     The ear groups and the mouth are named so ic_monkey_tap.xml can animate them. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="96dp"
     android:height="96dp"
     android:viewportWidth="100"
     android:viewportHeight="100">
+    <!-- pointing arm: invisible until ic_monkey_point.xml fades it in, and behind the head -->
+    <group android:name="arm">
+        <path android:name="armLine" android:strokeColor="#8B5A3C" android:strokeWidth="8"
+            android:strokeLineCap="round" android:strokeAlpha="0"
+            android:fillColor="#00000000" android:pathData="M44,74L26,84" />
+        <path android:name="armHand" android:fillColor="#8B5A3C" android:fillAlpha="0"
+            android:pathData="M20.5,84a5.5,5.5 0 1,0 11,0a5.5,5.5 0 1,0 -11,0" />
+    </group>
     <!-- ears -->
-    <path android:fillColor="#8B5A3C" android:pathData="M2,50a14,14 0 1,0 28,0a14,14 0 1,0 -28,0" />
-    <path android:fillColor="#E9B98F" android:pathData="M8,50a8,8 0 1,0 16,0a8,8 0 1,0 -16,0" />
-    <path android:fillColor="#8B5A3C" android:pathData="M70,50a14,14 0 1,0 28,0a14,14 0 1,0 -28,0" />
-    <path android:fillColor="#E9B98F" android:pathData="M76,50a8,8 0 1,0 16,0a8,8 0 1,0 -16,0" />
+    <group android:name="earLeft" android:pivotX="16" android:pivotY="50">
+        <path android:fillColor="#8B5A3C" android:pathData="M2,50a14,14 0 1,0 28,0a14,14 0 1,0 -28,0" />
+        <path android:fillColor="#E9B98F" android:pathData="M8,50a8,8 0 1,0 16,0a8,8 0 1,0 -16,0" />
+    </group>
+    <group android:name="earRight" android:pivotX="84" android:pivotY="50">
+        <path android:fillColor="#8B5A3C" android:pathData="M70,50a14,14 0 1,0 28,0a14,14 0 1,0 -28,0" />
+        <path android:fillColor="#E9B98F" android:pathData="M76,50a8,8 0 1,0 16,0a8,8 0 1,0 -16,0" />
+    </group>
     <!-- head + tuft -->
     <path android:fillColor="#8B5A3C" android:pathData="M17,50a33,33 0 1,0 66,0a33,33 0 1,0 -66,0" />
     <path android:strokeColor="#8B5A3C" android:strokeWidth="4" android:strokeLineCap="round"
@@ -26,6 +39,7 @@
     <!-- nose + smile -->
     <path android:fillColor="#3B2A20" android:pathData="M44.4,60a1.6,1.6 0 1,0 3.2,0a1.6,1.6 0 1,0 -3.2,0" />
     <path android:fillColor="#3B2A20" android:pathData="M52.4,60a1.6,1.6 0 1,0 3.2,0a1.6,1.6 0 1,0 -3.2,0" />
-    <path android:strokeColor="#3B2A20" android:strokeWidth="2.6" android:strokeLineCap="round"
-        android:fillColor="#00000000" android:pathData="M41,67Q50,75 59,67" />
+    <path android:name="mouth" android:strokeColor="#3B2A20" android:strokeWidth="2.6"
+        android:strokeLineCap="round" android:fillColor="#00000000"
+        android:pathData="M41,67Q50,75 59,67" />
 </vector>

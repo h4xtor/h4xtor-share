@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Look, a new device": the mascot points at the list, then tucks the arm away. -->
+<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@drawable/ic_monkey">
+    <target android:name="arm" android:animation="@animator/monkey_arm_jab" />
+    <target android:name="armLine" android:animation="@animator/monkey_arm_line" />
+    <target android:name="armHand" android:animation="@animator/monkey_arm_hand" />
+</animated-vector>

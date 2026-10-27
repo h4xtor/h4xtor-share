@@ -307,6 +307,7 @@ class PhonePagesMixin:
         c = self.theme.c
         if item.icon_png:
             try:
+                # master=parent: the icon belongs to this window, not to Tk's default root.
                 photo = tk.PhotoImage(master=parent, data=base64.b64encode(item.icon_png))
                 factor = max(1, -(-photo.width() // size))
                 if factor > 1:
@@ -330,7 +331,7 @@ class PhonePagesMixin:
     def _notif_build(self, item: NotifEntry, before: tk.Widget | None = None) -> None:
         c = self.theme.c
         px = self.theme.px
-        card = Card(self.notif_scroll.inner, self.theme, padding=14, radius=12)
+        card = Card(self.notif_scroll.inner, self.theme, padding=14)
         if before is not None:
             card.pack(fill="x", pady=(0, px(10)), before=before)
         else:
@@ -731,7 +732,7 @@ class PhonePagesMixin:
             longest = max((body_font.measure(line) for line in text.split("\n")), default=0)
             text_width = min(max_text, longest + px(4))
             fill = c["accent"] if outgoing else c["card"]
-            card = Card(row, self.theme, padding=10, radius=14, fill=fill)
+            card = Card(row, self.theme, padding=10, fill=fill)
             card.configure(width=text_width + 2 * px(10))
             card.pack(side="right" if outgoing else "left")
             tk.Label(

@@ -35,6 +35,7 @@ from h4xtor_share.models import (  # noqa: E402
     PeerPaired,
     SmsReceived,
 )
+from h4xtor_share.netmerge import NetMerge  # noqa: E402
 from h4xtor_share.pairing import PairingInvite  # noqa: E402
 from h4xtor_share.server import ShareServer  # noqa: E402
 
@@ -66,6 +67,36 @@ def shot(name: str) -> None:
     data = subprocess.run(["adb", "exec-out", "screencap", "-p"], capture_output=True,
                           timeout=30, check=True).stdout
     (SHOTS / f"{name}.png").write_bytes(data)
+
+
+def quick_shot(name: str) -> None:
+    """A screenshot right away (shot() waits for the screen to settle; gestures do not)."""
+    data = subprocess.run(["adb", "exec-out", "screencap", "-p"], capture_output=True,
+                          timeout=30, check=True).stdout
+    (SHOTS / f"{name}.png").write_bytes(data)
+
+
+def mascot_checks() -> None:
+    """The Del page's Battle.net hero with the monkey; a tap on the monkey makes it grin.
+
+    The rest of the run keeps Android's animations off for stable taps, so they are switched
+    on just for this, and the grin is caught by quick screenshots while it holds open.
+    """
+    shell("settings put global animator_duration_scale 1", check=False)
+    try:
+        tap_text("^Del$")
+        time.sleep(2)
+        assert screen_has("^SEND FILER$", 10), "the hero's big send button is missing"
+        assert screen_has("^SEND TIL$", 2), "the hero does not say who it sends to"
+        quick_shot("40-hero")
+        tap_text("tryk for at hilse")  # the monkey's description
+        for index in range(3):
+            quick_shot(f"41-monkey-grin-{index}")
+        time.sleep(1.5)
+        quick_shot("42-monkey-after")
+    finally:
+        shell("settings put global animator_duration_scale 0", check=False)
+    ok("Del page: Battle.net hero with SEND FILER; a tap on the monkey makes it grin")
 
 
 def _dump() -> list[ET.Element]:
@@ -607,6 +638,60 @@ def update_checks() -> None:
     server.shutdown()
 
 
+def netshare_checks(desktop: Desktop, phone: Peer) -> None:
+    """Wi-Fi + 5G: the PC tunnels real web traffic out over the emulator's mobile data."""
+    assert phone.supports("net-gateway"), "phone does not advertise net-gateway"
+    status = desktop.run(desktop.client.net_share_status(phone))
+    assert status["enabled"] is False, status
+    merge = NetMerge(47490, adapters=lambda: [])
+    desktop.run(merge.start())
+    merge.set_phone(phone.device_id, phone.name, desktop.client.net_route(phone))
+    link = merge.links[f"phone:{phone.device_id}"]
+    desktop.run(merge.probe(link))
+    assert not link.healthy, "phone tunnelled while sharing was off"
+    ok("mobile data sharing is off by default and the phone refuses tunnels")
+
+    open_settings_row("^Del mobildata med PC'en$")
+    assert "flag_net_share\" value=\"true" in prefs(), "share toggle not saved"
+    deadline = time.time() + 60
+    while not desktop.run(desktop.client.net_share_status(phone))["enabled"]:
+        assert time.time() < deadline, "mobile data never became ready on the phone"
+        time.sleep(2)
+    desktop.run(merge.probe(link))
+    assert link.healthy, "probe through the phone's mobile data failed"
+    ok("phone shares its mobile data; the PC's probe through it succeeds")
+
+    async def fetch(url: str) -> str:
+        import aiohttp
+
+        proxy = f"http://127.0.0.1:{merge.port}"
+        async with aiohttp.ClientSession(trust_env=False) as session, session.get(
+            url, proxy=proxy, timeout=aiohttp.ClientTimeout(total=30)
+        ) as response:
+            assert response.status == 200, (url, response.status)
+            return await response.text()
+
+    before = link.received
+    assert "Example Domain" in desktop.run(fetch("https://example.com/"))
+    assert "Example Domain" in desktop.run(fetch("http://example.com/"))
+    assert link.received > before and link.connections >= 2, link
+    ok("HTTPS (CONNECT) and HTTP web pages load through the phone's 5G")
+    shell(f"am start -W -n {PKG}/.MainActivity")  # re-render: the card shows the counter
+    time.sleep(2)
+    tap_text("^Indstillinger$")
+    time.sleep(1)
+    assert scroll_to("^Del mobildata med PC'en$")
+    shell("input swipe 540 1300 540 1000 400")  # the status line sits under the title
+    time.sleep(1)
+    assert screen_has("Deler nu", 5), "phone does not show that it is sharing"
+    shot("24-mobile-data-shared")
+    tap_text("^Del mobildata med PC'en$")  # switch it off again
+    time.sleep(2)
+    assert desktop.run(desktop.client.net_share_status(phone))["enabled"] is False
+    desktop.run(merge.stop())
+    ok("switching sharing off on the phone stops it")
+
+
 def media_uri(name: str) -> str:
     for _ in range(15):
         out = shell("content query --uri content://media/external/downloads --projection _id "
@@ -698,6 +783,7 @@ def main() -> None:
     time.sleep(5)
     shot("02-home-paired")
     ok("phone shows the paired PC")
+    mascot_checks()
 
     # ---- PC -> phone ----------------------------------------------------------
     desktop.run(desktop.client.send_clipboard(phone, "Hej fra PC'en"))
@@ -1023,6 +1109,7 @@ def main() -> None:
     bluetooth_checks(desktop, phone)
 
     v12_checks(desktop, phone)
+    netshare_checks(desktop, phone)
 
     # ---- Bank-tilstand: one tap genuinely switches the accessibility service off ----------
     # Runs after v12_checks (which needs remote control on), while the copy watcher above has

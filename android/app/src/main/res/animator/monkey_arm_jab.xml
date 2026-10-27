@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The arm slides out from behind the head and jabs twice down-left, at the device tiles. -->
+<set xmlns:android="http://schemas.android.com/apk/res/android">
+    <objectAnimator
+        android:propertyName="translateX"
+        android:valueFrom="0"
+        android:valueTo="-9"
+        android:valueType="floatType"
+        android:startOffset="90"
+        android:duration="140"
+        android:repeatCount="3"
+        android:repeatMode="reverse"
+        android:interpolator="@android:interpolator/accelerate_decelerate" />
+    <objectAnimator
+        android:propertyName="translateY"
+        android:valueFrom="0"
+        android:valueTo="7"
+        android:valueType="floatType"
+        android:startOffset="90"
+        android:duration="140"
+        android:repeatCount="3"
+        android:repeatMode="reverse"
+        android:interpolator="@android:interpolator/accelerate_decelerate" />
+</set>

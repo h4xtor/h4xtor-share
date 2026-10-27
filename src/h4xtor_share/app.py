@@ -50,21 +50,22 @@ from h4xtor_share.models import (
     WifiDirectJoined,
     WifiDirectOffer,
 )
+from h4xtor_share.netmerge_page import NetMergePageMixin
 from h4xtor_share.openers import open_path, reveal_in_folder
 from h4xtor_share.pairing import PairingInvite, parse_invite, qr_matrix
-from h4xtor_share.phone_pages import PhonePagesMixin
+from h4xtor_share.phone_pages import PhonePagesMixin, ago
 from h4xtor_share.scanner import scan_lan as scan_lan_peers
 from h4xtor_share.server import ShareServer
 from h4xtor_share.tray import TrayIcon
 from h4xtor_share.udp import UdpDiscovery
 from h4xtor_share.ui_kit import (
-    AuroraBar,
     Avatar,
     Button,
     Card,
+    DeviceTiles,
+    HeroBanner,
     Modal,
     Monkey,
-    OrbitMap,
     ProgressBar,
     QrCanvas,
     ScrollFrame,
@@ -73,8 +74,11 @@ from h4xtor_share.ui_kit import (
     Toast,
     Toggle,
     entry,
+    mix_color,
+    render_backdrop,
     round_rect,
     set_dark_titlebar,
+    tooltip,
 )
 from h4xtor_share.update_pages import UpdateMixin
 from h4xtor_share.updater import Updater, is_newer
@@ -354,7 +358,7 @@ class DeviceCard:
         if self.card is not None:
             self.card.destroy()
         parent = app.paired_list if paired else app.lan_list
-        self.card = Card(parent, theme, padding=12, radius=14)
+        self.card = Card(parent, theme, padding=12)
         body = self.card.body
         body.grid_columnconfigure(1, weight=1)
 
@@ -391,6 +395,7 @@ class DeviceCard:
                 right, theme, "", self.open_menu, kind="ghost", icon="⋯", size="sm", width=32
             )
             self.menu_button.pack(side="left", padx=(px(4), 0))
+            tooltip(self.menu_button, theme, "Mere: mappe, tekst, Bluetooth, fjern …")
         else:
             Button(
                 right,
@@ -411,6 +416,7 @@ class DeviceCard:
                 width=32,
             )
             self.menu_button.pack(side="left", padx=(px(4), 0))
+            tooltip(self.menu_button, theme, "Skjul fra listen")
 
         clickable = (self.card, body, self.name_label, meta, self.meta_label, self.avatar, self.dot)
         for widget in clickable:
@@ -461,7 +467,7 @@ class DeviceCard:
         assert self.card is not None
         self.card.set_colors(outline=c["accent"] if selected else c["border"])
 
-    def open_menu(self) -> None:
+    def open_menu(self, anchor: tk.Misc | None = None) -> None:
         app = self.app
         menu = tk.Menu(app, tearoff=0)
         if app.config_store.is_trusted(self.peer.device_id):
@@ -491,8 +497,9 @@ class DeviceCard:
             menu.add_command(label="Forbind…", command=lambda: app.pair_with_code(self.peer))
             menu.add_separator()
             menu.add_command(label="Fjern fra listen", command=lambda: app.remove_device(self.peer))
-        x = self.menu_button.winfo_rootx()
-        y = self.menu_button.winfo_rooty() + self.menu_button.winfo_height()
+        under = anchor or self.menu_button
+        x = under.winfo_rootx()
+        y = under.winfo_rooty() + under.winfo_height()
         try:
             menu.tk_popup(x, y)
         finally:
@@ -509,7 +516,7 @@ class TransferRow:
         self.state = state
         theme = app.theme
         c = theme.c
-        self.card = Card(parent, theme, padding=14, radius=12)
+        self.card = Card(parent, theme, padding=14)
         body = self.card.body
         body.grid_columnconfigure(1, weight=1)
         sending = state.direction == "send"
@@ -612,7 +619,7 @@ class TransferRow:
         else:
             parts.append("Mislykkedes – prøv igen for at genoptage")
             color = c["danger"]
-        self.bar.set(fraction, color)
+        self.bar.set(fraction, color, live=state.status == "active")
         self.detail.configure(text="  ·  ".join(parts))
 
         wanted = state.status + (":path" if state.path else "")
@@ -670,7 +677,7 @@ class TransferRow:
             ).pack(side="left", padx=(theme.px(6), 0))
 
 
-class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
+class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD.Tk):
     # Mix design: the menu in four small groups.
     NAV_GROUPS = (
         (
@@ -694,6 +701,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
             (
                 ("connections", "≋", "Wi-Fi Direct & Bluetooth"),
                 ("iphone", "▯", "iPhone (browser)"),
+                ("netmerge", "⇶", "Wi-Fi + 5G"),
             ),
         ),
         ("ANDET", (("history", "◷", "Historik"), ("settings", "⚙", "Indstillinger"))),
@@ -777,8 +785,10 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         self.selected_id: str | None = None
         self.target_all = False  # "Til: Alle enheder" chosen in the target menu
         self._init_phone_state()
+        self._init_netmerge()
         self.transfers: dict[str, TransferState] = {}
         self.transfer_rows: dict[str, TransferRow] = {}
+        self._started = time.monotonic()
         self.batches: dict[str, Future[Any]] = {}
         self.history = HistoryStore(self.config_store.history_path)
         self._clipboard_observed = ""
@@ -904,17 +914,26 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         self.sidebar = tk.Frame(self, bg=c["sidebar"], width=px(236))
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
-        # Aurora glass: a softly shimmering aurora seam between menu and pages.
-        AuroraBar(self, self.theme, thickness=max(2, px(2)), vertical=True).pack(
-            side="left", fill="y"
-        )
+        tk.Frame(self, bg=c["border"], width=1).pack(side="left", fill="y")
         self.main = tk.Frame(self, bg=c["bg"])
         self.main.pack(side="left", fill="both", expand=True)
-        AuroraBar(self.main, self.theme, thickness=max(2, px(2))).pack(side="top", fill="x")
         self._build_sidebar()
 
         self.status_var = tk.StringVar(value="Starter…")
+        status_bar = tk.Frame(self.main, bg=c["chrome"])
+        status_bar.pack(side="bottom", fill="x")
+        tk.Frame(status_bar, bg=c["border"], height=1).pack(side="top", fill="x")
+        self.status_label = tk.Label(
+            status_bar, textvariable=self.status_var, bg=c["chrome"], fg=c["muted"],
+            font=self.theme.font(8), anchor="w", padx=px(14), pady=px(4),
+        )
+        self.status_label.pack(side="left", fill="x", expand=True)
+        tk.Label(
+            status_bar, text="Ctrl+O filer · Ctrl+N ny enhed · F5 scan", bg=c["chrome"],
+            fg=c["faint"], font=self.theme.font(8), padx=px(14),
+        ).pack(side="right")
         self.pages: dict[str, tk.Frame] = {}
+        self._page_headers: dict[str, tk.Canvas] = {}
         self.page_container = tk.Frame(self.main, bg=c["bg"])
         self.page_container.pack(fill="both", expand=True)
         self.page_container.grid_rowconfigure(0, weight=1)
@@ -927,6 +946,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         self._build_remote_page()
         self._build_history_page()
         self._build_iphone_page()
+        self._build_netmerge_page()
         self._build_settings_page()
         self._build_connections_page()
         self.after(60000, self._notif_tick)
@@ -934,10 +954,36 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
             frame.grid(row=0, column=0, sticky="nsew")
         self.show_page("share")
 
+        # Keyboard shortcuts (shown in the status line and in the menus).
+        shortcuts = {
+            "o": lambda: self.send_files(),
+            "n": self.show_qr_pairing,
+            "v": self._paste_shortcut,
+        }
+        for key, action in shortcuts.items():
+            for sequence in (f"<Control-{key}>", f"<Control-{key.upper()}>"):
+                self.bind_all(sequence, lambda event, run=action: self._shortcut(event, run),
+                              add="+")
+        self.bind_all("<F5>", lambda event: self._shortcut(event, self.scan_lan), add="+")
+
         self.drop_target_register(DND_FILES)
         self.dnd_bind("<<DropEnter>>", lambda _e: self._drop_highlight(True))
         self.dnd_bind("<<DropLeave>>", lambda _e: self._drop_highlight(False))
         self.dnd_bind("<<Drop>>", self._files_dropped)
+
+    def _shortcut(self, event: tk.Event, action: Callable[[], None]) -> None:
+        """Run a shortcut from the main window only, never from inside a dialog."""
+        with contextlib.suppress(tk.TclError, KeyError):
+            if event.widget.winfo_toplevel() is self:
+                action()
+
+    def _paste_shortcut(self) -> None:
+        """Ctrl+V outside a text field sends the clipboard to the selected device."""
+        focus = self.focus_get()
+        if isinstance(focus, tk.Entry | tk.Text):
+            return  # an ordinary paste into the field
+        if self.active_page == "share" and self._trusted_peers():
+            self.send_clipboard(to_all=self._all_selected())
 
     def _build_sidebar(self) -> None:
         c = self.theme.c
@@ -960,36 +1006,17 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
             font=self.theme.title_font(15),
         ).pack(side="left", padx=(px(4), 0))
 
-        # "New chat"-style primary action at the top, like Claude.ai.
-        new = tk.Frame(self.sidebar, bg=c["sidebar"], cursor="hand2")
-        new.pack(fill="x", padx=px(10), pady=(0, px(10)))
-        plus = tk.Canvas(new, width=px(26), height=px(26), bg=c["sidebar"], highlightthickness=0)
-        plus.create_oval(1, 1, px(26) - 1, px(26) - 1, fill=c["accent"], outline=c["accent"])
-        plus.create_text(
-            px(13), px(13), text="+", fill=c["accent_text"], font=self.theme.font(13, "bold")
+        # The launcher's big blue button sits at the top of the menu.
+        self.connect_button = Button(
+            self.sidebar, self.theme, "Forbind ny enhed", self.show_qr_pairing,
+            kind="primary", size="lg", icon="+", width=212, bg=c["sidebar"],
         )
-        plus.pack(side="left", padx=(px(8), px(10)), pady=px(6))
-        new_label = tk.Label(
-            new,
-            text="Forbind ny enhed",
-            bg=c["sidebar"],
-            fg=c["accent"],
-            font=self.theme.font(10, "bold"),
-            anchor="w",
-        )
-        new_label.pack(side="left", fill="x", expand=True)
-        for widget in (new, plus, new_label):
-            widget.bind("<Button-1>", lambda _e: self.show_qr_pairing())
-            widget.bind(
-                "<Enter>",
-                lambda _e: [w.configure(bg=c["nav_active"]) for w in (new, plus, new_label)],
-            )
-            widget.bind(
-                "<Leave>", lambda _e: [w.configure(bg=c["sidebar"]) for w in (new, plus, new_label)]
-            )
+        self.connect_button.pack(padx=px(12), pady=(0, px(8)))
+        tooltip(self.connect_button, self.theme, "Vis QR-koden til telefonen (Ctrl+N)")
 
         self.nav_rows: dict[str, tuple[tk.Frame, tk.Label, tk.Label]] = {}
         self.nav_badges: dict[str, tk.Label] = {}
+        self.nav_bars: dict[str, tk.Frame] = {}
         group_of = {key: group for group, items in self.NAV_GROUPS for key, _i, _l in items}
         last_group = ""
         for key, icon, label in self.NAV_ITEMS:
@@ -1000,11 +1027,14 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
                     text=last_group,
                     bg=c["sidebar"],
                     fg=c["faint"],
-                    font=self.theme.font(8, family=self.theme.mono),
+                    font=self.theme.font(8, "bold"),
                     anchor="w",
-                ).pack(fill="x", padx=px(20), pady=(px(10), px(2)))
+                ).pack(fill="x", padx=px(22), pady=(px(12), px(3)))
             row = tk.Frame(self.sidebar, bg=c["sidebar"], cursor="hand2")
-            row.pack(fill="x", padx=px(10), pady=px(1))
+            row.pack(fill="x", padx=(0, px(10)), pady=px(1))
+            # Battle.net marks the open page with a bright bar on the menu's edge.
+            self.nav_bars[key] = tk.Frame(row, bg=c["sidebar"], width=px(3))
+            self.nav_bars[key].pack(side="left", fill="y", padx=(0, px(7)))
             icon_label = tk.Label(
                 row,
                 text=icon,
@@ -1090,7 +1120,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
             return
         c = self.theme.c
         color = c["nav_active"] if hover else c["sidebar"]
-        for widget in self.nav_rows[name]:
+        for widget in (*self.nav_rows[name], self.nav_bars[name], self.nav_badges[name]):
             widget.configure(bg=color)
 
     def show_page(self, name: str) -> None:
@@ -1105,40 +1135,62 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         for child in self.nav_rows.values():
             for widget in child[0].winfo_children():
                 widget.configure(bg=child[0].cget("bg"))
+        for key, bar in self.nav_bars.items():
+            bar.configure(bg=c["accent"] if key == name else bar.master.cget("bg"))
         self.pages[name].tkraise()
+        self._slide_in_title(name)
         if name == "history":
             self._refresh_history()
         elif name in {"notifications", "sms", "remote"}:
             self._phone_page_shown(name)
 
+    def _slide_in_title(self, name: str) -> None:
+        """A page's title glides in from the left and fades up, like a launcher tab change."""
+        header = self._page_headers.get(name)
+        if header is None:
+            return
+        c, px = self.theme.c, self.theme.px
+        steps = (0.0, 0.35, 0.62, 0.82, 0.94, 1.0)
+
+        def frame(index: int) -> None:
+            with contextlib.suppress(tk.TclError):
+                f = steps[index]
+                for tag, x, color in (("page-title", px(36), c["text"]),
+                                      ("page-sub", px(36), c["muted"])):
+                    _, y = header.coords(tag)
+                    header.coords(tag, x - px(18) * (1 - f), y)
+                    header.itemconfigure(tag, fill=mix_color(color, c["bg"], 1 - f))
+                if index + 1 < len(steps):
+                    header.after(16, lambda: frame(index + 1))
+
+        frame(0)
+
+    def _header_art(self) -> tk.PhotoImage:
+        """One shared strip of launcher light for every page header (rendered once)."""
+        if getattr(self, "_header_image", None) is None:
+            width = max(self.winfo_screenwidth(), 1600)
+            self._header_image = render_backdrop(self, width, self.theme.px(92), self.theme.c, 3)
+        return self._header_image
+
     def _page(self, name: str, title: str, subtitle: str) -> tuple[tk.Frame, tk.Frame]:
+        """A page with a Battle.net-style header: the title in big capitals on a strip of
+        blue light. Buttons go into the returned ``actions`` frame (right-hand side)."""
         c = self.theme.c
         px = self.theme.px
         page = tk.Frame(self.page_container, bg=c["bg"])
         self.pages[name] = page
-        header = tk.Frame(page, bg=c["bg"])
-        header.pack(fill="x", padx=px(36), pady=(px(30), px(18)))
-        # Pack actions first so a narrow window clips the subtitle, never a button.
+        header = tk.Canvas(page, height=px(126), bg=c["bg"], highlightthickness=0, bd=0)
+        header.pack(fill="x", pady=(0, px(4)))
+        header.create_image(0, 0, image=self._header_art(), anchor="nw")
+        header.create_text(px(36), px(26), text=title.upper(), fill=c["text"], anchor="nw",
+                           font=self.theme.hero_font(22), tags=("page-title",))
+        header.create_text(px(36), px(62), text=subtitle, fill=c["muted"], anchor="nw",
+                           font=self.theme.font(10), tags=("page-sub",))
+        self._page_headers[name] = header
+        # The buttons sit below the light, on the plain page colour (Tk widgets are opaque).
         actions = tk.Frame(header, bg=c["bg"])
-        actions.pack(side="right", anchor="s")
-        texts = tk.Frame(header, bg=c["bg"])
-        texts.pack(side="left", fill="x", expand=True)
-        tk.Label(
-            texts,
-            text=title,
-            bg=c["bg"],
-            fg=c["text"],
-            font=self.theme.title_font(20),
-            anchor="w",
-        ).pack(fill="x")
-        tk.Label(
-            texts,
-            text=subtitle,
-            bg=c["bg"],
-            fg=c["muted"],
-            font=self.theme.font(10),
-            anchor="w",
-        ).pack(fill="x", pady=(px(3), 0))
+        item = header.create_window(0, px(124), window=actions, anchor="se")
+        header.bind("<Configure>", lambda e: header.coords(item, e.width - px(36), px(124)))
         return page, actions
 
     # ------------------------------------------------------------- share page
@@ -1148,33 +1200,33 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         page = tk.Frame(self.page_container, bg=c["bg"])
         self.pages["share"] = page
 
-        top = tk.Frame(page, bg=c["bg"])
-        top.pack(fill="x", padx=px(24), pady=(px(14), 0))
-        Button(
-            top, self.theme, "Tilføj via IP", self.add_manual_peer, kind="ghost", size="sm"
-        ).pack(side="right")
-        Button(
-            top, self.theme, "Scan netværk", self.scan_lan, kind="ghost", size="sm", icon="⟳"
-        ).pack(side="right", padx=(0, px(4)))
-        if bluetooth.supported():
-            Button(
-                top,
-                self.theme,
-                "Søg via Bluetooth",
-                lambda: self.scan_bluetooth(manual=True),
-                kind="ghost",
-                size="sm",
-                icon="ᛒ",
-            ).pack(side="right", padx=(0, px(4)))
-
         scroll = ScrollFrame(page, self.theme)
         scroll.pack(fill="both", expand=True)
         outer = scroll.inner
+
+        # Battle.net's game page: key art with the monkey, the target's name in big
+        # letters and one big blue button. The words and buttons follow the selection.
+        self.hero = HeroBanner(outer, self.theme, height=300)
+        self.hero.pack(fill="x")
+        self.hero_send = Button(self.hero.buttons, self.theme, "SEND FILER",
+                                lambda: self.send_files(), kind="primary", size="xl", width=210)
+        self.hero_send.pack(side="left")
+        self.hero_more = Button(self.hero.buttons, self.theme, "▾", self._hero_menu,
+                                kind="primary", size="xl", width=46)
+        self.hero_more.pack(side="left", padx=(px(2), 0))
+        tooltip(self.hero_more, self.theme, "Mappe, udklipsholder, tekst …")
+        self.hero_gear = Button(self.hero.buttons, self.theme, "⚙", self._hero_device_menu,
+                                kind="secondary", size="xl", width=50)
+        self.hero_gear.pack(side="left", padx=(px(10), 0))
+        tooltip(self.hero_gear, self.theme, "Enhedens menu")
+        self.hero_scan = Button(self.hero.buttons, self.theme, "Scan netværk", self.scan_lan,
+                                kind="secondary", size="xl")
+
         center = tk.Frame(outer, bg=c["bg"])
-        center.pack(fill="x", padx=px(48), pady=(px(26), px(30)))
+        center.pack(fill="x", padx=px(48), pady=(px(6), px(30)))
 
         def recenter(event: tk.Event) -> None:
-            pad = max(px(28), (event.width - px(980)) // 2)
+            pad = max(px(48), (event.width - px(1100)) // 2)
             center.pack_configure(padx=pad)
 
         scroll.canvas.bind("<Configure>", recenter, add="+")
@@ -1182,52 +1234,28 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         self.banner = tk.Frame(center, bg=c["bg"])
         self.banner.pack(fill="x")
 
-        # Mix design: the orbit map (the monkey is this computer) next to the headline.
-        hero = tk.Frame(center, bg=c["bg"])
-        hero.pack(fill="x", pady=(px(4), px(18)))
-        self.orbit = OrbitMap(
-            hero,
-            self.theme,
-            size=px(320),
-            on_pick=self._orbit_pick,
-            on_add=self.show_qr_pairing,
-            label=f"{self.config_store.device_name} · klar",
-        )
-        self.orbit.pack(side="left")
-        words = tk.Frame(hero, bg=c["bg"])
-        words.pack(side="left", fill="both", expand=True, padx=(px(24), 0))
-        self.route_chips = tk.Frame(words, bg=c["bg"])
-        self.route_chips.pack(anchor="w", pady=(px(36), px(14)))
-        self.greeting_label = tk.Label(
-            words,
-            text="Slip noget herind.",
-            bg=c["bg"],
-            fg=c["text"],
-            font=self.theme.title_font(26),
-            anchor="w",
-        )
-        self.greeting_label.pack(fill="x")
-        self.greeting_sub = tk.Label(
-            words,
-            text="Aben bringer det frem.",
-            bg=c["bg"],
-            fg=c["accent"],
-            font=self.theme.title_font(17),
-            anchor="w",
-        )
-        self.greeting_sub.pack(fill="x", pady=(px(2), 0))
-        tk.Label(
-            words,
-            text="Træk filer ind overalt · Ctrl+V sender udklip · klik en enhed på kortet",
-            bg=c["bg"],
-            fg=c["faint"],
-            font=self.theme.font(9),
-            anchor="w",
-        ).pack(fill="x", pady=(px(10), 0))
+        # The devices as launcher game icons, with the ways to find more on the right.
+        head = tk.Frame(center, bg=c["bg"])
+        head.pack(fill="x", pady=(px(14), px(10)))
+        self.tiles_title = tk.Label(head, text="DINE ENHEDER", bg=c["bg"], fg=c["muted"],
+                                    font=self.theme.font(9, "bold"), anchor="w")
+        self.tiles_title.pack(side="left")
+        Button(head, self.theme, "Tilføj via IP", self.add_manual_peer, kind="ghost",
+               size="sm").pack(side="right")
+        Button(head, self.theme, "Scan netværk", self.scan_lan, kind="ghost", size="sm",
+               icon="⟳").pack(side="right", padx=(0, px(4)))
+        if bluetooth.supported():
+            Button(head, self.theme, "Søg via Bluetooth", lambda: self.scan_bluetooth(manual=True),
+                   kind="ghost", size="sm", icon="ᛒ").pack(side="right", padx=(0, px(4)))
+        self.device_tiles = DeviceTiles(center, self.theme, on_pick=self._tile_pick,
+                                        on_add=self.show_qr_pairing)
+        self.device_tiles.pack(fill="x")
+        self.route_chips = tk.Frame(center, bg=c["bg"])
+        self.route_chips.pack(anchor="w", pady=(px(10), px(18)))
         self._sends_landed = 0
 
         # The composer: Claude's prompt box, but for files, links and text.
-        self.composer = Card(center, self.theme, padding=14, radius=20, outline=c["border_strong"])
+        self.composer = Card(center, self.theme, padding=14, outline=c["border_strong"])
         self.composer.pack(fill="x")
         body = self.composer.body
         self._composer_placeholder = (
@@ -1318,19 +1346,26 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         self.composer_hint.pack(pady=(px(8), 0))
         self._drop_active = False
 
-        # Sections
-        section = tk.Frame(center, bg=c["bg"])
-        section.pack(fill="x", pady=(px(30), 0))
+        # "Seneste": the last few things sent or received, one click from used again.
+        self.recent_section = tk.Frame(center, bg=c["bg"])
+        tk.Label(self.recent_section, text="SENESTE", bg=c["bg"], fg=c["muted"],
+                 font=self.theme.font(9, "bold"), anchor="w").pack(fill="x", pady=(0, px(8)))
+        self.recent_grid = tk.Frame(self.recent_section, bg=c["bg"])
+        self.recent_grid.pack(fill="x")
+        self.recent_grid.grid_columnconfigure((0, 1), weight=1, uniform="recent")
+        self._recent_key: tuple[Any, ...] | None = None
+
+        # Every device in detail: address, route, signal and its menu.
+        section = self.share_paired_section = tk.Frame(center, bg=c["bg"])
         self.paired_title = tk.Label(
             section,
-            text="Dine enheder",
+            text="ALLE ENHEDER",
             bg=c["bg"],
             fg=c["muted"],
             font=self.theme.font(9, "bold"),
             anchor="w",
         )
         self.paired_title.pack(fill="x", pady=(0, px(8)))
-        self.paired_empty = self._build_empty_state(section)
         self.paired_list = tk.Frame(section, bg=c["bg"])
         self.paired_list.pack(fill="x")
 
@@ -1339,7 +1374,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         head.pack(fill="x", pady=(0, px(2)))
         self.lan_title = tk.Label(
             head,
-            text="Fundet i nærheden",
+            text="FUNDET I NÆRHEDEN",
             bg=c["bg"],
             fg=c["muted"],
             font=self.theme.font(9, "bold"),
@@ -1362,35 +1397,6 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         self.device_list = self.paired_list
         self._reorder_cards()
         self._draw_drop_zone()
-
-    def _build_empty_state(self, parent: tk.Misc) -> tk.Frame:
-        c = self.theme.c
-        px = self.theme.px
-        frame = tk.Frame(parent, bg=c["bg"])
-        tk.Label(
-            frame,
-            text="Ingen forbundne enheder endnu. Kom i gang med et af disse:",
-            bg=c["bg"],
-            fg=c["muted"],
-            font=self.theme.font(10),
-            anchor="w",
-        ).pack(fill="x", pady=(0, px(10)))
-        chips = tk.Frame(frame, bg=c["bg"])
-        chips.pack(fill="x")
-        chip_actions: list[tuple[str, str, Callable[[], None]]] = [
-            ("Forbind din telefon med QR", "▣", self.show_qr_pairing),
-            ("Scan netværket", "⟳", self.scan_lan),
-            ("Tilføj via IP-adresse", "⌁", self.add_manual_peer),
-        ]
-        if bluetooth.supported():
-            chip_actions.append(
-                ("Søg via Bluetooth", "ᛒ", lambda: self.scan_bluetooth(manual=True))
-            )
-        for label, icon, command in chip_actions:
-            Button(chips, self.theme, label, command, kind="secondary", size="sm", icon=icon).pack(
-                side="left", padx=(0, px(8))
-            )
-        return frame
 
     def _composer_focus(self, focused: bool) -> None:
         c = self.theme.c
@@ -1496,6 +1502,10 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
                 text="Enter sender · Shift+Enter ny linje · links åbner direkte i browseren",
                 fg=c["faint"],
             )
+        elif self._trusted_peers():
+            self.composer_hint.configure(
+                text="Vælg en enhed ovenfor – eller tryk Send, så spørger vi", fg=c["faint"]
+            )
         else:
             self.composer_hint.configure(
                 text="Forbind en enhed for at begynde at dele", fg=c["faint"]
@@ -1514,7 +1524,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         for card in self.device_cards.values():
             card.update(card.peer)
         self._draw_drop_zone()
-        self._refresh_orbit()
+        self._refresh_hero()
 
     def _drop_target_peer(self) -> Peer | None:
         if self._all_selected():
@@ -1541,16 +1551,56 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         for card in self.device_cards.values():
             card.update(card.peer)
         self._draw_drop_zone()
-        self._refresh_orbit()
+        self._refresh_hero()
 
-    def _orbit_pick(self, device_id: str) -> None:
-        if self.config_store.is_trusted(device_id):
+    def _tile_pick(self, device_id: str) -> None:
+        if device_id == "*":
+            self.select_all_devices()
+        elif self.config_store.is_trusted(device_id):
             self.select_peer(device_id)
 
-    def _refresh_orbit(self) -> None:
-        """Feed the orbit map, the headline and the route chips from the current state."""
-        orbit = getattr(self, "orbit", None)
-        if orbit is None:
+    def _hero_menu(self) -> None:
+        """The ▾ next to SEND FILER: everything else you can send, Battle.net-style."""
+        everyone = self._all_selected()
+        target = self._drop_target_peer()
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(label="Send filer…   Ctrl+O",
+                         command=lambda: self.send_files(target, to_all=everyone))
+        menu.add_command(label="Send mappe…", command=lambda: self.send_folder(target,
+                                                                              to_all=everyone))
+        menu.add_command(label="Send udklipsholder", command=lambda: self.send_clipboard(
+            target, to_all=everyone))
+        menu.add_command(label="Skriv tekst eller link…", command=self._focus_composer)
+        if len(self._trusted_peers()) >= 2:
+            menu.add_separator()
+            menu.add_command(label=("✓ " if everyone else "") + "Send til alle enheder",
+                             command=self.select_all_devices)
+        menu.add_separator()
+        menu.add_command(label="Forbind ny enhed…   Ctrl+N", command=self.show_qr_pairing)
+        x = self.hero_more.winfo_rootx()
+        y = self.hero_more.winfo_rooty() + self.hero_more.winfo_height()
+        try:
+            menu.tk_popup(x, y)
+        finally:
+            menu.grab_release()
+
+    def _hero_device_menu(self) -> None:
+        target = self._drop_target_peer()
+        card = self.device_cards.get(target.device_id) if target else None
+        if card is not None:
+            card.open_menu(self.hero_gear)
+        else:
+            self._choose_target()
+
+    def _focus_composer(self) -> None:
+        self.show_page("share")
+        self.composer_text.focus_set()
+        self._composer_focus(True)
+
+    def _refresh_hero(self) -> None:
+        """Feed the hero, the device tiles and the route chips from the current state."""
+        hero = getattr(self, "hero", None)
+        if hero is None:
             return
         c = self.theme.c
         target = self._drop_target_peer()
@@ -1560,36 +1610,79 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
             for state in self.transfers.values()
             if state.direction == "send" and state.status == "active"
         }
-        trusted = [p for p in self.peers.values() if self.config_store.is_trusted(p.device_id)]
+        trusted = self._trusted_peers()
 
         def online(peer: Peer) -> bool:
             status = self.peer_status.get(peer.device_id)
             return status is not None and status.online
 
+        def route(peer: Peer) -> str:
+            status = self.peer_status.get(peer.device_id)
+            way = {"wifi-direct": "Wi-Fi Direct", "bluetooth": "Bluetooth"}.get(
+                peer.transport, "Wi-Fi")
+            ping = f" · {int(status.rtt_ms)} ms" if status and status.rtt_ms else ""
+            return way + ping
+
         trusted.sort(key=lambda p: (0 if online(p) else 1, p.name.lower()))
         nodes = []
-        sending = set()
-        for peer in trusted[:5]:
-            status = self.peer_status.get(peer.device_id)
-            if online(peer):
-                route = {"wifi-direct": "direct", "bluetooth": "bt"}.get(peer.transport, "wifi")
-                ping = f" · {int(status.rtt_ms)} ms" if status and status.rtt_ms else ""
-                sub = route + ping
-            else:
-                sub = "offline"
-            selected = everyone or (target is not None and target.device_id == peer.device_id)
-            nodes.append(
-                {"id": peer.device_id, "name": peer.name, "sub": sub,
-                 "online": online(peer), "selected": selected}
-            )
+        if len(trusted) >= 2:
+            count = sum(1 for peer in trusted if online(peer))
+            nodes.append({"id": "*", "name": "Alle enheder", "platform": "all",
+                          "online": count > 0, "selected": everyone,
+                          "sub": f"{count} af {len(trusted)} online"})
+        for peer in trusted[:6]:
+            selected = not everyone and target is not None and target.device_id == peer.device_id
+            sub = route(peer) if online(peer) else "Offline"
             if peer.name in sending_names:
-                sending.add(peer.device_id)
-        orbit.set_nodes(nodes)
-        orbit.set_sending(sending)
-        name = self.config_store.device_name
-        orbit.set_label(f"{name} · sender…" if sending else f"{name} · klar")
-        who = "alle dine enheder" if everyone else target.name if target else "dine enheder"
-        self.greeting_sub.configure(text=f"Aben bringer det til {who}.")
+                sub = "Sender …"
+            nodes.append({"id": peer.device_id, "name": peer.name, "platform": peer.platform,
+                          "online": online(peer), "selected": selected, "sub": sub,
+                          "sending": peer.name in sending_names})
+        self.device_tiles.set_nodes(nodes)
+        live = sum(1 for peer in trusted if online(peer))
+        self.tiles_title.configure(
+            text=f"DINE ENHEDER  ·  {live} ONLINE" if trusted else "DINE ENHEDER")
+
+        hint = ("Træk filer ind hvor som helst  ·  Ctrl+V sender udklipsholderen  ·  "
+                "Ctrl+O vælger filer")
+        first_run = not trusted
+        px = self.theme.px
+        for button, gap in ((self.hero_more, px(2)), (self.hero_gear, px(10))):
+            if first_run:
+                button.pack_forget()
+            elif not button.winfo_manager():
+                place = {"before": self.hero_scan} if self.hero_scan.winfo_manager() else {}
+                button.pack(side="left", padx=(gap, 0), **place)
+        if first_run:
+            self.hero_send.command = lambda: self.show_qr_pairing()
+            self.hero_send.set_text("FORBIND NY ENHED")
+            if not self.hero_scan.winfo_manager():
+                self.hero_scan.pack(side="left", padx=(px(10), 0))
+            hero.set_words("KOM I GANG", "Forbind din telefon",
+                           "Scan QR-koden med h4xtor share på telefonen – det tager ti sekunder.",
+                           c["accent"], "Eller find enheder på dit Wi-Fi med Scan netværk.")
+        else:
+            self.hero_scan.pack_forget()
+            self.hero_send.command = lambda: self.send_files()
+            self.hero_send.set_text("SEND FILER")
+            if everyone:
+                hero.set_words("SEND TIL", "Alle enheder", f"{live} af {len(trusted)} online",
+                               c["success"] if live else c["faint"], hint)
+            elif target is None:
+                hero.set_words("VÆLG EN ENHED", "Hvem skal have det?",
+                               "Klik på en enhed herunder – eller tryk Send, så spørger vi.",
+                               c["accent"], hint)
+            elif online(target):
+                state = "Sender nu  ·  " if target.name in sending_names else ""
+                hero.set_words("SEND TIL", target.name, f"{state}Online  ·  {route(target)}",
+                               c["success"], hint)
+            else:
+                hero.set_words("SEND TIL", target.name,
+                               f"Offline – åbn h4xtor share på {target.name}", c["faint"], hint)
+        hero.refresh_buttons()
+        hero.actor.set_busy(any(state.status == "active" for state in self.transfers.values()))
+        self._refresh_recent()
+
         # Route chips: LAN · Wi-Fi Direct · Bluetooth
         for child in self.route_chips.winfo_children():
             child.destroy()
@@ -1609,12 +1702,90 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
                 text=f" {text} ",
                 bg=c["bg"],
                 fg=fg,
-                font=self.theme.font(9, family=self.theme.mono),
+                font=self.theme.font(8, family=self.theme.mono),
                 highlightthickness=1,
                 highlightbackground=fg if tone != "neutral" else c["border_strong"],
                 padx=self.theme.px(6),
-                pady=self.theme.px(3),
+                pady=self.theme.px(2),
             ).pack(side="left", padx=(0, self.theme.px(8)))
+
+    def _recent_entries(self) -> list[tuple[str, dict[str, Any]]]:
+        received = [("received", item) for item in self.history.received()[:4]]
+        sent = [("sent", item) for item in self.history.sent()[:4]]
+        merged = sorted(received + sent, key=lambda pair: str(pair[1].get("ts", "")),
+                        reverse=True)
+        return merged[:4]
+
+    def _refresh_recent(self) -> None:
+        """Fill "Seneste" with the newest four entries; rebuilt only when they change."""
+        if not hasattr(self, "recent_grid"):
+            return
+        entries = self._recent_entries()
+        key = tuple((way, e.get("ts"), e.get("text"), e.get("path")) for way, e in entries)
+        if key == self._recent_key:
+            return
+        self._recent_key = key
+        for child in self.recent_grid.winfo_children():
+            child.destroy()
+        if not entries:
+            self.recent_section.pack_forget()
+            return
+        if not self.recent_section.winfo_manager():
+            self.recent_section.pack(fill="x", pady=(self.theme.px(26), 0),
+                                     after=self.composer_hint)
+        for index, (way, item) in enumerate(entries):
+            self._recent_card(index, way, item)
+
+    def _recent_card(self, index: int, way: str, entry: dict[str, Any]) -> None:
+        c, px = self.theme.c, self.theme.px
+        card = Card(self.recent_grid, self.theme, padding=12)
+        card.grid(row=index // 2, column=index % 2, sticky="ew",
+                  padx=(0, px(6)) if index % 2 == 0 else (px(6), 0), pady=(0, px(12)))
+        body = card.body
+        body.grid_columnconfigure(1, weight=1)
+        received = way == "received"
+        kind = str(entry.get("kind", "file"))
+        text = str(entry.get("text", ""))
+        path = str(entry.get("path", ""))
+        glyph = {"folder": "▦", "link": "⇗", "clipboard": "¶"}.get(kind, "▤")
+        tk.Label(body, text=glyph, width=2, bg=c["accent_soft"],
+                 fg=c["success"] if received else c["accent"],
+                 font=self.theme.font(13, "bold")).grid(row=0, column=0, rowspan=2,
+                                                       sticky="ns", padx=(0, px(10)))
+        title = text.splitlines()[0] if text else "?"
+        if len(title) > 42:
+            title = title[:41] + "…"
+        tk.Label(body, text=title, bg=c["card"], fg=c["text"], font=self.theme.font(10, "bold"),
+                 anchor="w").grid(row=0, column=1, sticky="ew")
+        when = ""
+        with contextlib.suppress(ValueError, OverflowError):
+            stamp = time.mktime(time.strptime(str(entry.get("ts", "")), "%Y-%m-%dT%H:%M:%S"))
+            when = ago(int(stamp * 1000))
+        size = _format_bytes(int(entry.get("size") or 0)) if kind in {"file", "folder"} else ""
+        meta = "  ·  ".join(part for part in (
+            f"{'Fra' if received else 'Til'} {entry.get('peer', '?')}", size, when) if part)
+        tk.Label(body, text=meta, bg=c["card"], fg=c["muted"], font=self.theme.font(8),
+                 anchor="w").grid(row=1, column=1, sticky="ew")
+        actions = tk.Frame(body, bg=c["card"])
+        actions.grid(row=0, column=2, rowspan=2, sticky="e", padx=(px(8), 0))
+        buttons: list[tuple[str, Callable[[], Any]]] = []
+        exists = bool(path) and Path(path).exists()
+        if kind == "link":
+            buttons = [("Åbn link", lambda: self._open_link(text)),
+                       ("Kopiér", lambda: self._copy_to_clipboard(text))]
+        elif kind == "clipboard":
+            buttons = [("Kopiér", lambda: self._copy_to_clipboard(text))]
+        elif received and exists:
+            buttons = [("Åbn", lambda: self.open_path_safely(path)),
+                       ("Vis", lambda: self.reveal_path_safely(path))]
+        elif exists:
+            peer = self.peers.get(str(entry.get("peer_id", "")))
+            if peer is not None and self.config_store.is_trusted(peer.device_id):
+                buttons.append(("Send igen", lambda: self._send_paths(peer, [Path(path)])))
+            buttons.append(("Vis", lambda: self.reveal_path_safely(path)))
+        for label, action in buttons:
+            Button(actions, self.theme, label, action, kind="ghost", size="sm",
+                   bg=c["card"]).pack(side="left", padx=(px(2), 0))
 
     # ---------------------------------------------------------- transfers page
     def _build_transfers_page(self) -> None:
@@ -1819,7 +1990,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
             ).pack(fill="x")
             return
         for direction, item in items[:8]:
-            card = Card(self.recent_clips, self.theme, padding=12, radius=10)
+            card = Card(self.recent_clips, self.theme, padding=12)
             card.pack(fill="x", pady=(0, px(8)))
             text = str(item.get("text", ""))
             preview = text.replace("\n", " ")
@@ -1933,6 +2104,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
     }
 
     def _refresh_history(self) -> None:
+        self._refresh_recent()
         if not hasattr(self, "history_tree"):
             return
         self._fill_history()
@@ -2681,8 +2853,14 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
             )
         if self.web_share.enabled:
             await self._start_web_share()
+        try:
+            await self._netmerge_resume()
+        except Exception as error:  # noqa: BLE001 - never block the rest of the app
+            self.event_queue.put(("status", f"Wi-Fi + 5G kunne ikke starte: {error}"))
 
     async def _stop_services(self) -> None:
+        with contextlib.suppress(Exception):
+            await self._netmerge_shutdown()
         with contextlib.suppress(Exception):
             await self.web_share.stop()
         with contextlib.suppress(Exception):
@@ -2849,6 +3027,10 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         elif tag == "quit":
             self.quit_app()
 
+    def _mascot_ready(self) -> bool:
+        """Quiet at start-up: remembered devices turning up again are not news."""
+        return time.monotonic() - self._started > 5
+
     def _set_me_status(self) -> None:
         addresses = _sorted_lan_addresses()
         self.me_dot.configure(fg=self.theme.c["success"])
@@ -2962,6 +3144,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         else:
             self.history.record_sent_text(peer, text)
         self._refresh_recent_clips()
+        self._refresh_recent()
 
     # ---------------------------------------------------------------- devices
     def _upsert_peer(self, peer: Peer) -> None:
@@ -3025,6 +3208,8 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         if card is None:
             card = DeviceCard(self, self.device_list, peer)
             self.device_cards[peer.device_id] = card
+            if self._mascot_ready():
+                self.hero.actor.point()  # look, a new device
         else:
             card.update(peer)
         self._reorder_cards()
@@ -3057,18 +3242,17 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
             if (status := self.peer_status.get(peer.device_id)) is not None and status.online
         )
         self.paired_title.configure(
-            text=f"Dine enheder  ·  {online} online" if paired else "Dine enheder"
+            text=f"ALLE ENHEDER  ·  {online} ONLINE" if paired else "ALLE ENHEDER"
         )
-        self._refresh_orbit()
-        if paired:
-            self.paired_empty.pack_forget()
-        else:
-            self.paired_empty.pack(fill="x", before=self.paired_list)
+        self._refresh_hero()
+        # Sections in a fixed order; an empty one is not shown at all.
+        sections = ((self.share_paired_section, bool(paired)), (self.lan_section, bool(lan)))
+        for frame, show in sections:
+            frame.pack_forget()
+            if show:
+                frame.pack(fill="x", pady=(px(24), 0))
         if lan:
-            self.lan_section.pack(fill="x", pady=(px(18), 0))
-            self.lan_title.configure(text=f"Fundet i nærheden  ·  {len(lan)}")
-        else:
-            self.lan_section.pack_forget()
+            self.lan_title.configure(text=f"FUNDET I NÆRHEDEN  ·  {len(lan)}")
 
     def _refresh_device_cards(self) -> None:
         for card in self.device_cards.values():
@@ -3155,6 +3339,9 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         self.peer_status[status.device_id] = status
         if previous is None or previous.online != status.online:
             self.history.record_connection(peer, status.online, status.rtt_ms)
+            ready = status.online and self.config_store.is_trusted(status.device_id)
+            if ready and self._mascot_ready():
+                self.hero.actor.nod()  # connected and ready
             card = self.device_cards.get(peer.device_id)
             if card is not None:
                 card.update(peer)
@@ -3667,11 +3854,11 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
                 inner,
                 text=title.upper(),
                 bg=c["bg"],
-                fg=c["faint"],
-                font=self.theme.font(8, family=self.theme.mono),
+                fg=c["muted"],
+                font=self.theme.font(8, "bold"),
                 anchor="w",
             ).pack(fill="x", pady=(px(6), px(8)))
-            card = Card(inner, self.theme, radius=20)
+            card = Card(inner, self.theme)
             card.pack(fill="x", pady=(0, px(16)))
             return card
 
@@ -4504,7 +4691,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         modal = Modal(self, self.theme, title)
         modal.heading(title, subtitle)
         if all_callback is not None and len(trusted) >= 2:
-            card = Card(modal.body, self.theme, padding=12, radius=10)
+            card = Card(modal.body, self.theme, padding=12)
             card.pack(fill="x", pady=(px(10), 0))
             Avatar(card.body, self.theme, "all", size=32).pack(side="left")
             tk.Label(
@@ -4532,7 +4719,7 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         for peer in sorted(trusted, key=lambda item: item.name.lower()):
             status = self.peer_status.get(peer.device_id)
             online = status is not None and status.online
-            card = Card(modal.body, self.theme, padding=12, radius=10)
+            card = Card(modal.body, self.theme, padding=12)
             card.pack(fill="x", pady=(px(10), 0))
             Avatar(card.body, self.theme, peer.platform, size=32).pack(side="left")
             tk.Label(
@@ -4834,10 +5021,11 @@ class H4xtorShareApp(PhonePagesMixin, UpdateMixin, TkinterDnD.Tk):
         states = list(self.transfers.values())
         active = sum(1 for state in states if state.status == "active")
         landed = sum(1 for s in states if s.direction == "send" and s.status == "done")
-        if landed > getattr(self, "_sends_landed", 0) and hasattr(self, "orbit"):
-            self.orbit.celebrate()  # the monkey hops when a send has landed
+        if landed > getattr(self, "_sends_landed", 0) and hasattr(self, "hero"):
+            self.hero.actor.celebrate()  # the monkey hops when a send has landed
+            self.hero.burst()
         self._sends_landed = landed
-        self._refresh_orbit()
+        self._refresh_hero()
         self.transfer_badge.configure(text=str(active) if active else "")
         for key, label in TRANSFER_FILTERS:
             count = sum(1 for state in states if state.matches(key))

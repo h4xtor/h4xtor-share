@@ -163,8 +163,19 @@ def test_scrollframe_wheel_works_over_child_widgets() -> None:
         labels = [tk.Label(scroll.inner, text=f"row {i}") for i in range(80)]
         for label in labels:
             label.pack()
-        root.update()
+        # The window manager places the window when it gets round to it (on Windows CI it
+        # can take a moment): ask the OS what is under a point only once it is really there.
+        import time
+
         child = labels[2]
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            root.update()
+            if root.winfo_viewable() and child.winfo_rootx() >= 120:
+                break
+            time.sleep(0.05)
+        else:
+            pytest.skip("Tk runtime unavailable on this runner: the window was never placed")
         event = SimpleNamespace(
             widget=child,
             x_root=child.winfo_rootx() + 2,
@@ -870,6 +881,95 @@ def test_update_dialog_flow(tmp_path, monkeypatch) -> None:
 
 
 @pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_wifi_5g_page_switches_proxy_and_finds_sharing_phone(tmp_path, monkeypatch) -> None:
+    import socket
+
+    from h4xtor_share import sysproxy
+
+    calls: list[str] = []
+    monkeypatch.setattr(sysproxy, "apply", lambda url: calls.append(f"apply {url}") or {"x": 1})
+    monkeypatch.setattr(sysproxy, "restore", lambda saved, url: calls.append(f"restore {saved}"))
+    app, peers = _paired_app(1, tmp_path, monkeypatch, ("net-gateway",))
+    try:
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            app.netmerge.port = sock.getsockname()[1]
+        app.netmerge.adapters = lambda: [("Wi-Fi", "127.0.0.1")]
+
+        async def healthy(link) -> None:
+            link.healthy, link.latency = True, 0.02
+
+        async def status(peer):
+            return {"enabled": True, "network": "5G"}
+
+        monkeypatch.setattr(app.netmerge, "probe", healthy)
+        monkeypatch.setattr(app.client, "net_share_status", status)
+        app.show_page("netmerge")
+        assert app.netmerge_status.cget("text") == "Slået fra"
+
+        app.set_netmerge_enabled(True)
+        _pump(app, lambda: app.config_store.data.get("netmerge_proxy_saved") == {"x": 1})
+        assert app.netmerge.running and calls == [f"apply {app.netmerge.pac_url}"]
+        _pump(app, lambda: f"phone:{peers[0].device_id}" in app.netmerge.links)
+        app._refresh_netmerge()
+        texts = " ".join(_texts(app.netmerge_list))
+        assert "Mobil" in texts and "Telefon · 5G" in texts and "Wi-Fi" in texts
+        assert app.netmerge_status.cget("text").startswith("Kører · 2 links")
+
+        app.set_netmerge_enabled(False)
+        _pump(app, lambda: "netmerge_proxy_saved" not in app.config_store.data)
+        assert not app.netmerge.running and calls[-1] == "restore {'x': 1}"
+        assert not app.netmerge_toggle.value
+
+        # On at quit: the system proxy is put back, but it switches on again next start.
+        app.set_netmerge_enabled(True)
+        _pump(app, lambda: app.config_store.data.get("netmerge_proxy_saved") == {"x": 1})
+    finally:
+        app.close()
+    assert calls[-1] == "restore {'x': 1}"
+    assert app.config_store.data["netmerge_enabled"] is True
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_wifi_5g_quit_while_switching_on_puts_the_proxy_back(tmp_path, monkeypatch) -> None:
+    import socket
+    import threading
+    import time
+
+    from h4xtor_share import sysproxy
+
+    calls: list[str] = []
+    applying = threading.Event()
+
+    def slow_apply(url: str) -> dict[str, int]:
+        applying.set()
+        time.sleep(0.6)  # Windows writes the registry and tells WinINet meanwhile
+        calls.append("apply")
+        return {"x": 1}
+
+    monkeypatch.setattr(sysproxy, "apply", slow_apply)
+    monkeypatch.setattr(sysproxy, "restore", lambda saved, url: calls.append(f"restore {saved}"))
+    app, _peers = _paired_app(1, tmp_path, monkeypatch, ("net-gateway",))
+    try:
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            app.netmerge.port = sock.getsockname()[1]
+        app.netmerge.adapters = lambda: [("Wi-Fi", "127.0.0.1")]
+
+        async def healthy(link) -> None:
+            link.healthy, link.latency = True, 0.02
+
+        monkeypatch.setattr(app.netmerge, "probe", healthy)
+        app.set_netmerge_enabled(True)
+        _pump(app, applying.is_set)
+    finally:
+        app.close()  # quit while the system proxy is still being set
+    # The quit waited for it and put the user's own settings back.
+    assert calls == ["apply", "restore {'x': 1}"]
+    assert not app.netmerge.running
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
 def test_bluetooth_fallback_switches_route_and_back(tmp_path, monkeypatch) -> None:
     import socket
 
@@ -957,11 +1057,14 @@ def test_bluetooth_finds_and_pairs_a_phone_never_seen_on_wifi(tmp_path, monkeypa
     app = _new_app()
     opened: list[tuple[str, str | None]] = []
     phone_ends: list[bluetooth.Bridge] = []
+    in_range = [True]
 
     def fake_open_bridge(address, device_id, local_port, expected_id=None, on_closed=None):
         opened.append((address, expected_id))
         if address != "22:22:22:22:22:22":  # the headphones: no h4xtor share there
             raise OSError(10108, "service not found")
+        if not in_range[0]:  # out of range: the app's own retry must not reach it either
+            raise OSError(10060, "connection timed out")
         left, right = socket.socketpair()
         phone_ends.append(
             bluetooth.Bridge(right, phone_id, phone_config.port, odd=False).start()
@@ -1026,12 +1129,16 @@ def test_bluetooth_finds_and_pairs_a_phone_never_seen_on_wifi(tmp_path, monkeypa
                    for e in phone_events)
 
         # Out of range: the phone stays in the list (offline) instead of vanishing…
+        in_range[0] = False
         phone_ends[0].close()
         _pump(app, lambda: phone_id not in app._bt_bridges)
         kept = app.peers[phone_id]
         assert (kept.address, kept.transport) == ("", "bluetooth")
         assert not app.peer_status[phone_id].online
         # …and comes back on Bluetooth by itself (the remembered MAC first).
+        _pump(app, lambda: phone_id not in app._bt_trying)  # an out-of-range retry is over
+        in_range[0] = True
+        app._bt_last_try.pop(phone_id, None)  # …and would hold the next try back for a minute
         app.event_queue.put(("bt_maybe", kept))
         _pump(app, lambda: phone_id in app._bt_bridges, 15)
         assert opened[-1] == ("22:22:22:22:22:22", phone_id)
@@ -1198,7 +1305,7 @@ def test_pc_wifi_direct_can_be_retried_after_a_failed_start(tmp_path, monkeypatc
 
 
 @pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
-def test_send_page_orbit_shows_devices_and_picks_one(tmp_path, monkeypatch) -> None:
+def test_send_page_hero_and_tiles_follow_the_selection(tmp_path, monkeypatch) -> None:
     from h4xtor_share.app import TransferState
     from h4xtor_share.models import PeerStatus
 
@@ -1208,23 +1315,118 @@ def test_send_page_orbit_shows_devices_and_picks_one(tmp_path, monkeypatch) -> N
             app.peer_status[peer.device_id] = PeerStatus(peer.device_id, True, 4.0)
         app._reorder_cards()
         app.update()
-        names = [node["name"] for node in app.orbit.nodes]
-        assert sorted(names) == ["Bærbar", "Mobil"]
-        assert all(node["sub"] == "wifi · 4 ms" for node in app.orbit.nodes)
-        app._orbit_pick(peers[1].device_id)  # a click on a node on the map
+        tiles = {node["id"]: node for node in app.device_tiles.nodes}
+        assert tiles["*"]["name"] == "Alle enheder"  # two devices: an "all" tile first
+        assert sorted(n["name"] for k, n in tiles.items() if k != "*") == ["Bærbar", "Mobil"]
+        assert all(n["sub"] == "Wi-Fi · 4 ms" for k, n in tiles.items() if k != "*")
+
+        app._tile_pick(peers[1].device_id)  # a click on a tile
         assert app.selected_id == peers[1].device_id
-        assert "Bærbar" in app.greeting_sub.cget("text")
-        assert [n["id"] for n in app.orbit.nodes if n["selected"]] == [peers[1].device_id]
+        eyebrow, title, status, _dot, _hint = app.hero._words
+        assert (eyebrow, title) == ("SEND TIL", "BÆRBAR")
+        assert status.startswith("Online")
+        assert [n["id"] for n in app.device_tiles.nodes if n["selected"]] == [peers[1].device_id]
+        assert app.hero_send._text == "SEND FILER"
+
+        app._tile_pick("*")
+        assert app._all_selected() and app.hero._words[1] == "ALLE ENHEDER"
+
         app.transfers["t"] = TransferState("t", "ferie.mp4", "send", "Bærbar", total=10, sent=4)
         app._update_transfer_badge()
-        assert app.orbit.sending == {peers[1].device_id}
-        app.orbit._animate()  # one frame of the motion (ring, pulse, beams, lights, blink)
+        assert app.hero.actor.busy  # the monkey hops while files move
+        sub = {n["id"]: n["sub"] for n in app.device_tiles.nodes}
+        assert sub[peers[1].device_id] == "Sender …"
+        assert app.device_tiles._pulse_after is not None  # its tile breathes blue
+        app.device_tiles._pulse()
+        app.hero._animate()  # one frame: embers drift, the monkey moves
         app.transfers["t"].status = "done"
         app._update_transfer_badge()
-        assert app.orbit._hop > 0  # the monkey hops when the send has landed
-        assert app.orbit.sending == set()
+        assert app.hero.actor.gesture == "hops"  # a happy hop when the send has landed
+        app.device_tiles._pulse()
+        assert app.device_tiles._pulse_after is None  # the pulse stops with the send
+        app.show_page("transfers")  # the title slides in
+        app.update()
+        title = app._page_headers["transfers"].find_withtag("page-title")
+        assert title and app._page_headers["transfers"].itemcget(title[0], "text") == "OVERFØRSLER"
+        assert len(app.hero._sparks) == 18  # and a ring of sparks
+        for _ in range(25):
+            app.hero._animate_sparks()
+        assert app.hero._sparks == [] and not app.hero.find_withtag("spark")
+        assert not app.hero.actor.busy
     finally:
         app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_send_page_first_run_offers_to_connect() -> None:
+    app = _new_app()
+    try:
+        app.update()
+        assert app.hero._words[:2] == ("KOM I GANG", "FORBIND DIN TELEFON")
+        assert app.hero_send._text == "FORBIND NY ENHED"
+        opened = []
+        app.show_qr_pairing = lambda: opened.append(True)
+        app.hero_send.command()
+        assert opened == [True]
+        assert [n["id"] for n in app.device_tiles.nodes] == []  # only the "+" tile
+    finally:
+        app.close()
+
+
+def test_monkey_actor_hops_grins_points_and_nods() -> None:
+    import tkinter as tk
+
+    from h4xtor_share.ui_kit import MonkeyActor
+
+    try:
+        root = tk.Tk()
+    except tk.TclError as error:
+        pytest.skip(f"Tk unavailable: {error}".splitlines()[0])
+    try:
+        canvas = tk.Canvas(root, width=300, height=300)
+        actor = MonkeyActor(canvas, "m")
+        actor.place(150, 150, 120)
+        head_top = canvas.bbox("m")[1]
+
+        def frames(count: int) -> None:
+            for _ in range(count):
+                actor.tick()
+
+        arm = canvas.find_withtag("m-arm")[0]
+        assert canvas.itemcget(arm, "state") == "hidden"
+        actor.point()
+        frames(4)
+        assert canvas.itemcget(arm, "state") == "normal"  # the arm is out
+        frames(len(actor.POINT))
+        assert canvas.itemcget(arm, "state") == "hidden" and actor.gesture == ""
+
+        mouth = canvas.find_withtag("m-mouth")[0]
+        ear = canvas.find_withtag("m-ear")[0]
+        ear_height = canvas.coords(ear)[3] - canvas.coords(ear)[1]
+        actor.grin()
+        frames(3)
+        assert canvas.itemcget(mouth, "style") == "chord"  # mouth open
+        assert canvas.coords(ear)[3] - canvas.coords(ear)[1] > ear_height * 1.2  # ears up
+        frames(len(actor.GRIN))
+        assert canvas.itemcget(mouth, "style") == "arc"
+        assert abs(canvas.coords(ear)[3] - canvas.coords(ear)[1] - ear_height) < 0.01
+
+        actor.nod()
+        frames(3)
+        assert canvas.bbox("m")[1] > head_top + 4  # head dips
+        frames(len(actor.NOD))
+
+        actor.set_busy(True)
+        tops = []
+        for _ in range(14):
+            actor.tick()
+            tops.append(canvas.bbox("m")[1])
+        assert min(tops) < head_top - 8  # off the ground
+        actor.set_busy(False)
+        frames(30)
+        assert abs(canvas.bbox("m")[1] - head_top) <= 3  # back on the ground (breathing only)
+    finally:
+        root.destroy()
 
 
 @pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
@@ -1239,3 +1441,110 @@ def test_menu_groups_and_connections_page() -> None:
         assert app.direct_status.winfo_toplevel() is app
     finally:
         app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_every_button_and_menu_entry_runs(tmp_path, monkeypatch) -> None:
+    """Press every button on every page (and in the dialogs they open) and run every
+    entry of the menus they show: none may raise. Pickers return nothing."""
+    import time
+    import tkinter as tk
+    import tkinter.filedialog as filedialog
+
+    from h4xtor_share import app as app_module
+    from h4xtor_share.models import TransferProgress
+    from h4xtor_share.ui_kit import Button
+
+    for name in ("askopenfilenames", "askopenfilename", "asksaveasfilename"):
+        monkeypatch.setattr(filedialog, name, lambda **_k: "")
+    monkeypatch.setattr(filedialog, "askdirectory", lambda **_k: "")
+    monkeypatch.setattr(app_module, "open_path", lambda *_a, **_k: None)
+    monkeypatch.setattr(app_module, "reveal_in_folder", lambda *_a, **_k: None)
+    monkeypatch.setattr("webbrowser.open", lambda *_a, **_k: True)
+    app, peers = _paired_app(1, tmp_path, monkeypatch, ("notifications", "sms", "remote-control"))
+    problems: list[str] = []
+    app.report_callback_exception = lambda *exc: problems.append(f"Tk callback: {exc[1]!r}")
+    phone = peers[0]
+    app._update_transfer(TransferProgress("a" * 32, "x.bin", 5, 10, "send", peer_name=phone.name))
+    picture = tmp_path / "photo.jpg"
+    picture.write_bytes(b"x" * 100)
+    app.history.record_received_file(phone, picture.name, 100, str(picture))
+    app.history.record_received_text(phone, "https://example.com")
+    app.history.record_sent_file(phone, picture.name, 100, str(picture))
+    app._refresh_history()
+
+    def settle(seconds: float = 0.05) -> None:
+        end = time.time() + seconds
+        while time.time() < end:
+            app.update()
+            time.sleep(0.01)
+
+    def dialogs() -> list[tk.Toplevel]:
+        return [w for w in app.winfo_children() if isinstance(w, tk.Toplevel)]
+
+    def buttons_in(widget: tk.Misc) -> list[Button]:
+        found = []
+        for child in widget.winfo_children():
+            if isinstance(child, Button):
+                found.append(child)
+            found.extend(buttons_in(child))
+        return found
+
+    def press(button: Button, where: str) -> bool:
+        if not button.winfo_exists() or not button.enabled or button.command is None:
+            return False
+        try:
+            button.command()
+        except Exception as error:  # noqa: BLE001 - collected and reported below
+            problems.append(f"{where} {button._text or button._icon!r}: {error!r}")
+        settle()
+        return True
+
+    menu_entries: list[str] = []
+
+    def run_menu(menu: tk.Menu, _x: int, _y: int, _entry: str = "") -> None:
+        last = menu.index("end")
+        for index in range(0 if last is None else last + 1):
+            if menu.type(index) != "command":
+                continue
+            label = menu.entrycget(index, "label")
+            try:
+                menu.invoke(index)
+            except Exception as error:  # noqa: BLE001
+                problems.append(f"menu {label!r}: {error!r}")
+            menu_entries.append(label)
+            settle()
+            for dialog in dialogs():
+                dialog.destroy()
+
+    monkeypatch.setattr(tk.Menu, "tk_popup", run_menu)
+    pressed = 0
+    try:
+        settle(0.3)
+        for name in list(app.pages):
+            app.show_page(name)
+            settle()
+            for button in buttons_in(app.pages[name]):
+                label = button._text or button._icon
+                if not press(button, f"{name}:"):
+                    continue
+                pressed += 1
+                for dialog in dialogs():  # one level down: the dialog it opened
+                    for inner in buttons_in(dialog):
+                        pressed += press(inner, f"{name}: dialog from {label!r}:")
+                        for extra in dialogs():
+                            if extra is not dialog:
+                                extra.destroy()
+                for dialog in dialogs():
+                    dialog.destroy()
+                app.show_page(name)
+        for button in buttons_in(app.sidebar):
+            pressed += press(button, "menu:")
+            for dialog in dialogs():
+                dialog.destroy()
+        settle(0.3)
+    finally:
+        monkeypatch.undo()
+        app.close()
+    assert not problems, "\n".join(problems)
+    assert pressed > 40 and len(menu_entries) > 10, (pressed, menu_entries)

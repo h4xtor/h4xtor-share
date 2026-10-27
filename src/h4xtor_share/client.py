@@ -12,6 +12,7 @@ import aiohttp
 
 from h4xtor_share.config import Config
 from h4xtor_share.models import DESKTOP_CAPABILITIES, Peer, TransferProgress
+from h4xtor_share.netmerge import PhoneRoute
 from h4xtor_share.pairing import PairingInvite
 
 CHUNK_SIZE = 1024 * 1024
@@ -304,6 +305,17 @@ class PeerClient:
     async def speak(self, peer: Peer, text: str) -> None:
         self._require(peer, "remote-control")
         await self._authed_post(peer, "/api/v1/remote/speak", {"text": text[:1000]})
+
+    async def net_share_status(self, peer: Peer) -> dict[str, Any]:
+        """Is the phone sharing its mobile data (Wi-Fi + 5G)? {"enabled", "network", ...}"""
+        self._require(peer, "net-gateway")
+        return await self._authed_post(peer, "/api/v1/net/status", {}, timeout_seconds=6)
+
+    def net_route(self, peer: Peer) -> PhoneRoute:
+        """Where and how the Wi-Fi + 5G proxy tunnels through this phone (its pairing)."""
+        headers, _ssl = self.auth(peer)  # raises when the phone is not paired
+        _token, fingerprint = self.config.outbound_credentials(peer.device_id) or ("", "")
+        return PhoneRoute(peer.address, peer.port, fingerprint, headers)
 
     async def set_wallpaper(self, peer: Peer, path: Path) -> None:
         self._require(peer, "remote-control")
