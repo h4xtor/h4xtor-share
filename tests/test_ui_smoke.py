@@ -1373,7 +1373,31 @@ def test_send_page_first_run_offers_to_connect() -> None:
         app.close()
 
 
-def test_monkey_actor_hops_grins_points_and_nods() -> None:
+def test_monkey_parts_bend_with_the_pose() -> None:
+    from h4xtor_share.ui_kit import MonkeyPose, monkey_parts
+
+    def box(parts, part):
+        xs = [v for p in parts if p[4] == part for v in p[1][0::2]]
+        ys = [v for p in parts if p[4] == part for v in p[1][1::2]]
+        return min(xs), min(ys), max(xs), max(ys)
+
+    pose = MonkeyPose()
+    still = monkey_parts(pose)
+    assert {"tail", "leg", "foot", "body", "arm", "hand", "head", "eye", "mouth"} <= {
+        p[4] for p in still}
+    assert box(still, "foot")[3] <= 141 and box(still, "head")[1] >= 0  # stands in its box
+    pose.point = 1
+    assert box(monkey_parts(pose), "hand")[0] < 0  # the arm reaches out at the devices
+    pose.point, pose.grin = 0, 1
+    assert [p[0] for p in monkey_parts(pose) if p[4] == "mouth"] == ["poly"]  # mouth open
+    pose.grin, pose.wag = 0, 1
+    assert any(p[4] == "finger" for p in monkey_parts(pose))
+    pose.wag, pose.rot = 0, 180
+    flipped = monkey_parts(pose)
+    assert box(flipped, "head")[1] > box(flipped, "foot")[3]  # upside down mid-somersault
+
+
+def test_monkey_actor_strolls_points_reacts_and_hops() -> None:
     import tkinter as tk
 
     from h4xtor_share.ui_kit import MonkeyActor
@@ -1383,48 +1407,58 @@ def test_monkey_actor_hops_grins_points_and_nods() -> None:
     except tk.TclError as error:
         pytest.skip(f"Tk unavailable: {error}".splitlines()[0])
     try:
-        canvas = tk.Canvas(root, width=300, height=300)
-        actor = MonkeyActor(canvas, "m")
-        actor.place(150, 150, 120)
-        head_top = canvas.bbox("m")[1]
+        canvas = tk.Canvas(root, width=400, height=300)
+        actor = MonkeyActor(canvas, "m", seed=3)
+        actor.place(200, 280, 100, roam=60)
+        top = canvas.bbox("m")[1]
 
         def frames(count: int) -> None:
             for _ in range(count):
                 actor.tick()
 
-        arm = canvas.find_withtag("m-arm")[0]
-        assert canvas.itemcget(arm, "state") == "hidden"
-        actor.point()
-        frames(4)
-        assert canvas.itemcget(arm, "state") == "normal"  # the arm is out
-        frames(len(actor.POINT))
-        assert canvas.itemcget(arm, "state") == "hidden" and actor.gesture == ""
+        def play(start, name: str) -> list[float]:
+            start()
+            seen = []
+            while actor.gesture == name:
+                actor.tick()
+                seen.append(actor.pose)
+                seen[-1] = (actor.pose.point, actor.pose.grin, actor.pose.wag,
+                            abs(actor.pose.rot), canvas.bbox("m")[1],
+                            len(canvas.find_withtag("m-bubble")))
+            return seen
 
-        mouth = canvas.find_withtag("m-mouth")[0]
-        ear = canvas.find_withtag("m-ear")[0]
-        ear_height = canvas.coords(ear)[3] - canvas.coords(ear)[1]
-        actor.grin()
-        frames(3)
-        assert canvas.itemcget(mouth, "style") == "chord"  # mouth open
-        assert canvas.coords(ear)[3] - canvas.coords(ear)[1] > ear_height * 1.2  # ears up
-        frames(len(actor.GRIN))
-        assert canvas.itemcget(mouth, "style") == "arc"
-        assert abs(canvas.coords(ear)[3] - canvas.coords(ear)[1] - ear_height) < 0.01
+        centres = set()
+        for _ in range(400):
+            actor.tick()
+            if actor.gesture:
+                frames(actor.LENGTHS[actor.gesture])
+            centres.add(round(actor.center[0]))
+        assert max(centres) - min(centres) > 40  # it walks about
 
-        actor.nod()
-        frames(3)
-        assert canvas.bbox("m")[1] > head_top + 4  # head dips
-        frames(len(actor.NOD))
+        assert max(f[0] for f in play(actor.point, "point")) > 0.95
+        assert actor.pose.point == 0  # arm back down
+        assert max(f[1] for f in play(actor.grin, "grin")) > 0.95
+        stop = play(actor.stop, "stop")
+        assert max(f[2] for f in stop) > 0.95 and max(f[5] for f in stop) == 2  # "Lad være!"
+        assert not canvas.find_withtag("m-bubble")
+        assert max(f[3] for f in play(actor.flip, "flip")) > 300  # a full turn
+        assert actor.pose.rot == 0
+        top = canvas.bbox("m")[1]
+        assert min(f[4] for f in play(actor.celebrate, "hops")) < top - 8
 
+        reactions = [actor.tap() for _ in range(12)]
+        assert set(reactions) == {"grin", "stop", "flip"}
+        assert all(a != b for a, b in zip(reactions, reactions[1:], strict=False))
+        x, y = actor.center
+        assert actor.hit(x, y) and not actor.hit(5, 5)
+
+        actor._gesture = None
         actor.set_busy(True)
         tops = []
         for _ in range(14):
             actor.tick()
             tops.append(canvas.bbox("m")[1])
-        assert min(tops) < head_top - 8  # off the ground
-        actor.set_busy(False)
-        frames(30)
-        assert abs(canvas.bbox("m")[1] - head_top) <= 3  # back on the ground (breathing only)
+        assert max(tops) - min(tops) > 8  # hopping while files move
     finally:
         root.destroy()
 
