@@ -74,6 +74,7 @@ from h4xtor_share.ui_kit import (
     Toast,
     Toggle,
     entry,
+    mix_color,
     render_backdrop,
     round_rect,
     set_dark_titlebar,
@@ -932,6 +933,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             fg=c["faint"], font=self.theme.font(8), padx=px(14),
         ).pack(side="right")
         self.pages: dict[str, tk.Frame] = {}
+        self._page_headers: dict[str, tk.Canvas] = {}
         self.page_container = tk.Frame(self.main, bg=c["bg"])
         self.page_container.pack(fill="both", expand=True)
         self.page_container.grid_rowconfigure(0, weight=1)
@@ -1136,10 +1138,32 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         for key, bar in self.nav_bars.items():
             bar.configure(bg=c["accent"] if key == name else bar.master.cget("bg"))
         self.pages[name].tkraise()
+        self._slide_in_title(name)
         if name == "history":
             self._refresh_history()
         elif name in {"notifications", "sms", "remote"}:
             self._phone_page_shown(name)
+
+    def _slide_in_title(self, name: str) -> None:
+        """A page's title glides in from the left and fades up, like a launcher tab change."""
+        header = self._page_headers.get(name)
+        if header is None:
+            return
+        c, px = self.theme.c, self.theme.px
+        steps = (0.0, 0.35, 0.62, 0.82, 0.94, 1.0)
+
+        def frame(index: int) -> None:
+            with contextlib.suppress(tk.TclError):
+                f = steps[index]
+                for tag, x, color in (("page-title", px(36), c["text"]),
+                                      ("page-sub", px(36), c["muted"])):
+                    _, y = header.coords(tag)
+                    header.coords(tag, x - px(18) * (1 - f), y)
+                    header.itemconfigure(tag, fill=mix_color(color, c["bg"], 1 - f))
+                if index + 1 < len(steps):
+                    header.after(16, lambda: frame(index + 1))
+
+        frame(0)
 
     def _header_art(self) -> tk.PhotoImage:
         """One shared strip of launcher light for every page header (rendered once)."""
@@ -1159,9 +1183,10 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         header.pack(fill="x", pady=(0, px(4)))
         header.create_image(0, 0, image=self._header_art(), anchor="nw")
         header.create_text(px(36), px(26), text=title.upper(), fill=c["text"], anchor="nw",
-                           font=self.theme.hero_font(22))
+                           font=self.theme.hero_font(22), tags=("page-title",))
         header.create_text(px(36), px(62), text=subtitle, fill=c["muted"], anchor="nw",
-                           font=self.theme.font(10))
+                           font=self.theme.font(10), tags=("page-sub",))
+        self._page_headers[name] = header
         # The buttons sit below the light, on the plain page colour (Tk widgets are opaque).
         actions = tk.Frame(header, bg=c["bg"])
         item = header.create_window(0, px(124), window=actions, anchor="se")
@@ -1611,7 +1636,8 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             if peer.name in sending_names:
                 sub = "Sender …"
             nodes.append({"id": peer.device_id, "name": peer.name, "platform": peer.platform,
-                          "online": online(peer), "selected": selected, "sub": sub})
+                          "online": online(peer), "selected": selected, "sub": sub,
+                          "sending": peer.name in sending_names})
         self.device_tiles.set_nodes(nodes)
         live = sum(1 for peer in trusted if online(peer))
         self.tiles_title.configure(

@@ -236,7 +236,22 @@ public final class Ui {
         }
         view.setTextColor(color);
         view.setBackground(ripple(rounded(fill, stroke, 6), 6));
+        pressable(view);
         return view;
+    }
+
+    /** Pressed, the view sinks a little (launcher buttons feel physical). */
+    public static void pressable(View view) {
+        android.animation.StateListAnimator states = new android.animation.StateListAnimator();
+        states.addState(new int[]{android.R.attr.state_pressed}, scaleTo(view, 0.96f, 80));
+        states.addState(new int[]{}, scaleTo(view, 1f, 140));
+        view.setStateListAnimator(states);
+    }
+
+    private static android.animation.Animator scaleTo(View view, float scale, long millis) {
+        return android.animation.ObjectAnimator.ofPropertyValuesHolder(view,
+                android.animation.PropertyValuesHolder.ofFloat("scaleX", scale),
+                android.animation.PropertyValuesHolder.ofFloat("scaleY", scale)).setDuration(millis);
     }
 
     public LinearLayout card() {

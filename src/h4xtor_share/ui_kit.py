@@ -1518,6 +1518,8 @@ class DeviceTiles(tk.Frame):
         self.nodes: list[dict[str, Any]] = []
         self.tiles: dict[str, tk.Canvas] = {}
         self._tw, self._th = theme.px(118), theme.px(150)
+        self._phase = 0.0
+        self._pulse_after: str | None = None
         self.set_nodes([])
 
     def set_nodes(self, nodes: list[dict[str, Any]]) -> None:
@@ -1531,6 +1533,22 @@ class DeviceTiles(tk.Frame):
             self.tiles[node["id"]] = self._tile(node)
         if self.on_add is not None:
             self._tile({"id": "+", "name": "Forbind ny", "sub": "QR · IP · Bluetooth"})
+        if self._pulse_after is None and any(node.get("sending") for node in self.nodes):
+            self._pulse_after = self.after(60, self._pulse)
+
+    def _pulse(self) -> None:
+        """The tile being sent to breathes blue until the send is over."""
+        self._pulse_after = None
+        try:
+            if not self.winfo_exists() or not any(n.get("sending") for n in self.nodes):
+                return
+            self._phase += 0.14
+            for tile in self.tiles.values():
+                if tile.node.get("sending") and tile.winfo_ismapped():  # type: ignore[attr-defined]
+                    self._paint(tile)
+            self._pulse_after = self.after(60, self._pulse)
+        except tk.TclError:
+            return
 
     def _tile(self, node: dict[str, Any]) -> tk.Canvas:
         px = self.theme.px
@@ -1584,7 +1602,12 @@ class DeviceTiles(tk.Frame):
                                width=2)
             fill = c["card_hover"] if hover else c["card"]
             outline = c["accent"] if selected else c["border_strong"] if hover else c["border"]
-            round_rect(tile, *box, px(6), fill=fill, outline=outline, width=2 if selected else 1)
+            if node.get("sending"):
+                import math
+
+                outline = mix_color(c["accent2"], c["border"], 0.5 - 0.5 * math.sin(self._phase))
+            width = 2 if selected or node.get("sending") else 1
+            round_rect(tile, *box, px(6), fill=fill, outline=outline, width=width)
             color, letter = PLATFORM_STYLE.get(str(node.get("platform", "")).lower(),
                                                (c["faint"], "?"))
             if not node.get("online"):

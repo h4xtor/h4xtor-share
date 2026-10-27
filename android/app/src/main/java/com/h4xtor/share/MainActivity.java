@@ -89,6 +89,8 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private FrameLayout navHolder;
     /** Kept between renders so its animation never restarts. */
     private HeroArt heroArt;
+    /** The tab last drawn, so only a real tab change animates. */
+    private String shownPage = "";
     private int landedSends = -1;
     /** A finger is on the screen: live progress waits, so a button is never rebuilt mid-tap. */
     private boolean touching;
@@ -481,6 +483,14 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             case PAGE_SETTINGS: renderSettings(); break;
             default: renderDevices();
         }
+        if (!page.equals(shownPage)) {  // a new tab glides in; live updates of the same tab do not
+            shownPage = page;
+            if (!animationsOff()) {
+                content.setAlpha(0f);
+                content.setTranslationY(ui.dp(14));
+                content.animate().alpha(1f).translationY(0f).setDuration(200).start();
+            }
+        }
     }
 
     private View header(String title, String subtitle, View action) {
@@ -574,6 +584,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             if (suggestion != null) {
                 content.addView(suggestion, ui.margins(0, 0, 0, 12));
             }
+        }
+        View recent = recentCard();
+        if (recent != null) {
+            content.addView(recent, ui.margins(0, 4, 0, 6));
         }
 
         LinearLayout sectionRow = ui.row();
@@ -906,6 +920,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         tile.setClickable(true);
         tile.setFocusable(true);
         tile.setOnClickListener(click);
+        Ui.pressable(tile);
         tile.setContentDescription(("+".equals(platform) ? "Forbind ny enhed" : name)
                 + (selected ? ", valgt" : "") + ", " + sub);
         FrameLayout square = new FrameLayout(this);
@@ -2039,7 +2054,14 @@ public final class MainActivity extends Activity implements ShareService.UiListe
 
         JSONArray list = service.identity().history(historyMode);
         if (list.length() == 0) {
-            content.addView(ui.text("Intet endnu.", 14f, ui.muted, false), ui.margins(4, 8, 0, 0));
+            LinearLayout empty = ui.card();
+            empty.addView(ui.text("Intet endnu", 16f, ui.text, true));
+            empty.addView(ui.text("devices".equals(historyMode)
+                    ? "Enheder, du har været forbundet med, kommer på listen her."
+                    : "Filer, links og tekst, du " + ("sent".equals(historyMode) ? "sender" : "modtager")
+                    + ", samles her – tryk på en for at åbne den igen.", 13.5f, ui.muted, false),
+                    ui.margins(0, 4, 0, 0));
+            content.addView(empty);
             return;
         }
         LinearLayout card = ui.card();
@@ -2056,18 +2078,58 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                 card.addView(line, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                         Math.max(1, ui.dp(1))));
             }
-            card.addView(historyRow(entry));
+            card.addView(historyRow(entry, "devices".equals(historyMode)));
         }
         content.addView(card);
     }
 
-    private View historyRow(JSONObject entry) {
+    /** "Seneste" on Del: the three newest things that arrived, one tap from opened. */
+    private View recentCard() {
+        JSONArray list = service.identity().history("received");
+        if (list.length() == 0) {
+            return null;
+        }
+        LinearLayout box = ui.column();
+        LinearLayout head = ui.row();
+        head.addView(ui.label("Seneste"), ui.weight(1));
+        TextView all = ui.text("Se alt", 13.5f, ui.accent, true);
+        all.setPadding(ui.dp(12), ui.dp(12), ui.dp(4), ui.dp(12));
+        all.setMinHeight(ui.dp(48));
+        all.setGravity(Gravity.CENTER_VERTICAL);
+        all.setOnClickListener(v -> {
+            page = PAGE_HISTORY;
+            historyMode = "received";
+            render();
+            scroll.scrollTo(0, 0);
+        });
+        head.addView(all);
+        box.addView(head, ui.margins(2, 0, 0, 0));
+        LinearLayout card = ui.card();
+        card.setPadding(ui.dp(6), ui.dp(4), ui.dp(6), ui.dp(4));
+        for (int index = list.length() - 1, shown = 0; index >= 0 && shown < 3; index--) {
+            JSONObject entry = list.optJSONObject(index);
+            if (entry == null) {
+                continue;
+            }
+            if (shown++ > 0) {
+                View line = new View(this);
+                line.setBackgroundColor(ui.border);
+                card.addView(line, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
+                        Math.max(1, ui.dp(1))));
+            }
+            card.addView(historyRow(entry, false));
+        }
+        box.addView(card);
+        return box;
+    }
+
+    private View historyRow(JSONObject entry, boolean devices) {
         LinearLayout row = ui.row();
         row.setPadding(ui.dp(12), ui.dp(12), ui.dp(12), ui.dp(12));
         row.setBackground(ui.ripple(ui.rounded(Color.TRANSPARENT, 0, 12), 12));
         String kind = entry.optString("kind", "");
         int icon;
-        if ("devices".equals(historyMode)) {
+        if (devices) {
             row.addView(ui.avatar(entry.optString("os"), 34));
         } else {
             switch (kind) {
@@ -2079,12 +2141,12 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             row.addView(ui.iconBadge(icon, 34, ui.surfaceAlt, ui.muted));
         }
         LinearLayout texts = ui.column();
-        String title = "devices".equals(historyMode) ? entry.optString("name") : entry.optString("text");
+        String title = devices ? entry.optString("name") : entry.optString("text");
         TextView main = ui.text(title.replace('\n', ' '), 14.5f, ui.text, true);
         main.setSingleLine(true);
         main.setEllipsize(TextUtils.TruncateAt.END);
         texts.addView(main);
-        String subtitle = "devices".equals(historyMode)
+        String subtitle = devices
                 ? entry.optString("ip") + " · " + Ui.platformLabel(entry.optString("os")) + " · " + entry.optString("ts")
                 : entry.optString("peer") + " · " + entry.optString("ts")
                 + (entry.optLong("size", 0) > 0 ? " · " + Ui.formatBytes(entry.optLong("size")) : "");

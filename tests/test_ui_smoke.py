@@ -1279,10 +1279,18 @@ def test_send_page_hero_and_tiles_follow_the_selection(tmp_path, monkeypatch) ->
         assert app.hero.actor.busy  # the monkey hops while files move
         sub = {n["id"]: n["sub"] for n in app.device_tiles.nodes}
         assert sub[peers[1].device_id] == "Sender …"
+        assert app.device_tiles._pulse_after is not None  # its tile breathes blue
+        app.device_tiles._pulse()
         app.hero._animate()  # one frame: embers drift, the monkey moves
         app.transfers["t"].status = "done"
         app._update_transfer_badge()
         assert app.hero.actor.gesture == "hops"  # a happy hop when the send has landed
+        app.device_tiles._pulse()
+        assert app.device_tiles._pulse_after is None  # the pulse stops with the send
+        app.show_page("transfers")  # the title slides in
+        app.update()
+        title = app._page_headers["transfers"].find_withtag("page-title")
+        assert title and app._page_headers["transfers"].itemcget(title[0], "text") == "OVERFØRSLER"
         assert len(app.hero._sparks) == 18  # and a ring of sparks
         for _ in range(25):
             app.hero._animate_sparks()
