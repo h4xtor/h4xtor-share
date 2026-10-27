@@ -188,6 +188,48 @@ async def test_phone_link_tunnels_with_pinned_tls(origin: int, tmp_path: Path) -
         server.close()
 
 
+def test_speed_samples_stay_bounded_while_nobody_reads_them(monkeypatch) -> None:
+    clock = [100.0]
+    monkeypatch.setattr("h4xtor_share.netmerge.time.monotonic", lambda: clock[0])
+    link = Link("a", "Wi-Fi", "pc")
+    for _ in range(1000):  # hours of traffic with the Wi-Fi + 5G page closed, compressed
+        link.count(1000)
+        clock[0] += 0.25
+    assert link.received == 1_000_000
+    assert len(link._window) <= 13  # three seconds of samples, not the whole history
+    assert link.speed() == 4000  # the 12 samples of the last three seconds
+
+
+async def test_phone_tunnel_ends_when_the_client_leaves(origin: int, tmp_path: Path) -> None:
+    server, port, fingerprint, _seen = await fake_phone(tmp_path, "t")
+    held: list[asyncio.StreamWriter] = []
+    # A server that keeps an idle connection open and never says anything (keep-alive).
+    idle = await asyncio.start_server(lambda _r, w: held.append(w), "127.0.0.1", 0)
+    merge = await make_merge(origin, adapters=lambda: [])
+    try:
+        route = PhoneRoute("127.0.0.1", port, fingerprint, {"Authorization": "Bearer t"})
+        merge.set_phone("phone1", "Pixel", route)
+        await merge.probe_all()
+        link = merge.links["phone:phone1"]
+        idle_port = idle.sockets[0].getsockname()[1]
+        reader, writer = await asyncio.open_connection("127.0.0.1", merge.port)
+        writer.write(f"CONNECT 127.0.0.1:{idle_port} HTTP/1.1\r\n\r\n".encode())
+        assert (await reader.readuntil(b"\r\n\r\n")).startswith(b"HTTP/1.1 200")
+        assert link.active == 1
+        writer.close()  # the browser drops the connection
+        for _ in range(100):
+            if link.active == 0:
+                break
+            await asyncio.sleep(0.05)
+        assert link.active == 0  # the tunnel to the phone ended with it
+    finally:
+        await merge.stop()
+        server.close()
+        idle.close()
+        for item in held:
+            item.close()
+
+
 async def test_balancing_prefers_fast_links_and_falls_back(origin: int) -> None:
     merge = NetMerge(free_port(), adapters=lambda: [])
     fast, slow = Link("a", "Wi-Fi", "pc", healthy=True), Link("b", "5G", "pc", healthy=True)

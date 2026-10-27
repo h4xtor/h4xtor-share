@@ -23,6 +23,7 @@ import socket
 import ssl
 import struct
 import time
+from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from urllib.parse import urlsplit
@@ -36,6 +37,7 @@ CONNECT_TIMEOUT = 10.0
 MAX_HEAD = 64 * 1024
 CHUNK = 64 * 1024
 DEFAULT_RATE = 2_000_000.0  # bytes/s guess until a link has moved real data
+SPEED_WINDOW = 3.0  # seconds of samples kept for the live speed
 
 PAC = """function FindProxyForURL(url, host) {
   if (isPlainHostName(host) || host == "localhost" || shExpMatch(host, "*.local")) return "DIRECT";
@@ -74,7 +76,7 @@ class Link:
     received: int = 0
     sent: int = 0
     failures: int = 0
-    _window: list[tuple[float, int]] = field(default_factory=list, repr=False)
+    _window: deque[tuple[float, int]] = field(default_factory=deque, repr=False)
 
     @property
     def score(self) -> float:
@@ -83,13 +85,17 @@ class Link:
 
     def count(self, size: int) -> None:
         self.received += size
-        self._window.append((time.monotonic(), size))
+        now = time.monotonic()
+        self._window.append((now, size))
+        # Trimmed here, not only by speed(): nobody reads it while the page is closed.
+        while self._window[0][0] < now - SPEED_WINDOW:
+            self._window.popleft()
 
-    def speed(self, seconds: float = 3.0) -> float:
+    def speed(self, seconds: float = SPEED_WINDOW) -> float:
         """Bytes per second over the last few seconds (for the live display)."""
         horizon = time.monotonic() - seconds
-        self._window = [item for item in self._window if item[0] >= horizon]
-        return sum(size for _, size in self._window) / seconds
+        samples = tuple(self._window)  # one step: the proxy's thread appends while Tk reads
+        return sum(size for at, size in samples if at >= horizon) / seconds
 
 
 def adapter_addresses() -> list[tuple[str, str]]:
@@ -419,6 +425,10 @@ class NetMerge:
                 with contextlib.suppress(OSError):
                     if sink.can_write_eof():
                         sink.write_eof()
+                    elif not down:
+                        # TLS to a phone cannot half-close: the client is gone, so end the
+                        # tunnel (an idle server would otherwise hold it, and the link's count).
+                        sink.close()
 
         upload = asyncio.create_task(pump(reader, up_writer, False))
         try:

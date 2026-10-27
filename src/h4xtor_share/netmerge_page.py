@@ -47,6 +47,10 @@ class NetMergePageMixin:
         self.netmerge = NetMerge(self.config_store.port + NETMERGE_PORT_OFFSET)
         self.netmerge_rows: dict[str, dict[str, tk.Label]] = {}
         self.netmerge_error = ""
+        # Start, stop and quit take turns: quitting while the proxy is being set waits for it.
+        self._netmerge_turn = asyncio.Lock()
+        # The settings the last start replaced, kept at once (the Tk side saves them later).
+        self._netmerge_applied: dict[str, Any] | None = None
 
     @property
     def netmerge_enabled(self) -> bool:
@@ -289,21 +293,27 @@ class NetMergePageMixin:
             self._netmerge_poll_phones(reschedule=False)
 
     async def _netmerge_start(self) -> dict[str, Any] | str:
-        await self.netmerge.start()
-        if getattr(self, "_closing", False):  # the app is quitting: never leave a proxy set
-            await self.netmerge.stop()
-            return "closing"
-        try:
-            return await asyncio.to_thread(sysproxy.apply, self.netmerge.pac_url)
-        except Exception as error:  # noqa: BLE001 - the proxy still works when set by hand
-            return f"manual:{error}"
+        async with self._netmerge_turn:
+            await self.netmerge.start()
+            if getattr(self, "_closing", False):  # the app is quitting: never leave a proxy set
+                await self.netmerge.stop()
+                return "closing"
+            try:
+                result = await asyncio.to_thread(sysproxy.apply, self.netmerge.pac_url)
+            except Exception as error:  # noqa: BLE001 - the proxy still works when set by hand
+                return f"manual:{error}"
+            if self._netmerge_applied is None:  # a second start would only see our own proxy
+                self._netmerge_applied = result
+            return result
 
     async def _netmerge_stop(self) -> str:
-        saved = self.config_store.data.get("netmerge_proxy_saved")
-        await self.netmerge.stop()
-        if isinstance(saved, dict):
-            await asyncio.to_thread(sysproxy.restore, saved, self.netmerge.pac_url)
-        return "restored"
+        async with self._netmerge_turn:
+            saved = self.config_store.data.get("netmerge_proxy_saved", self._netmerge_applied)
+            self._netmerge_applied = None
+            await self.netmerge.stop()
+            if isinstance(saved, dict):
+                await asyncio.to_thread(sysproxy.restore, saved, self.netmerge.pac_url)
+            return "restored"
 
     async def _netmerge_resume(self) -> None:
         """At start-up: switch back on, or undo a system proxy left by a crash."""
@@ -319,7 +329,7 @@ class NetMergePageMixin:
     async def _netmerge_shutdown(self) -> None:
         """App closing: put the system proxy back but remember that it was on."""
         if self.netmerge.running:
-            await self._netmerge_stop()
+            await self._netmerge_stop()  # after a start that is still setting the proxy
             # The Tk thread is blocked in close(), so saving from here cannot race it.
             self.config_store.data.pop("netmerge_proxy_saved", None)
             self.config_store.save()

@@ -931,6 +931,45 @@ def test_wifi_5g_page_switches_proxy_and_finds_sharing_phone(tmp_path, monkeypat
 
 
 @pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_wifi_5g_quit_while_switching_on_puts_the_proxy_back(tmp_path, monkeypatch) -> None:
+    import socket
+    import threading
+    import time
+
+    from h4xtor_share import sysproxy
+
+    calls: list[str] = []
+    applying = threading.Event()
+
+    def slow_apply(url: str) -> dict[str, int]:
+        applying.set()
+        time.sleep(0.6)  # Windows writes the registry and tells WinINet meanwhile
+        calls.append("apply")
+        return {"x": 1}
+
+    monkeypatch.setattr(sysproxy, "apply", slow_apply)
+    monkeypatch.setattr(sysproxy, "restore", lambda saved, url: calls.append(f"restore {saved}"))
+    app, _peers = _paired_app(1, tmp_path, monkeypatch, ("net-gateway",))
+    try:
+        with socket.socket() as sock:
+            sock.bind(("127.0.0.1", 0))
+            app.netmerge.port = sock.getsockname()[1]
+        app.netmerge.adapters = lambda: [("Wi-Fi", "127.0.0.1")]
+
+        async def healthy(link) -> None:
+            link.healthy, link.latency = True, 0.02
+
+        monkeypatch.setattr(app.netmerge, "probe", healthy)
+        app.set_netmerge_enabled(True)
+        _pump(app, applying.is_set)
+    finally:
+        app.close()  # quit while the system proxy is still being set
+    # The quit waited for it and put the user's own settings back.
+    assert calls == ["apply", "restore {'x': 1}"]
+    assert not app.netmerge.running
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
 def test_bluetooth_fallback_switches_route_and_back(tmp_path, monkeypatch) -> None:
     import socket
 
