@@ -1,19 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- h4xtor share's monkey mascot (original artwork, vector).
-     The ear groups and the mouth are named so ic_monkey_tap.xml can animate them. -->
+     The app icon and small marks; the Del page draws the whole, walking monkey (MonkeyView). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="96dp"
     android:height="96dp"
     android:viewportWidth="100"
     android:viewportHeight="100">
-    <!-- pointing arm: invisible until ic_monkey_point.xml fades it in, and behind the head -->
-    <group android:name="arm">
-        <path android:name="armLine" android:strokeColor="#8B5A3C" android:strokeWidth="8"
-            android:strokeLineCap="round" android:strokeAlpha="0"
-            android:fillColor="#00000000" android:pathData="M44,74L26,84" />
-        <path android:name="armHand" android:fillColor="#8B5A3C" android:fillAlpha="0"
-            android:pathData="M20.5,84a5.5,5.5 0 1,0 11,0a5.5,5.5 0 1,0 -11,0" />
-    </group>
     <!-- ears -->
     <group android:name="earLeft" android:pivotX="16" android:pivotY="50">
         <path android:fillColor="#8B5A3C" android:pathData="M2,50a14,14 0 1,0 28,0a14,14 0 1,0 -28,0" />

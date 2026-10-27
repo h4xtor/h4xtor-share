@@ -79,8 +79,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private EditText composerInput;
     private android.widget.ImageView sendButton;
     /** Kept across renders so the hop is not restarted every progress tick. */
-    private android.widget.ImageView monkeyView;
-    private android.animation.ObjectAnimator monkeyHop;
+    private MonkeyView monkeyView;
     private final java.util.Set<String> seenPeers = new java.util.HashSet<>();
     private final java.util.Set<String> readyPeers = new java.util.HashSet<>();
     private boolean knowsPeers;
@@ -199,9 +198,6 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     @Override
     protected void onPause() {
         resumed = false;
-        if (monkeyHop != null) {
-            monkeyHop.cancel();  // no hopping in the background
-        }
         if (service != null) {
             service.removeListener(this);
         }
@@ -492,9 +488,6 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             getWindow().clearFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         }
         renderNav();
-        if (!PAGE_DEVICES.equals(page) && monkeyHop != null) {
-            monkeyHop.cancel();  // the mascot is off-screen on the other pages
-        }
         content.removeAllViews();
         switch (page) {
             case PAGE_TRANSFERS: renderTransfers(); break;
@@ -835,8 +828,10 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         }
         words.addView(buttons, ui.matchWrap());
         row.addView(words, ui.weight(1));
-        LinearLayout.LayoutParams monkeyParams = new LinearLayout.LayoutParams(ui.dp(104), ui.dp(104));
-        monkeyParams.setMargins(ui.dp(8), 0, 0, 0);
+        // The whole height of the card, so the monkey has room to stroll, hop and flip.
+        LinearLayout.LayoutParams monkeyParams = new LinearLayout.LayoutParams(ui.dp(132),
+                ViewGroup.LayoutParams.MATCH_PARENT);
+        monkeyParams.setMargins(ui.dp(4), 0, 0, 0);
         row.addView(monkey(), monkeyParams);
         frame.addView(row, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -1038,31 +1033,14 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         }
     }
 
-    /** The mascot, reused across renders, hopping while files are moving. */
-    private android.widget.ImageView monkey() {
+    /** The mascot, reused across renders (it keeps strolling), hopping while files move. */
+    private MonkeyView monkey() {
         if (monkeyView == null) {
-            monkeyView = new android.widget.ImageView(this);
-            monkeyView.setImageResource(R.drawable.ic_monkey_tap);
-            monkeyView.setContentDescription("H4xtor Share-aben – tryk for at hilse");
-            monkeyView.setOnClickListener(v -> grin());
+            monkeyView = new MonkeyView(this);
         } else if (monkeyView.getParent() instanceof ViewGroup) {
             ((ViewGroup) monkeyView.getParent()).removeView(monkeyView);
         }
-        boolean busy = service != null && service.activeTransfers() > 0 && !animationsOff();
-        if (busy) {
-            if (monkeyHop == null) {
-                monkeyHop = android.animation.ObjectAnimator.ofFloat(
-                        monkeyView, "translationY", 0f, -ui.dp(14), 0f, 0f);
-                monkeyHop.setDuration(700);
-                monkeyHop.setRepeatCount(android.animation.ValueAnimator.INFINITE);
-            }
-            if (!monkeyHop.isStarted()) {
-                monkeyHop.start();
-            }
-        } else if (monkeyHop != null && monkeyHop.isStarted()) {
-            monkeyHop.cancel();
-            monkeyView.setTranslationY(0f);
-        }
+        monkeyView.setBusy(service != null && service.activeTransfers() > 0);
         return monkeyView;
     }
 
@@ -1072,51 +1050,27 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                 android.provider.Settings.Global.ANIMATOR_DURATION_SCALE, 1f) == 0f;
     }
 
-    /** Tapped: the mascot opens its mouth and perks up its ears, once. */
-    private void grin() {
-        playMascot(R.drawable.ic_monkey_tap);
-    }
-
-    /** A device the phone had not seen before showed up: point at the list. */
+    /** A device the phone had not seen before showed up: point at the tiles. */
     private void point() {
-        if (!animationsOff()) {
-            playMascot(R.drawable.ic_monkey_point);
+        if (monkeyView != null) {
+            monkeyView.point();
         }
     }
 
     /** A paired device is online and ready: a friendly nod. */
     private void nod() {
-        if (monkeyView == null || animationsOff()
-                || (monkeyHop != null && monkeyHop.isStarted())) {
-            return;  // never fight the hop for the same property
+        if (monkeyView != null) {
+            monkeyView.nod();
         }
-        android.animation.ObjectAnimator.ofFloat(monkeyView, "translationY",
-                0f, ui.dp(9), 0f, ui.dp(9), 0f).setDuration(620).start();
     }
 
-    /** A send has landed: three happy hops and a ring of sparks behind the monkey. */
+    /** A send has landed: happy hops and a ring of sparks behind the monkey. */
     private void celebrate() {
         if (heroArt != null) {
             heroArt.burst();
         }
-        if (monkeyView == null || animationsOff() || (monkeyHop != null && monkeyHop.isStarted())) {
-            return;
-        }
-        float up = -ui.dp(16);
-        android.animation.ObjectAnimator.ofFloat(monkeyView, "translationY",
-                0f, up, 0f, up * 0.7f, 0f, up * 0.4f, 0f).setDuration(900).start();
-    }
-
-    private void playMascot(int drawableId) {
-        if (monkeyView == null) {
-            return;
-        }
-        monkeyView.setImageResource(drawableId);
-        if (monkeyView.getDrawable() instanceof android.graphics.drawable.AnimatedVectorDrawable) {
-            android.graphics.drawable.AnimatedVectorDrawable gesture =
-                    (android.graphics.drawable.AnimatedVectorDrawable) monkeyView.getDrawable();
-            gesture.stop();  // a second tap restarts it instead of being swallowed
-            gesture.start();
+        if (monkeyView != null) {
+            monkeyView.celebrate();
         }
     }
 

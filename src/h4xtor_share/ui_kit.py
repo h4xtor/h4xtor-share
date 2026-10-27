@@ -1146,53 +1146,170 @@ def render_backdrop(
     return small.zoom(step) if step > 1 else small
 
 
-class MonkeyActor:
-    """Brings a draw_monkey() drawing to life. Its owner calls tick() every frame.
+class MonkeyPose:
+    """One frame of the walking monkey, in its own 100 × 140 box (feet at y 140)."""
 
-    Always: a slow breathing bob and a blink now and then. Then: hops while files move
-    (``set_busy``), a few happy hops when a send lands (``celebrate``), mouth open and
-    ears up when clicked (``grin``), the arm points when a new device turns up
-    (``point``) and a double nod when one is connected and ready (``nod``).
+    def __init__(self) -> None:
+        self.step = 0.0  # walk phase (radians)
+        self.stride = 0.0  # 0 standing … 1 walking
+        self.facing = 1  # 1 right, -1 left
+        self.bob = 0.0  # + is down
+        self.rot = 0.0  # degrees around the belly (the somersault)
+        self.crouch = 0.0
+        self.grin = 0.0
+        self.point = 0.0  # left arm out, down-left at the device tiles
+        self.wag = 0.0  # right arm up, finger wagging: "lad være!"
+        self.wag_phase = 0.0
+        self.blink = False
+
+
+def monkey_parts(pose: MonkeyPose) -> list[tuple[str, list[float], str, float, str]]:
+    """The whole monkey as shapes, back to front: (kind, flat points, colour, line width,
+    part). ``kind`` is "poly" (filled) or "line" (round caps, smoothed). Points are in the
+    100 × 140 box, already bent by the pose (crouch, somersault, bob)."""
+    import math
+
+    brown, face, inner, dark = MONKEY_BROWN, MONKEY_FACE, MONKEY_INNER, MONKEY_DARK
+    turn = math.radians(pose.rot)
+    cos, sin = math.cos(turn), math.sin(turn)
+    squash = 1 - 0.14 * pose.crouch
+
+    def at(x: float, y: float) -> list[float]:
+        y = 140 - (140 - y) * squash
+        dx, dy = x - 50, y - 92
+        return [50 + dx * cos - dy * sin, 92 + dx * sin + dy * cos + pose.bob]
+
+    def oval(x: float, y: float, rx: float, ry: float, n: int = 22) -> list[float]:
+        points: list[float] = []
+        for i in range(n):
+            a = i * math.tau / n
+            points += at(x + rx * math.cos(a), y + ry * math.sin(a))
+        return points
+
+    def line(*xy: float) -> list[float]:
+        points: list[float] = []
+        for i in range(0, len(xy), 2):
+            points += at(xy[i], xy[i + 1])
+        return points
+
+    def lerp(a: tuple[float, float], b: tuple[float, float], k: float) -> tuple[float, float]:
+        return a[0] + (b[0] - a[0]) * k, a[1] + (b[1] - a[1]) * k
+
+    parts: list[tuple[str, list[float], str, float, str]] = []
+    side = -pose.facing  # the tail trails behind
+    parts.append(("line", line(50 + side * 14, 114, 50 + side * 30, 110, 50 + side * 37, 94,
+                               50 + side * 30, 80), brown, 5, "tail"))
+    swing = math.sin(pose.step) * pose.stride * 8
+    lift = math.sin(pose.step) * pose.stride * 4
+    for hip, foot_x, up in ((43, 43 + swing, max(0.0, lift)), (57, 57 - swing, max(0.0, -lift))):
+        parts.append(("line", line(hip, 110, foot_x, 133 - up), brown, 9, "leg"))
+        parts.append(("poly", oval(foot_x + pose.facing * 2, 136 - up, 7.5, 4.2), inner, 0,
+                      "foot"))
+    parts.append(("poly", oval(50, 92, 21, 25), brown, 0, "body"))
+    parts.append(("poly", oval(50, 97, 13, 17), face, 0, "belly"))
+    cheer = pose.grin * 0.7
+    left = lerp((27 - swing * 0.6, 104), (20, 62), cheer)
+    left = lerp(left, (-8, 120), pose.point)
+    right = lerp((73 + swing * 0.6, 104), (80, 62), cheer)
+    right = lerp(right, (79, 48), pose.wag)
+    for shoulder, hand, part in (((34, 80), left, "arm"), ((66, 80), right, "arm")):
+        parts.append(("line", line(*shoulder, *hand), brown, 7, part))
+        parts.append(("poly", oval(*hand, 5.2, 5.2), inner, 0, "hand"))
+    if pose.wag > 0.2:  # the raised finger, wagging
+        tip = (right[0] + math.sin(pose.wag_phase) * 5 * pose.wag, right[1] - 10 * pose.wag)
+        parts.append(("line", line(*right, *tip), inner, 3.2, "finger"))
+    ears = 1 + 0.35 * pose.grin
+    for x in (18, 82):
+        parts.append(("poly", oval(x, 40, 12, 12 * ears), brown, 0, "ear"))
+        parts.append(("poly", oval(x, 40, 7, 7 * ears), inner, 0, "ear"))
+    parts.append(("poly", oval(50, 40, 30, 30, 28), brown, 0, "head"))
+    parts.append(("line", line(44, 12, 50, 3, 55, 11), brown, 4, "tuft"))
+    parts.append(("poly", oval(40, 36, 11, 11), face, 0, "face"))
+    parts.append(("poly", oval(60, 36, 11, 11), face, 0, "face"))
+    parts.append(("poly", oval(50, 53, 21, 14, 26), face, 0, "face"))
+    look = pose.facing * 1.2
+    for x in (40, 60):
+        if pose.blink:
+            parts.append(("line", line(x - 4, 36, x + 4, 36), dark, 2.2, "eye"))
+        else:
+            parts.append(("poly", oval(x + look, 36, 4.2, 4.2, 14), dark, 0, "eye"))
+            parts.append(("poly", oval(x + look + 1.3, 34.5, 1.3, 1.3, 8), "#FFFFFF", 0, "eye"))
+    if pose.wag > 0.3:  # stern brows
+        parts.append(("line", line(33, 27, 45, 30), dark, 2.4, "brow"))
+        parts.append(("line", line(67, 27, 55, 30), dark, 2.4, "brow"))
+    for x in (46, 54):
+        parts.append(("poly", oval(x, 50, 1.5, 1.5, 8), dark, 0, "nose"))
+    if pose.grin > 0.15:  # open mouth: the lower half of an oval
+        tall = 3 + 8 * pose.grin
+        points: list[float] = []
+        for i in range(13):
+            a = i * math.pi / 12
+            points += at(50 + 10 * math.cos(a), 56 + tall * math.sin(a))
+        parts.append(("poly", points, dark, 0, "mouth"))
+    elif pose.wag > 0.3:
+        parts.append(("line", line(44, 60, 56, 59), dark, 2.4, "mouth"))
+    else:
+        smile: list[float] = []
+        for i in range(9):
+            a = math.radians(200 + 140 * i / 8)  # the lower curve: a smile
+            smile += [50 + 9 * math.cos(a), 55 - 6 * math.sin(a)]
+        parts.append(("line", line(*smile), dark, 2.4, "mouth"))
+    return parts
+
+
+class MonkeyActor:
+    """The whole monkey, alive. Its owner calls tick() every frame (~25 fps).
+
+    It strolls back and forth in its patch (``roam``), stops now and then and points at
+    the devices, breathes and blinks. Hops while files move (``set_busy``), happy hops when
+    a send lands (``celebrate``), points when a new device turns up (``point``), nods when
+    one is ready (``nod``). A click (``tap``) does one of three things, never the same
+    twice in a row: a big grin, a stern "Lad være!" with a wagging finger, or a somersault.
     """
 
-    GRIN = (0.4, 0.8, 1.0, 1.0, 1.0, 1.0, 0.85, 0.6, 0.3, 0.0)
-    POINT = (0.2, 0.5, 0.8, 1.0, 0.7, 1.0, 0.7, 1.0, 1.0, 1.0, 0.8, 0.5, 0.2, 0.0)
-    NOD = (0.3, 0.7, 1.0, 0.6, 0.1, 0.4, 0.8, 1.0, 0.6, 0.2, 0.0)
-    HOPS = (0.3, 0.7, 1.0, 0.7, 0.3, 0.0, 0.4, 0.8, 0.4, 0.0, 0.3, 0.6, 0.3, 0.0)
+    LENGTHS = {"point": 36, "nod": 14, "hops": 26, "grin": 24, "stop": 50, "flip": 30}
+    REACTIONS = ("grin", "stop", "flip")
+    BUBBLE = "Lad være!"
 
-    def __init__(self, canvas: tk.Canvas, tag: str = "actor", point_left: bool = True) -> None:
+    def __init__(self, canvas: tk.Canvas, tag: str = "actor", point_left: bool = True,
+                 seed: int | None = None) -> None:
+        import random
+
         self.canvas = canvas
         self.tag = tag
         self.point_left = point_left
         self.busy = False
         self.frame = 0
-        self._y = 0.0
+        self.pose = MonkeyPose()
+        self._rng = random.Random(seed)
         self._size = 0.0
-        self._origin = (0.0, 0.0)
-        self._grin: int | None = None
+        self._feet = (0.0, 0.0)
+        self._roam = 0.0
+        self._x = 0.0  # -1 … 1 across the roam
+        self._target = 0.0
+        self._rest = 30
         self._gesture: tuple[str, int] | None = None
+        self._last_reaction = ""
         self._blink_at = 60
-        self._base: dict[int, list[float]] = {}
 
-    def place(self, cx: float, cy: float, size: float) -> None:
-        """(Re)draw the monkey centred on (cx, cy); gestures carry on where they were."""
-        self.canvas.delete(self.tag)
-        draw_monkey(self.canvas, cx, cy, size, self.tag)
-        self._size = size
-        self._origin = (cx - size / 2, cy - size / 2)
-        self._y = 0.0
-        self._base = {
-            item: self.canvas.coords(item)
-            for part in ("ear", "mouth")
-            for item in self.canvas.find_withtag(f"{self.tag}-{part}")
-        }
+    def place(self, cx: float, feet_y: float, size: float, roam: float = 0.0) -> None:
+        """Stand the monkey (``size`` wide, 1.4 × as tall) with its feet on (cx, feet_y),
+        free to stroll ``roam`` pixels to either side."""
+        self._size, self._feet, self._roam = size, (cx, feet_y), roam
+        self._draw()
+
+    @property
+    def center(self) -> tuple[float, float]:
+        cx, feet = self._feet
+        return cx + self._x * self._roam, feet - 0.75 * self._size
+
+    def hit(self, x: float, y: float) -> bool:
+        box = self.canvas.bbox(self.tag)
+        return bool(box) and box[0] <= x <= box[2] and box[1] <= y <= box[3]
 
     # ------------------------------------------------------------ gestures
     def set_busy(self, busy: bool) -> None:
         self.busy = busy
-
-    def grin(self) -> None:
-        self._grin = 0
 
     def point(self) -> None:
         self._gesture = ("point", 0)
@@ -1202,6 +1319,25 @@ class MonkeyActor:
 
     def celebrate(self) -> None:
         self._gesture = ("hops", 0)
+
+    def grin(self) -> None:
+        self._react("grin")
+
+    def stop(self) -> None:
+        self._react("stop")
+
+    def flip(self) -> None:
+        self._react("flip")
+
+    def tap(self) -> str:
+        """Clicked: a reaction other than the last one."""
+        name = self._rng.choice([r for r in self.REACTIONS if r != self._last_reaction])
+        self._react(name)
+        return name
+
+    def _react(self, name: str) -> None:
+        self._last_reaction = name
+        self._gesture = (name, 0)
 
     @property
     def gesture(self) -> str:
@@ -1213,70 +1349,93 @@ class MonkeyActor:
 
         if not self._size:
             return
-        canvas, size = self.canvas, self._size
         self.frame += 1
-        t = self.frame
-        y = math.sin(t / 14) * size * 0.012  # breathing
-        if self.busy:
-            y -= abs(math.sin(t * math.pi / 13)) * size * 0.10
-        arm = 0.0
+        t, pose = self.frame, self.pose
+        pose.bob = math.sin(t / 14) * 0.8  # breathing
+        pose.rot = pose.crouch = pose.grin = pose.point = pose.wag = 0.0
+        walking = False
         if self._gesture is not None:
             name, index = self._gesture
-            frames = {"point": self.POINT, "nod": self.NOD, "hops": self.HOPS}[name]
-            value = frames[index]
-            if name == "nod":
-                y += value * size * 0.07
-            elif name == "hops":
-                y -= value * size * 0.13
-            else:
-                arm = value
-            self._gesture = (name, index + 1) if index + 1 < len(frames) else None
-        canvas.move(self.tag, 0, y - self._y)
-        self._y = y
-        grin = 0.0
-        if self._grin is not None:
-            grin = self.GRIN[self._grin]
-            self._grin = self._grin + 1 if self._grin + 1 < len(self.GRIN) else None
-        self._pose(grin, arm)
-        if t >= self._blink_at:  # blink: eyes shut for three frames
-            shut = t - self._blink_at < 3
-            canvas.itemconfigure(f"{self.tag}-eye", state="hidden" if shut else "normal")
-            if not shut:
+            self._play(name, index / (self.LENGTHS[name] - 1))  # ends at rest
+            self._gesture = (name, index + 1) if index + 1 < self.LENGTHS[name] else None
+        elif self.busy:
+            pose.bob -= abs(math.sin(t * math.pi / 13)) * 14
+        elif self._roam:
+            walking = self._stroll()
+        if walking:
+            pose.step += 0.38
+        pose.stride += ((1.0 if walking else 0.0) - pose.stride) * 0.25
+        if t >= self._blink_at:  # eyes shut for three frames now and then
+            pose.blink = t - self._blink_at < 3
+            if not pose.blink:
                 self._blink_at = t + 70 + (t * 37) % 80
-        canvas.tag_raise(f"{self.tag}-eye")
+        self._draw()
 
-    def _pose(self, grin: float, arm: float) -> None:
-        canvas, s, dy = self.canvas, self._size / 100.0, self._y
-        for part in ("ear",):
-            for item in canvas.find_withtag(f"{self.tag}-{part}"):
-                x1, y1, x2, y2 = self._base[item]
-                mx, my = (x1 + x2) / 2, (y1 + y2) / 2
-                wide, tall = (x2 - x1) / 2 * (1 + 0.14 * grin), (y2 - y1) / 2 * (1 + 0.35 * grin)
-                canvas.coords(item, mx - wide, my - tall + dy, mx + wide, my + tall + dy)
-        for item in canvas.find_withtag(f"{self.tag}-mouth"):
-            x1, y1, x2, y2 = self._base[item]
-            canvas.coords(item, x1, y1 + dy, x2, y2 + 12 * s * grin + dy)
-            if grin > 0.15:  # a filled chord reads as an open mouth, the plain arc as a smile
-                canvas.itemconfigure(item, style="chord", fill=MONKEY_DARK)
+    def _stroll(self) -> bool:
+        if self._rest > 0:
+            self._rest -= 1
+            return False
+        gap = self._target - self._x
+        if abs(gap) < 0.02:
+            self._rest = self._rng.randint(40, 110)
+            self._target = self._rng.uniform(-1, 1)
+            if self._rng.random() < 0.3:
+                self.point()  # stops and shows you the devices
+            return False
+        self._x += max(-0.014, min(0.014, gap))
+        self.pose.facing = 1 if gap > 0 else -1
+        return True
+
+    def _play(self, name: str, p: float) -> None:
+        import math
+
+        pose = self.pose
+        swell = min(1.0, p / 0.2, (1 - p) / 0.2)  # in, hold, out
+        if name == "point":
+            pose.point, pose.facing = swell, -1 if self.point_left else 1
+        elif name == "nod":
+            pose.bob += abs(math.sin(p * math.tau)) * 6
+        elif name == "hops":
+            pose.bob -= abs(math.sin(p * 3 * math.pi)) * 14 * (1 - p * 0.5)
+        elif name == "grin":
+            pose.grin = swell
+            pose.bob -= math.sin(p * math.pi) * 6
+        elif name == "stop":
+            pose.wag, pose.wag_phase = swell, p * 40
+        elif name == "flip":
+            if p < 0.2:
+                pose.crouch = p / 0.2
+            elif p < 0.85:
+                q = (p - 0.2) / 0.65
+                pose.bob -= math.sin(q * math.pi) * 32
+                pose.rot = -360 * q * pose.facing
             else:
-                canvas.itemconfigure(item, style="arc", fill="")
-        parts = canvas.find_withtag(f"{self.tag}-arm")
-        if arm <= 0:
-            for item in parts:
-                canvas.itemconfigure(item, state="hidden")
-            return
-        ox, oy = self._origin
-        side = -1 if self.point_left else 1
-        shoulder = (50 + side * 6, 74)
-        hand = (50 + side * (24 + 14 * arm), 84 + 10 * arm)
-        line, hand_item = parts[0], parts[1]
-        canvas.coords(line, ox + shoulder[0] * s, oy + shoulder[1] * s + dy,
-                      ox + hand[0] * s, oy + hand[1] * s + dy)
-        r = 5.5 * s
-        canvas.coords(hand_item, ox + hand[0] * s - r, oy + hand[1] * s - r + dy,
-                      ox + hand[0] * s + r, oy + hand[1] * s + r + dy)
-        for item in parts:
-            canvas.itemconfigure(item, state="normal")
+                pose.crouch = (1 - p) / 0.15 * 0.6
+
+    def _draw(self) -> None:
+        canvas, tag = self.canvas, self.tag
+        canvas.delete(tag)
+        s = self._size / 100
+        cx, feet = self._feet
+        ox, oy = cx + self._x * self._roam - 50 * s, feet - 140 * s
+        for kind, points, color, width, part in monkey_parts(self.pose):
+            xy = [ox + v * s if i % 2 == 0 else oy + v * s for i, v in enumerate(points)]
+            if kind == "poly":
+                canvas.create_polygon(xy, fill=color, outline="", tags=(tag, f"{tag}-{part}"))
+            else:
+                canvas.create_line(xy, fill=color, width=max(1.5, width * s), smooth=True,
+                                   capstyle="round", joinstyle="round",
+                                   tags=(tag, f"{tag}-{part}"))
+        if self.pose.wag > 0.3:
+            font = ("Segoe UI", max(8, int(4 + 4 * s)), "bold")
+            bx, by = ox + 50 * s, oy - 4 * s
+            text = canvas.create_text(bx, by, text=self.BUBBLE, fill=MONKEY_DARK, font=font,
+                                      anchor="s", tags=(tag, f"{tag}-bubble"))
+            x1, y1, x2, y2 = canvas.bbox(text)
+            pad = 5 * s
+            box = round_rect(canvas, x1 - pad, y1 - pad, x2 + pad, y2 + pad, 6 * s,
+                             fill="#FFFFFF", outline="", tags=(tag, f"{tag}-bubble"))
+            canvas.tag_raise(text, box)
 
 
 class HeroBanner(tk.Canvas):
@@ -1284,7 +1443,8 @@ class HeroBanner(tk.Canvas):
     the monkey as the character. The words are drawn straight onto the art (set_words);
     the owner packs its buttons into ``buttons``, which sits under the words.
 
-    Click the monkey and it grins. Animation pauses while the banner is not on screen.
+    The monkey strolls about; click it and it grins, says "Lad være!" or turns a
+    somersault. Animation pauses while the banner is not on screen.
     """
 
     FRAME_MS = 40
@@ -1305,9 +1465,10 @@ class HeroBanner(tk.Canvas):
         self.bind("<Configure>", self._configured, add="+")
         self.bind("<Map>", lambda _e: self._start(), add="+")
         self.bind("<Destroy>", lambda _e: self._stop(), add="+")
-        self.tag_bind("hero-monkey", "<Button-1>", lambda _e: self.actor.grin())
-        self.tag_bind("hero-monkey", "<Enter>", lambda _e: self.configure(cursor="hand2"))
-        self.tag_bind("hero-monkey", "<Leave>", lambda _e: self.configure(cursor=""))
+        # On the canvas, not the tag: the monkey is redrawn every frame.
+        self.bind("<Button-1>", lambda e: self.actor.hit(e.x, e.y) and self.actor.tap(), add="+")
+        self.bind("<Motion>", lambda e: self.configure(
+            cursor="hand2" if self.actor.hit(e.x, e.y) else ""), add="+")
 
     def color_at(self, x: float, y: float) -> str:
         """The backdrop's colour under (x, y): widgets placed on the art match it."""
@@ -1340,8 +1501,8 @@ class HeroBanner(tk.Canvas):
         self.delete("backdrop")
         self.create_image(0, 0, image=self._image, anchor="nw", tags=("backdrop",))
         self.tag_lower("backdrop")
-        size = min(height * 0.66, width * 0.24)
-        self.actor.place(width * 0.79, height * 0.52, size)
+        size = min(height * 0.6, width * 0.15)
+        self.actor.place(width * 0.80, height * 0.93, size, roam=width * 0.07)
         self._spawn_embers(width, height)
         self._layout_words()
 
@@ -1423,7 +1584,7 @@ class HeroBanner(tk.Canvas):
         width, height = self._size
         if not width:
             return
-        cx, cy = width * 0.79, height * 0.52
+        cx, cy = self.actor.center
         self._sparks = []
         for index in range(18):
             angle = index * math.tau / 18

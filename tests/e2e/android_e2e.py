@@ -77,10 +77,11 @@ def quick_shot(name: str) -> None:
 
 
 def mascot_checks() -> None:
-    """The Del page's Battle.net hero with the monkey; a tap on the monkey makes it grin.
+    """The Del page's Battle.net hero with the whole monkey; taps make it react.
 
     The rest of the run keeps Android's animations off for stable taps, so they are switched
-    on just for this, and the grin is caught by quick screenshots while it holds open.
+    on just for this. Two taps give two different reactions (grin, "Lad være!" or a
+    somersault), caught by quick screenshots while they play.
     """
     shell("settings put global animator_duration_scale 1", check=False)
     try:
@@ -90,14 +91,15 @@ def mascot_checks() -> None:
         # 10 s, not 2: a UI dump taken while the live status rebuilds the page sees nothing.
         assert screen_has("^SEND TIL$", 10), "the hero does not say who it sends to"
         quick_shot("40-hero")
-        tap_text("tryk for at hilse")  # the monkey's description
-        for index in range(3):
-            quick_shot(f"41-monkey-grin-{index}")
-        time.sleep(1.5)
+        for tap in range(2):
+            tap_text("tryk for at hilse")  # the monkey's description
+            for index in range(3):
+                quick_shot(f"41-monkey-tap{tap}-{index}")
+            time.sleep(2.2)  # the longest reaction is two seconds
         quick_shot("42-monkey-after")
     finally:
         shell("settings put global animator_duration_scale 0", check=False)
-    ok("Del page: Battle.net hero with SEND FILER; a tap on the monkey makes it grin")
+    ok("Del page: Battle.net hero with SEND FILER; taps on the monkey make it react")
 
 
 def _dump() -> list[ET.Element]:

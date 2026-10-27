@@ -4,6 +4,12 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
+## 1.5.1 – 2026-10-27
+### Nyt
+- Aben er nu en hel abe med krop, arme, ben og hale, på både PC'en og telefonen. Den går lidt frem og tilbage, stopper op og peger på dine enheder.
+- Tryk på aben, og den finder på noget: et stort grin, en streng "Lad være!" med løftet pegefinger eller en kolbøtte. Aldrig det samme to gange i træk.
+### Forbedret
+- Står telefonen til "ingen animationer", står aben stille og reagerer kun, når du trykker (uden kolbøtte).
 ## 1.5.0 – 2026-10-27
 ### Nyt
 - Nyt udseende i Battle.net-stil på PC'en og telefonen: en mørk launcher med blåt lys, svævende gnister og store, tydelige knapper. PC'en har også et lyst tema.

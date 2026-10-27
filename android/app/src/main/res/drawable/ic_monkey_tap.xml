@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<!-- The mascot, plus the one-shot reaction to a tap: mouth opens, ears perk up. -->
-<animated-vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:drawable="@drawable/ic_monkey">
-    <target android:name="earLeft" android:animation="@animator/monkey_ear" />
-    <target android:name="earRight" android:animation="@animator/monkey_ear" />
-    <target android:name="mouth" android:animation="@animator/monkey_mouth" />
-</animated-vector>
