@@ -163,8 +163,19 @@ def test_scrollframe_wheel_works_over_child_widgets() -> None:
         labels = [tk.Label(scroll.inner, text=f"row {i}") for i in range(80)]
         for label in labels:
             label.pack()
-        root.update()
+        # The window manager places the window when it gets round to it (on Windows CI it
+        # can take a moment): ask the OS what is under a point only once it is really there.
+        import time
+
         child = labels[2]
+        deadline = time.time() + 5
+        while time.time() < deadline:
+            root.update()
+            if root.winfo_viewable() and child.winfo_rootx() >= 120:
+                break
+            time.sleep(0.05)
+        else:
+            pytest.skip("Tk runtime unavailable on this runner: the window was never placed")
         event = SimpleNamespace(
             widget=child,
             x_root=child.winfo_rootx() + 2,
