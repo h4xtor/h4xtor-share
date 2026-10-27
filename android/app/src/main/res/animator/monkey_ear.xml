@@ -1,22 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- A tapped ear perks up and settles back. Reused for both ears; each group has its own pivot. -->
-<set xmlns:android="http://schemas.android.com/apk/res/android">
-    <objectAnimator
-        android:propertyName="scaleX"
-        android:valueFrom="1.0"
-        android:valueTo="1.14"
-        android:valueType="floatType"
-        android:duration="220"
-        android:repeatCount="1"
-        android:repeatMode="reverse"
-        android:interpolator="@android:interpolator/accelerate_decelerate" />
-    <objectAnimator
-        android:propertyName="scaleY"
-        android:valueFrom="1.0"
-        android:valueTo="1.35"
-        android:valueType="floatType"
-        android:duration="220"
-        android:repeatCount="1"
-        android:repeatMode="reverse"
-        android:interpolator="@android:interpolator/accelerate_decelerate" />
+<!-- A tapped ear perks up, stays up a moment and settles back. Reused for both ears;
+     each group has its own pivot. -->
+<set xmlns:android="http://schemas.android.com/apk/res/android" android:ordering="sequentially">
+    <set>
+        <objectAnimator android:propertyName="scaleX" android:valueFrom="1.0" android:valueTo="1.14"
+            android:valueType="floatType" android:duration="200"
+            android:interpolator="@android:interpolator/decelerate_quad" />
+        <objectAnimator android:propertyName="scaleY" android:valueFrom="1.0" android:valueTo="1.35"
+            android:valueType="floatType" android:duration="200"
+            android:interpolator="@android:interpolator/decelerate_quad" />
+    </set>
+    <set>
+        <objectAnimator android:propertyName="scaleX" android:valueFrom="1.14" android:valueTo="1.0"
+            android:valueType="floatType" android:startOffset="550" android:duration="240"
+            android:interpolator="@android:interpolator/accelerate_decelerate" />
+        <objectAnimator android:propertyName="scaleY" android:valueFrom="1.35" android:valueTo="1.0"
+            android:valueType="floatType" android:startOffset="550" android:duration="240"
+            android:interpolator="@android:interpolator/accelerate_decelerate" />
+    </set>
 </set>

@@ -23,9 +23,13 @@ import android.widget.TextView;
 
 import java.util.Locale;
 
-/** Tiny design system: one palette (light + dark), rounded surfaces, typography. */
+/** Tiny design system, Battle.net style: a near-black launcher palette, solid panels with
+ *  hairline borders and one launcher blue for the actions that matter. */
 public final class Ui {
-    public static final int ACCENT_LIGHT = Color.parseColor("#2DD4BF");
+    /** The launcher blue (text, icons, indicators): 5.6:1 on the background. */
+    public static final int ACCENT_LIGHT = Color.parseColor("#148EFF");
+    /** Filled buttons use a deeper blue so white text on them reads at 4.6:1. */
+    public static final int BUTTON_BLUE = Color.parseColor("#0B74DC");
 
     public final Context context;
     public final boolean dark;
@@ -48,39 +52,40 @@ public final class Ui {
     public final int dangerSoft;
     public final int neutralSoft;
     public final int track;
+    public final int chrome;
     private final float density;
 
     public Ui(Context context) {
         this.context = context;
-        // Mix design ("Aurora"): always the deep night-blue look with a teal → sky accent,
-        // translucent glass cards over a slowly drifting aurora background (AuroraView).
+        // Battle.net: always the dark launcher look; every text colour keeps 4.5:1 on panels.
         dark = true;
         density = context.getResources().getDisplayMetrics().density;
-        bg = Color.parseColor("#0E1022");
-        surface = Color.parseColor("#C4171B36");
-        surfaceAlt = Color.parseColor("#A31E2343");
-        border = Color.parseColor("#33FFFFFF");
-        text = Color.parseColor("#EEF2FF");
-        muted = Color.parseColor("#A3ABC6");
-        faint = Color.parseColor("#7C84A6");
+        bg = Color.parseColor("#111318");
+        chrome = Color.parseColor("#0B0D11");
+        surface = Color.parseColor("#1A1D24");
+        surfaceAlt = Color.parseColor("#22262F");
+        border = Color.parseColor("#272B34");
+        text = Color.parseColor("#F3F5F9");
+        muted = Color.parseColor("#AAB1BE");
+        faint = Color.parseColor("#8A92A0");
         accent = ACCENT_LIGHT;
-        accentPressed = Color.parseColor("#5EEAD4");
-        accentSoft = Color.parseColor("#332DD4BF");
-        success = Color.parseColor("#34D399");
-        successSoft = Color.parseColor("#3334D399");
-        warning = Color.parseColor("#FBBF24");
-        warningSoft = Color.parseColor("#33FBBF24");
-        danger = Color.parseColor("#F87171");
-        dangerSoft = Color.parseColor("#33F87171");
-        neutralSoft = Color.parseColor("#1FFFFFFF");
-        track = Color.parseColor("#26FFFFFF");
-        onAccent = Color.parseColor("#0A0B16");
+        accentPressed = Color.parseColor("#3BA2FF");
+        accentSoft = Color.parseColor("#0D2340");
+        success = Color.parseColor("#3CCB7F");
+        successSoft = Color.parseColor("#12301F");
+        warning = Color.parseColor("#F2B33D");
+        warningSoft = Color.parseColor("#352A12");
+        danger = Color.parseColor("#FF6B6B");
+        dangerSoft = Color.parseColor("#3A1C1F");
+        neutralSoft = Color.parseColor("#22262F");
+        track = Color.parseColor("#272B34");
+        onAccent = Color.WHITE;
     }
 
-    /** Sky blue: the second colour of the accent gradient. */
-    public static final int SKY = Color.parseColor("#38BDF8");
-    /** Warm orange: Bluetooth and the monkey's corner of the aurora. */
-    public static final int ORANGE = Color.parseColor("#FB923C");
+    /** Light launcher blue: highlights, the eyebrow over hero titles. */
+    public static final int SKY = Color.parseColor("#45B6FF");
+    /** Warm orange: Bluetooth and the monkey. */
+    public static final int ORANGE = Color.parseColor("#FF9F1A");
 
     /** Edge-to-edge window with transparent system bars and correctly tinted icons. */
     @SuppressWarnings("deprecation")
@@ -137,37 +142,12 @@ public final class Ui {
 
     public GradientDrawable rounded(int fill, int stroke, float radiusDp) {
         GradientDrawable drawable = new GradientDrawable();
-        if (fill == surface || fill == surfaceAlt) {
-            // Aurora glass: a frosted sheen from the top-left corner fading into the
-            // translucent body, so the drifting aurora glows through every card.
-            drawable.setOrientation(GradientDrawable.Orientation.TL_BR);
-            drawable.setColors(new int[]{glassSheen(fill), fill, glassDeep(fill)});
-            if (stroke == border) {
-                stroke = GLASS_EDGE;
-            }
-        } else {
-            drawable.setColor(fill);
-        }
+        drawable.setColor(fill);
         drawable.setCornerRadius(dp(radiusDp));
         if (stroke != 0) {
             drawable.setStroke(Math.max(1, dp(1)), stroke);
         }
         return drawable;
-    }
-
-    /** The bright frosted edge of a glass card. */
-    public static final int GLASS_EDGE = Color.parseColor("#47FFFFFF");
-
-    private static int glassSheen(int fill) {
-        // A touch lighter and a touch more see-through than the card itself.
-        int a = Math.max(0, Color.alpha(fill) - 40);
-        return Color.argb(a, Math.min(255, Color.red(fill) + 34), Math.min(255, Color.green(fill) + 40),
-                Math.min(255, Color.blue(fill) + 52));
-    }
-
-    private static int glassDeep(int fill) {
-        int a = Math.max(0, Color.alpha(fill) - 70);
-        return Color.argb(a, Color.red(fill), Color.green(fill), Color.blue(fill));
     }
 
     public Drawable ripple(Drawable content, float radiusDp) {
@@ -188,16 +168,33 @@ public final class Ui {
         return view;
     }
 
-    /** Serif display titles, like Claude.ai. */
+    /** Heavy launcher titles. */
     public TextView title(String value, float sizeSp) {
         TextView view = text(value, sizeSp, text, false);
         view.setTypeface(Typeface.create("sans-serif-black", Typeface.NORMAL));
-        view.setLetterSpacing(-0.03f);
+        view.setLetterSpacing(-0.01f);
+        return view;
+    }
+
+    /** Big uppercase hero title, like a game's name on Battle.net. */
+    public TextView heroTitle(String value, float sizeSp) {
+        TextView view = title(value.toUpperCase(Locale.ROOT), sizeSp);
+        view.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
+        view.setLetterSpacing(0.01f);
+        view.setSingleLine(true);
+        view.setEllipsize(TextUtils.TruncateAt.END);
+        return view;
+    }
+
+    /** Small uppercase line in the light launcher blue, above a hero title. */
+    public TextView eyebrow(String value) {
+        TextView view = text(value.toUpperCase(Locale.ROOT), 11.5f, SKY, true);
+        view.setLetterSpacing(0.12f);
         return view;
     }
 
     public TextView label(String value) {
-        TextView view = text(value.toUpperCase(Locale.ROOT), 11.5f, faint, true);
+        TextView view = text(value.toUpperCase(Locale.ROOT), 11.5f, muted, true);
         view.setLetterSpacing(0.08f);
         return view;
     }
@@ -209,7 +206,7 @@ public final class Ui {
         view.setSingleLine(true);
         view.setEllipsize(TextUtils.TruncateAt.END);
         view.setPadding(dp(16), 0, dp(16), 0);
-        view.setMinHeight(dp(46));
+        view.setMinHeight(dp(48));
         view.setClickable(true);
         view.setFocusable(true);
         int fill;
@@ -217,7 +214,7 @@ public final class Ui {
         int color;
         switch (kind) {
             case "primary":
-                fill = accent;
+                fill = BUTTON_BLUE;
                 color = onAccent;
                 break;
             case "soft":
@@ -238,7 +235,7 @@ public final class Ui {
                 color = text;
         }
         view.setTextColor(color);
-        view.setBackground(ripple(rounded(fill, stroke, 14), 14));
+        view.setBackground(ripple(rounded(fill, stroke, 6), 6));
         return view;
     }
 
@@ -246,7 +243,7 @@ public final class Ui {
         LinearLayout layout = new LinearLayout(context);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(dp(18), dp(16), dp(18), dp(16));
-        layout.setBackground(rounded(surface, border, 20));
+        layout.setBackground(rounded(surface, border, 8));
         return layout;
     }
 
@@ -285,14 +282,15 @@ public final class Ui {
         int color;
         String letter;
         switch (key) {
-            case "android": color = Color.parseColor("#3DDC84"); letter = "A"; break;
-            case "windows": color = Color.parseColor("#2F7BEA"); letter = "W"; break;
-            case "linux": color = Color.parseColor("#E8A33D"); letter = "L"; break;
+            case "android": color = Color.parseColor("#3CCB7F"); letter = "A"; break;
+            case "windows": color = Color.parseColor("#3BA2FF"); letter = "W"; break;
+            case "linux": color = Color.parseColor("#F2B33D"); letter = "L"; break;
             case "darwin":
-            case "macos": color = Color.parseColor("#8E8E93"); letter = "M"; break;
+            case "macos": color = Color.parseColor("#AAB1BE"); letter = "M"; break;
+            case "all": color = SKY; letter = "★"; break;
             default: color = faint; letter = "?";
         }
-        TextView view = text(letter, sizeDp * 0.38f, Color.WHITE, true);
+        TextView view = text(letter, sizeDp * 0.38f, Color.parseColor("#0B0D11"), true);
         view.setGravity(Gravity.CENTER);
         GradientDrawable circle = new GradientDrawable();
         circle.setShape(GradientDrawable.OVAL);

@@ -69,6 +69,36 @@ def shot(name: str) -> None:
     (SHOTS / f"{name}.png").write_bytes(data)
 
 
+def quick_shot(name: str) -> None:
+    """A screenshot right away (shot() waits for the screen to settle; gestures do not)."""
+    data = subprocess.run(["adb", "exec-out", "screencap", "-p"], capture_output=True,
+                          timeout=30, check=True).stdout
+    (SHOTS / f"{name}.png").write_bytes(data)
+
+
+def mascot_checks() -> None:
+    """The Del page's Battle.net hero with the monkey; a tap on the monkey makes it grin.
+
+    The rest of the run keeps Android's animations off for stable taps, so they are switched
+    on just for this, and the grin is caught by quick screenshots while it holds open.
+    """
+    shell("settings put global animator_duration_scale 1", check=False)
+    try:
+        tap_text("^Del$")
+        time.sleep(2)
+        assert screen_has("^SEND FILER$", 10), "the hero's big send button is missing"
+        assert screen_has("^SEND TIL$", 2), "the hero does not say who it sends to"
+        quick_shot("40-hero")
+        tap_text("tryk for at hilse")  # the monkey's description
+        for index in range(3):
+            quick_shot(f"41-monkey-grin-{index}")
+        time.sleep(1.5)
+        quick_shot("42-monkey-after")
+    finally:
+        shell("settings put global animator_duration_scale 0", check=False)
+    ok("Del page: Battle.net hero with SEND FILER; a tap on the monkey makes it grin")
+
+
 def _dump() -> list[ET.Element]:
     shell("uiautomator dump /sdcard/ui.xml", check=False)
     xml = adb("exec-out", "cat", "/sdcard/ui.xml", check=False)
@@ -753,6 +783,7 @@ def main() -> None:
     time.sleep(5)
     shot("02-home-paired")
     ok("phone shows the paired PC")
+    mascot_checks()
 
     # ---- PC -> phone ----------------------------------------------------------
     desktop.run(desktop.client.send_clipboard(phone, "Hej fra PC'en"))

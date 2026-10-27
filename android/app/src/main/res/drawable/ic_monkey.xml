@@ -10,9 +10,9 @@
     <group android:name="arm">
         <path android:name="armLine" android:strokeColor="#8B5A3C" android:strokeWidth="8"
             android:strokeLineCap="round" android:strokeAlpha="0"
-            android:fillColor="#00000000" android:pathData="M56,74L74,84" />
+            android:fillColor="#00000000" android:pathData="M44,74L26,84" />
         <path android:name="armHand" android:fillColor="#8B5A3C" android:fillAlpha="0"
-            android:pathData="M68.5,84a5.5,5.5 0 1,0 11,0a5.5,5.5 0 1,0 -11,0" />
+            android:pathData="M20.5,84a5.5,5.5 0 1,0 11,0a5.5,5.5 0 1,0 -11,0" />
     </group>
     <!-- ears -->
     <group android:name="earLeft" android:pivotX="16" android:pivotY="50">

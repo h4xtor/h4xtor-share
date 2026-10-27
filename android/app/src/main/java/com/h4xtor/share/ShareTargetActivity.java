@@ -203,7 +203,7 @@ public final class ShareTargetActivity extends Activity {
             int onlineCount = service.onlinePairedPeers().size();
             LinearLayout all = ui.card();
             all.setClickable(true);
-            all.setBackground(ui.ripple(ui.rounded(ui.accentSoft, 0, 18), 18));
+            all.setBackground(ui.ripple(ui.rounded(ui.accentSoft, 0, 8), 8));
             LinearLayout allRow = ui.row();
             allRow.addView(ui.iconBadge(R.drawable.ic_nav_share, 42, ui.surface, ui.accent));
             LinearLayout allTexts = ui.column();
@@ -222,7 +222,7 @@ public final class ShareTargetActivity extends Activity {
             boolean online = service.isOnline(peer.deviceId);
             LinearLayout card = ui.card();
             card.setClickable(true);
-            card.setBackground(ui.ripple(ui.rounded(ui.surface, ui.border, 18), 18));
+            card.setBackground(ui.ripple(ui.rounded(ui.surface, ui.border, 8), 8));
             LinearLayout row = ui.row();
             row.addView(ui.avatar(peer.platform, 42));
             LinearLayout texts = ui.column();
