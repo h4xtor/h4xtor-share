@@ -1124,8 +1124,10 @@ def render_backdrop(
         for x in range(w):
             u = x / w
             r, g, b = base
-            shade = (1 - u) ** 2 * 0.32  # darker on the left, under the words
-            r, g, b = r * (1 - shade), g * (1 - shade), b * (1 - shade)
+            # Quieter on the left, under the words: towards the page colour (dark or light).
+            shade = (1 - u) ** 2 * 0.45
+            r, g, b = r + (bottom[0] - r) * shade, g + (bottom[1] - g) * shade, b + (
+                bottom[2] - b) * shade
             for index, glow in enumerate(glows):
                 k = glow[4] * cols[index][x] * rows[index][y]
                 gr, gg, gb = glow[5]
