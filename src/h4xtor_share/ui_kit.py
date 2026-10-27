@@ -229,7 +229,7 @@ _GLASS_CACHE: dict[tuple[Any, ...], tk.PhotoImage] = {}
 def glass_image(
     master: tk.Misc, width: int, height: int, radius: float, fill: str,
     bg: str | tuple[str, str, str, str], ring: str | None = None, ring_width: float = 1.0,
-    shine: bool = True,
+    shine: bool = True, light: float = 0.20,
 ) -> tk.PhotoImage:
     """A rounded pill/panel with smooth (anti-aliased) edges and a glassy light: brighter
     at the top, a thin bright rim along the top edge. Tk cannot smooth polygon edges, so
@@ -238,7 +238,7 @@ def glass_image(
     corners then blend into it instead of showing a box. Cached per look and size."""
     import math
 
-    key = (master.tk, width, height, radius, fill, bg, ring, ring_width, shine)  # per Tk app
+    key = (master.tk, width, height, radius, fill, bg, ring, ring_width, shine, light)  # per app
     image = _GLASS_CACHE.get(key)
     if image is not None:
         return image
@@ -254,8 +254,8 @@ def glass_image(
     rows = []
     for y in range(height):
         v = (y + 0.5) / height
-        light = 0.20 * (1 - v) ** 2 - 0.05 * v * v if shine else 0.0
-        base = [c + ((255 if light > 0 else 0) - c) * abs(light) for c in rgb[0]]
+        glow = light * (1 - v) ** 2 - light / 4 * v * v if shine else 0.0
+        base = [c + ((255 if glow > 0 else 0) - c) * abs(glow) for c in rgb[0]]
         qy = abs(y + 0.5 - half_h) - (half_h - radius)
         left = [a + (b - a) * v for a, b in zip(corners[0], corners[2], strict=True)]
         right = [a + (b - a) * v for a, b in zip(corners[1], corners[3], strict=True)]
@@ -475,6 +475,25 @@ class Button(tk.Canvas):
         self._width = self._fixed or self._natural()
         self.configure(width=self._width)
         self._draw()
+
+
+def chip(parent: tk.Misc, theme: Theme, text: str, color: str) -> tk.Canvas:
+    """A small soft status pill: a dot and a word or two, tinted with ``color``."""
+    bg = parent.cget("bg")
+    font = theme.font(8, "bold")
+    height = theme.px(24)
+    dot = theme.px(6)
+    width = font.measure(text) + dot + theme.px(30)
+    canvas = tk.Canvas(parent, width=width, height=height, bg=bg, highlightthickness=0, bd=0)
+    tint = mix_color(color, bg, 0.86)
+    canvas.image = glass_image(  # type: ignore[attr-defined]
+        canvas, width, height, height / 2, tint, bg, mix_color(color, bg, 0.55), light=0.10)
+    canvas.create_image(0, 0, image=canvas.image, anchor="nw")
+    x = theme.px(12)
+    canvas.create_oval(x, (height - dot) / 2, x + dot, (height + dot) / 2, fill=color, outline="")
+    canvas.create_text(x + dot + theme.px(7), height / 2, text=text, fill=color, font=font,
+                       anchor="w")
+    return canvas
 
 
 class Toggle(tk.Canvas):
@@ -766,9 +785,11 @@ class Card(tk.Canvas):
         padding: int = 18,
         fill: str | None = None,
         outline: str | None = None,
-        radius: int = 6,
+        radius: int = 14,
     ) -> None:
         self.theme = theme
+        self._image: tk.PhotoImage | None = None
+        self._draw_after: str | None = None
         self.fill = fill or theme.c["card"]
         self.outline = outline or theme.c["border"]
         self.radius = theme.px(radius)
@@ -791,11 +812,21 @@ class Card(tk.Canvas):
         height = self.body.winfo_reqheight() + 2 * self.padding
         if int(float(self.cget("height"))) != height:
             self.configure(height=height)
-        self._draw()
+        self._schedule_draw()
 
     def _resized(self, event: tk.Event) -> None:
         self.itemconfigure(self._window, width=max(1, event.width - 2 * self.padding))
-        self._draw()
+        self._schedule_draw()
+
+    def _schedule_draw(self) -> None:
+        """Draw at once the first time; while the window is being resized, once it settles."""
+        if self._image is None:
+            self._draw()
+            return
+        if self._draw_after is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._draw_after)
+        self._draw_after = self.after(40, self._draw)
 
     def set_colors(self, fill: str | None = None, outline: str | None = None) -> None:
         if fill:
@@ -806,31 +837,17 @@ class Card(tk.Canvas):
         self._draw()
 
     def _draw(self) -> None:
-        self.delete("bg")
+        self._draw_after = None
         width = self.winfo_width()
         height = self.winfo_height()
         if width < 4 or height < 4:
             return
-        round_rect(
-            self,
-            1,
-            1,
-            width - 1,
-            height - 1,
-            self.radius,
-            fill=self.fill,
-            outline=self.outline,
-            tags=("bg",),
-        )
-        # Panels catch a faint line of light along the top edge, strongest at the left.
-        r = self.radius
-        span = width - 2 * r
-        segments = 16
-        for index in range(segments):
-            f = index / segments
-            x1 = r + f * span
-            self.create_line(x1, 1, x1 + span / segments + 1, 1, tags=("bg",), width=1,
-                             fill=mix_color("#FFFFFF", self.outline, 0.86 + 0.14 * f))
+        # A glass panel: soft smooth corners, a hairline edge and light along its top rim.
+        self._image = glass_image(self, width, height, self.radius, self.fill, self.cget("bg"),
+                                  self.outline if self.outline != self.fill else None,
+                                  light=0.0)
+        self.delete("bg")
+        self.create_image(0, 0, image=self._image, anchor="nw", tags=("bg",))
         self.tag_lower("bg")
 
 
@@ -1842,25 +1859,34 @@ class DeviceTiles(tk.Frame):
         box = (px(4), px(4) - lift, w - px(4), w - px(16) - lift)
         selected = node.get("selected")
         if node["id"] == "+":
-            round_rect(tile, *box, px(6), fill=c["bg"], outline=c["border_strong"], dash=(4, 4))
+            round_rect(tile, *box, px(16), fill=c["bg"], outline=c["border_strong"], dash=(4, 4))
             tile.create_text((box[0] + box[2]) / 2, (box[1] + box[3]) / 2, text="+",
                              fill=c["accent"] if hover else c["muted"],
                              font=self.theme.font(26))
         else:
-            if selected:  # a blue glow around the selected tile
-                for step, amount in ((3, 0.78), (2, 0.6), (1, 0.4)):
-                    grow = px(step)
-                    round_rect(tile, box[0] - grow, box[1] - grow, box[2] + grow, box[3] + grow,
-                               px(7), fill="", outline=mix_color(c["accent"], c["bg"], amount),
-                               width=2)
+            radius = px(16)
+            bw, bh = int(box[2] - box[0]), int(box[3] - box[1])
+            images = []
+            if selected:  # a soft blue glow around the selected tile
+                grow = px(4)
+                images.append((box[0] - grow, box[1] - grow, glass_image(
+                    tile, bw + 2 * grow, bh + 2 * grow, radius + grow,
+                    mix_color(c["accent"], c["bg"], 0.72), c["bg"], shine=False)))
             fill = c["card_hover"] if hover else c["card"]
             outline = c["accent"] if selected else c["border_strong"] if hover else c["border"]
             if node.get("sending"):
                 import math
 
-                outline = mix_color(c["accent2"], c["border"], 0.5 - 0.5 * math.sin(self._phase))
+                # In six steps, so the breathing edge reuses its few cached images.
+                level = round((0.5 - 0.5 * math.sin(self._phase)) * 6) / 6
+                outline = mix_color(c["accent2"], c["border"], level)
             width = 2 if selected or node.get("sending") else 1
-            round_rect(tile, *box, px(6), fill=fill, outline=outline, width=width)
+            under = mix_color(c["accent"], c["bg"], 0.72) if selected else c["bg"]
+            images.append((box[0], box[1], glass_image(
+                tile, bw, bh, radius, fill, under, outline, width, light=0.08)))
+            tile.images = [image for _x, _y, image in images]  # type: ignore[attr-defined]
+            for x, y, image in images:
+                tile.create_image(x, y, image=image, anchor="nw")
             color, letter = PLATFORM_STYLE.get(str(node.get("platform", "")).lower(),
                                                (c["faint"], "?"))
             if not node.get("online"):
@@ -1870,7 +1896,7 @@ class DeviceTiles(tk.Frame):
             tile.create_text(cx, cy, text=letter, fill=AVATAR_LETTER,
                              font=self.theme.font(15, "bold"))
             dot = c["success"] if node.get("online") else c["faint"]
-            tile.create_oval(box[2] - px(16), box[1] + px(8), box[2] - px(8), box[1] + px(16),
+            tile.create_oval(box[2] - px(20), box[1] + px(10), box[2] - px(12), box[1] + px(18),
                              fill=dot, outline=fill, width=2)
         name = node["name"] if len(node["name"]) <= 14 else node["name"][:13] + "…"
         tile.create_text(w / 2, w - px(4), text=name, anchor="n",
@@ -1879,7 +1905,7 @@ class DeviceTiles(tk.Frame):
         tile.create_text(w / 2, w + px(13), text=node.get("sub", ""), anchor="n",
                          fill=c["accent"] if selected else c["faint"], font=self.theme.font(8))
         if tile.focused:  # type: ignore[attr-defined]
-            round_rect(tile, 1, 1, w - 1, h - 1, px(6), fill="", outline=c["accent2"], width=2)
+            round_rect(tile, 1, 1, w - 1, h - 1, px(16), fill="", outline=c["accent2"], width=2)
 
 
 def tooltip(widget: tk.Misc, theme: Theme, text: str) -> None:

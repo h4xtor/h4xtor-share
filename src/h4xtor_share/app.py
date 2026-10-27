@@ -80,6 +80,9 @@ from h4xtor_share.ui_kit import (
     set_dark_titlebar,
     tooltip,
 )
+from h4xtor_share.ui_kit import (
+    chip as status_chip,
+)
 from h4xtor_share.update_pages import UpdateMixin
 from h4xtor_share.updater import Updater, is_newer
 from h4xtor_share.updater import run_helper as run_update_helper
@@ -1270,18 +1273,17 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         self.tiles_title = tk.Label(head, text="DINE ENHEDER", bg=c["bg"], fg=c["muted"],
                                     font=self.theme.font(9, "bold"), anchor="w")
         self.tiles_title.pack(side="left")
-        Button(head, self.theme, "Tilføj via IP", self.add_manual_peer, kind="ghost",
-               size="sm").pack(side="right")
-        Button(head, self.theme, "Scan netværk", self.scan_lan, kind="ghost", size="sm",
-               icon="⟳").pack(side="right", padx=(0, px(4)))
-        if bluetooth.supported():
-            Button(head, self.theme, "Søg via Bluetooth", lambda: self.scan_bluetooth(manual=True),
-                   kind="ghost", size="sm", icon="ᛒ").pack(side="right", padx=(0, px(4)))
+        # One way in to every way of finding a device, instead of a row of small buttons.
+        self.add_device_button = Button(head, self.theme, "Tilføj enhed ▾",
+                                        lambda: self._add_device_menu(self.add_device_button),
+                                        kind="soft", size="sm", icon="＋")
+        self.add_device_button.pack(side="right")
         self.device_tiles = DeviceTiles(center, self.theme, on_pick=self._tile_pick,
                                         on_add=self.show_qr_pairing)
         self.device_tiles.pack(fill="x")
         self.route_chips = tk.Frame(center, bg=c["bg"])
         self.route_chips.pack(anchor="w", pady=(px(10), px(18)))
+        self._chips_key: tuple[Any, ...] | None = None
         self._sends_landed = 0
 
         # The composer: Claude's prompt box, but for files, links and text.
@@ -1404,7 +1406,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         head.pack(fill="x", pady=(0, px(2)))
         self.lan_title = tk.Label(
             head,
-            text="FUNDET I NÆRHEDEN",
+            text="NYE ENHEDER I NÆRHEDEN",
             bg=c["bg"],
             fg=c["muted"],
             font=self.theme.font(9, "bold"),
@@ -1414,8 +1416,8 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         tk.Label(
             self.lan_section,
             text=(
-                "Enheder med h4xtor share på dit Wi-Fi eller via Bluetooth, som du ikke har "
-                "forbundet. Klik Forbind – eller ✕ for at skjule."
+                "Har h4xtor share, men er ikke forbundet endnu. Klik Forbind – eller ✕ for "
+                "at skjule."
             ),
             bg=c["bg"],
             fg=c["faint"],
@@ -1614,6 +1616,23 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         finally:
             menu.grab_release()
 
+    def _add_device_menu(self, anchor: tk.Misc) -> None:
+        """Every way to add a device, in one menu under "Tilføj enhed"."""
+        menu = tk.Menu(self, tearoff=0)
+        menu.add_command(label="Scan QR-kode med telefonen…   Ctrl+N",
+                         command=self.show_qr_pairing)
+        menu.add_command(label="Søg på dit Wi-Fi", command=self.scan_lan)
+        if bluetooth.supported():
+            menu.add_command(label="Søg via Bluetooth",
+                             command=lambda: self.scan_bluetooth(manual=True))
+        menu.add_command(label="Tilføj via IP-adresse…", command=self.add_manual_peer)
+        x = anchor.winfo_rootx()
+        y = anchor.winfo_rooty() + anchor.winfo_height()
+        try:
+            menu.tk_popup(x, y)
+        finally:
+            menu.grab_release()
+
     def _hero_device_menu(self) -> None:
         target = self._drop_target_peer()
         card = self.device_cards.get(target.device_id) if target else None
@@ -1714,31 +1733,27 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         hero.actor.set_busy(any(state.status == "active" for state in self.transfers.values()))
         self._refresh_recent()
 
-        # Route chips: LAN · Wi-Fi Direct · Bluetooth
-        for child in self.route_chips.winfo_children():
-            child.destroy()
+        # How this PC can be reached: soft glass pills, rebuilt only when something changes.
         addresses = _sorted_lan_addresses()
         host = getattr(self, "direct_host", None)
+        direct = host is not None and host.running
         chips = [
-            ("● LAN " + (addresses[0] if addresses else "–"), "accent" if addresses else "neutral"),
-            ("● DIRECT kører" if host is not None and host.running else "○ DIRECT slukket",
-             "accent" if host is not None and host.running else "neutral"),
+            (f"Wi-Fi  {addresses[0]}" if addresses else "Intet Wi-Fi",
+             "accent" if addresses else "neutral"),
+            ("Wi-Fi Direct tændt" if direct else "Wi-Fi Direct slukket",
+             "accent" if direct else "neutral"),
         ]
         if bluetooth.supported():
-            chips.append(("● BT klar", "warning"))
-        for text, tone in chips:
-            fg = {"accent": c["accent"], "warning": c["accent3"]}.get(tone, c["muted"])
-            tk.Label(
-                self.route_chips,
-                text=f" {text} ",
-                bg=c["bg"],
-                fg=fg,
-                font=self.theme.font(8, family=self.theme.mono),
-                highlightthickness=1,
-                highlightbackground=fg if tone != "neutral" else c["border_strong"],
-                padx=self.theme.px(6),
-                pady=self.theme.px(2),
-            ).pack(side="left", padx=(0, self.theme.px(8)))
+            chips.append(("Bluetooth klar", "warning"))
+        key = (tuple(chips), c["bg"])
+        if key != self._chips_key:
+            self._chips_key = key
+            for child in self.route_chips.winfo_children():
+                child.destroy()
+            for text, tone in chips:
+                fg = {"accent": c["accent"], "warning": c["accent3"]}.get(tone, c["faint"])
+                status_chip(self.route_chips, self.theme, text, fg).pack(
+                    side="left", padx=(0, self.theme.px(8)))
 
     def _recent_entries(self) -> list[tuple[str, dict[str, Any]]]:
         received = [("received", item) for item in self.history.received()[:4]]
@@ -3296,13 +3311,15 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         )
         self._refresh_hero()
         # Sections in a fixed order; an empty one is not shown at all.
-        sections = ((self.share_paired_section, bool(paired)), (self.lan_section, bool(lan)))
+        # The tiles already show the paired devices (their menu is the hero's ⚙), so the Send
+        # page only lists the ones found nearby that still need connecting.
+        sections = ((self.lan_section, bool(lan)),)
         for frame, show in sections:
             frame.pack_forget()
             if show:
                 frame.pack(fill="x", pady=(px(24), 0))
         if lan:
-            self.lan_title.configure(text=f"FUNDET I NÆRHEDEN  ·  {len(lan)}")
+            self.lan_title.configure(text=f"NYE ENHEDER I NÆRHEDEN  ·  {len(lan)}")
 
     def _refresh_device_cards(self) -> None:
         for card in self.device_cards.values():

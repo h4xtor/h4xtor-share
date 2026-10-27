@@ -11,6 +11,8 @@ Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 - Kan slås til og fra begge steder: på PC'en under Indstillinger → "Ekstra funktioner", på telefonen under "Batteri og signal på PC'en".
 ### Forbedret
 - Tænd/sluk-knapperne på PC'en er bløde og glatte ligesom de andre knapper.
+- Send-siden på PC'en er ryddet op: én "Tilføj enhed"-knap samler QR-kode, Wi-Fi-søgning, Bluetooth og IP-adresse, og dine enheder står kun ét sted (som fliser).
+- Kort, fliser og status-mærker har fået bløde, runde hjørner og et let glas-look.
 
 ## 1.5.1 – 2026-10-27
 ### Nyt
