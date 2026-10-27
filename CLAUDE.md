@@ -22,7 +22,7 @@ Never use the deleted repo `h4xtor/H4xtorShare` or old folders such as `C:\AI\Fr
 | Path | What it is |
 |------|------------|
 | `src/h4xtor_share/` | Desktop app (Python 3.11+, Tk, aiohttp). Entry: `app.py` (`H4xtorShareApp`) |
-| `src/h4xtor_share/ui_kit.py` | Claude-style widgets: Theme, Button, Card, ScrollFrame, Monkey mascot … |
+| `src/h4xtor_share/ui_kit.py` | Battle.net-style widgets: Theme, Button, Card, ScrollFrame, `HeroBanner` (Send page key art), `DeviceTiles`, `MonkeyActor` (hop/grin/point/nod), `render_backdrop` … |
 | `src/h4xtor_share/server.py` / `client.py` | Protocol v1 (HTTPS on port 47474, pinned TLS fingerprints) |
 | `src/h4xtor_share/local_api.py` | Loopback API on 127.0.0.1:47476, used by the Chrome extension |
 | `src/h4xtor_share/web_share.py` + `web_page.py` | iPhone/browser sharing: plain HTTP on the LAN, port 47478, guarded by a random key in the QR link. Off until switched on (page "iPhone") |
@@ -33,7 +33,7 @@ Never use the deleted repo `h4xtor/H4xtorShare` or old folders such as `C:\AI\Fr
 | `src/h4xtor_share/netmerge.py` + `netmerge_page.py` + `sysproxy.py` | "Wi-Fi + 5G" (net-merge style): local HTTP/SOCKS5 proxy on 127.0.0.1:47480 spreading connections over the PC's adapters and paired phones (pinned-TLS `CONNECT` to the phone's port 47474); system proxy via a PAC file so a crash never breaks the internet |
 | `src/h4xtor_share/openers.py` | Opening and revealing files. Folders are **always** opened through `explorer.exe`, never through `os.startfile` |
 | `src/h4xtor_share/chrome_extension/` | MV3 extension (popup + context menu) |
-| `android/app/src/main/java/com/h4xtor/share/` | Android app (Java, minSdk 29). `MainActivity`, `ShareService`, `ShareTargetActivity`, `SpeedGraph`, `NetGateway` (shares mobile data) … |
+| `android/app/src/main/java/com/h4xtor/share/` | Android app (Java, minSdk 29). `MainActivity`, `ShareService`, `ShareTargetActivity`, `Ui` (design tokens), `LauncherBackdrop` + `HeroArt` (Battle.net backdrop and Del hero), `SpeedGraph`, `NetGateway` (shares mobile data) … |
 | `tests/` | pytest suite |
 | `tests/e2e/chrome_extension_e2e.py` | Real desktop app + Chrome extension + simulated phone |
 | `tests/e2e/iphone_web_e2e.py` | Real desktop app + its iPhone web page in Chromium posing as an iPhone |
@@ -61,7 +61,7 @@ gradle -p android testDebugUnitTest lintDebug assembleDebug
    a `.sha256` per binary and `CHANGELOG.md` (fixed names: the in-app updater looks for them), and uses
    the changelog entry as release notes.
 
-The latest release is **v1.3.9**. Without tag-push rights, start a release from Actions → Release → Run workflow (tag input).
+The latest release is **v1.5.0**. Without tag-push rights, start a release from Actions → Release → Run workflow (tag input).
 
 
 ## Known limits (be honest about these)

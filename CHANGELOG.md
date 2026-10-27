@@ -6,6 +6,12 @@ Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
 ## 1.5.0 – 2026-10-27
 ### Nyt
+- Nyt udseende i Battle.net-stil på PC'en og telefonen: en mørk launcher med blåt lys, svævende gnister og store, tydelige knapper. PC'en har også et lyst tema.
+- Forsiden har et stort "SEND TIL"-kort med aben. Én knap sender filer, ▾ giver fotos, mappe, udklipsholder og tekst, og ⚙ har enhedens egen menu.
+- Dine enheder vises som fliser: tryk for at vælge, hvem du sender til. "+ Forbind ny" samler alle måder at forbinde på.
+- "Seneste" på forsiden: de nyeste ting, du har fået, ét tryk fra at blive åbnet. På PC'en kan du også kopiere dem eller sende dem igen.
+- Aben peger på en ny enhed og nikker, når den er klar. Når noget er sendt, hopper den, og der flyver gnister.
+- Genveje på PC'en: Ctrl+O sender filer, Ctrl+V sender det, du har kopieret, Ctrl+N forbinder en ny enhed, og F5 søger igen. En statuslinje nederst fortæller, hvad der sker.
 - "Wi-Fi + 5G" på PC'en: brug Wi-Fi og telefoners mobildata på én gang, så I får mere fart, når I er flere. Nye forbindelser fordeles på alle links med internet, og hurtige links får flest. Siden viser hver forbindelse med fart, svartid og hvor meget den har båret.
 - "Del mobildata med PC'en" på Android: forbundne PC'er på samme Wi-Fi kan låne telefonens 5G/4G. Trafikken går krypteret til telefonen og kun fra PC'er, du har parret med.
 - Har PC'en selv to netkort (fx Wi-Fi + USB-deling fra en telefon), bruges begge.
@@ -14,6 +20,14 @@ Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 ### Forbedret
 - Aben hopper nu, mens der sendes eller modtages – både på PC'en og på telefonens forside. Den lander igen, når alt er ovre.
 - Trykker du på aben (med fingeren eller musen), åbner den munden og spidser ører.
+- Sider glider blødt ind, knapper giver lidt efter, når du trykker, og enheden, der sendes til, lyser blåt, mens det står på.
+- Beskederne nederst er tydeligere, og TalkBack læser dem op. Knapperne har bedre kontrast.
+- En tom historik fortæller, hvad der kommer til at stå der.
+### Rettet
+- Et tryk på en knap eller fane på telefonen kunne gå tabt, hvis skærmen blev opdateret i samme øjeblik. Nu tæller hvert tryk.
+- Telefonen skrev "Sendt til …", før filen var fremme. Nu siger den det først, når den er.
+- Status-mærket på telefonen var grønt, selv når der ikke var noget netværk.
+- Modtagne filer vises ikke længere med en "send"-pil.
 
 ## 1.4.0 – 2026-10-26
 ### Nyt
