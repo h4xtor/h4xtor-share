@@ -2638,6 +2638,14 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                         + "h4xtor share under Indstillinger → Tilgængelighed.",
                 identity.flag("screen_control", false), value -> {
                     identity.setFlag("screen_control", value);
+                    if (value && !CopyWatchService.isEnabled(this)) {
+                        toast("Slå \"h4xtor share\" til her, så PC'en kan trykke for dig", false);
+                        try {
+                            startActivity(new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS));
+                        } catch (Exception ignored) {
+                            // The toast says where to go.
+                        }
+                    }
                     if (!value && service != null) {
                         service.stopMirror();
                     }

@@ -805,6 +805,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             self._api_send,
             self._api_approve,
             sender_all=self._api_send_all,
+            phone=self._api_phone,
         )
         self.web_share = WebShare(
             self.config_store,
@@ -2079,6 +2080,11 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
                     kind="ghost",
                 ).pack(side="right", padx=(0, px(6)))
 
+    def _copy_ai_setup(self) -> None:
+        from h4xtor_share.mcp_phone import setup_json
+
+        self._copy_to_clipboard(setup_json())
+
     def _copy_to_clipboard(self, text: str) -> None:
         self.clipboard_clear()
         self.clipboard_append(text)
@@ -2657,6 +2663,19 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             self.config_store.get_flag("screen_mirror", True),
             lambda value: self.config_store.set_flag("screen_mirror", value),
         )
+
+        self._divider(extras.body)
+        self._toggle_row(
+            extras.body,
+            "Lad en AI styre telefonen",
+            "En AI som Claude kan se telefonens skærm og trykke og skrive for dig. Tryk "
+            "\"Kopiér AI-opsætning\" og indsæt den i AI'ens indstillinger (MCP). Du godkender "
+            "AI'en første gang, og telefonen viser altid, når skærmen deles.",
+            self.config_store.get_flag("ai_control", False),
+            lambda value: self.config_store.set_flag("ai_control", value),
+        )
+        Button(extras.body, self.theme, "Kopiér AI-opsætning", self._copy_ai_setup,
+               kind="secondary", size="sm").pack(anchor="w", pady=(px(4), 0))
 
         behaviour = section("Opførsel")
         self._toggle_row(
@@ -5357,6 +5376,28 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             for peer, error in outcome
         ]
 
+    async def _api_phone(self, device_id: str, op: str, body: dict[str, Any]) -> dict[str, Any]:
+        """The local API's AI control: the same screen mirror the "Vis og styr skærmen" window
+        uses. The phone asks before sharing and keeps a notification up meanwhile."""
+        peer = self.peers.get(device_id)
+        if peer is None:
+            raise RuntimeError("Enheden er ikke tilgængelig.")
+        if op == "start":
+            self.event_queue.put(("status", f"En AI ser nu {peer.name}s skærm"))
+            return await self.client.mirror_start(peer, "jpeg")
+        if op == "screen":
+            return await self.client.mirror_frame(peer, int(body.get("after") or 0))
+        if op == "stop":
+            await self.client.mirror_stop(peer)
+            self.event_queue.put(("status", f"AI-styring af {peer.name} er stoppet"))
+            return {"ok": True}
+        action = body.get("action")
+        if not isinstance(action, dict):
+            raise ValueError("Mangler en handling.")
+        await self.client.mirror_input(peer, action)
+        self.event_queue.put(("status", f"En AI styrer {peer.name}"))
+        return {"ok": True}
+
     async def _send_download(self, peer: Peer, url: str) -> None:
         """Download a file from the web (e.g. an image) and send it as a real file."""
         import tempfile
@@ -5402,9 +5443,14 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         c = self.theme.c
         px = self.theme.px
         self.show_window()
-        modal = Modal(self, self.theme, "Chrome-udvidelse")
+        tool = "://" not in origin  # no browser origin: an AI or a script on this PC
+        modal = Modal(self, self.theme, "AI eller lokalt værktøj" if tool else "Chrome-udvidelse")
         modal.heading(
             f"{name} vil forbinde til h4xtor share",
+            "Et program på denne PC (fx en AI) vil sende til dine enheder og – hvis du har slået "
+            "AI-styring til – se og styre telefonens skærm. Tillad kun, hvis du selv har sat "
+            "det op."
+            if tool else
             "Udvidelsen kan så sende faner, links, tekst og billeder fra Chrome til dine "
             "enheder. Tillad kun, hvis du selv lige har trykket Forbind i udvidelsen.",
         )
@@ -5418,7 +5464,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             if not decision.done():
                 loop.call_soon_threadsafe(lambda: decision.done() or decision.set_result(value))
             if value:
-                self.toast.show("Chrome-udvidelsen er forbundet", "success")
+                self.toast.show(f"{name} er forbundet", "success")
 
         modal.on_close = lambda: answer(False)
         buttons = tk.Frame(modal.body, bg=c["bg"])
@@ -5595,6 +5641,11 @@ def main(argv: list[str] | None = None) -> None:
     arguments = list(sys.argv[1:] if argv is None else argv)
     if arguments[:1] == ["--apply-update"]:  # the update helper: no window, no services
         raise SystemExit(0 if run_update_helper(arguments[1:]) else 1)
+    if arguments[:1] == ["--mcp"]:  # started by an AI app: tools over stdin/stdout, no window
+        from h4xtor_share.mcp_phone import serve
+
+        serve()
+        return
     minimized = "--minimized" in arguments
     send_paths: list[Path] = []
     if "--send" in arguments:

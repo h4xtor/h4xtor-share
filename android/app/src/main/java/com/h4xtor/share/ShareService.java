@@ -102,6 +102,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     private static final int NOTIFICATION_SCREENSHOT = 201;
     private static final int NOTIFICATION_PC_WIFI = 202;
     private static final int NOTIFICATION_MIRROR = 203;
+    private static final int NOTIFICATION_CONTROL = 204;
     private static final long SCREENSHOT_REQUEST_TTL_MS = 5 * 60_000L;
     private static final int CLIPBOARD_SUPPRESS_MS = 3000;
     private static final long WIFI_DIRECT_IDLE_MS = 10 * 60_000L;
@@ -1456,11 +1457,11 @@ public final class ShareService extends Service implements H4xtorServer.Listener
             case "/api/v1/mirror/start":
                 requireMirror();
                 if (mirror != null && mirror.active()) {
-                    return new JSONObject().put("active", true);
+                    return new JSONObject().put("active", true).put("control", CopyWatchService.running());
                 }
                 mirrorPng = "png".equals(body.optString("format"));
                 requestCapture(peerId, true);
-                return new JSONObject().put("accepted", true);
+                return new JSONObject().put("accepted", true).put("control", CopyWatchService.running());
             case "/api/v1/mirror/frame": {
                 requireMirror();
                 ScreenMirror live = mirror;
@@ -1470,6 +1471,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
                 Object[] newest = live.await(body.optInt("after", 0), Math.min(2000, body.optLong("wait_ms", 1500)));
                 byte[] image = (byte[]) newest[1];
                 return new JSONObject().put("active", true).put("seq", newest[0])
+                        .put("control", CopyWatchService.running())
                         .put("width", live.width).put("height", live.height)
                         .put("format", live.png ? "png" : "jpeg")
                         .put("image", image == null ? "" : android.util.Base64.encodeToString(image, android.util.Base64.NO_WRAP));
@@ -1480,6 +1482,9 @@ public final class ShareService extends Service implements H4xtorServer.Listener
                     throw new H4xtorServer.HttpError(409, "Skærmdelingen er ikke startet.");
                 }
                 String error = CopyWatchService.perform(body);
+                if (!CopyWatchService.running()) {
+                    askForControl();
+                }
                 if (error != null) {
                     throw new H4xtorServer.HttpError(409, error);
                 }
@@ -1696,7 +1701,22 @@ public final class ShareService extends Service implements H4xtorServer.Listener
                 "Tryk her for at stoppe skærmdelingen.",
                 PendingIntent.getService(this, 6, new Intent(this, ShareService.class).setAction(ACTION_MIRROR_STOP),
                         PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
+        if (!CopyWatchService.running()) {
+            askForControl();
+        }
         changed();
+    }
+
+    /** The PC sees the screen but cannot tap: one tap on this opens the switch that allows it. */
+    private void askForControl() {
+        notifyEvent(NOTIFICATION_CONTROL, "Tillad styring fra PC'en",
+                "Tryk her og slå \"h4xtor share\" til under Hjælpefunktioner (Tilgængelighed). "
+                        + "Står der \"Begrænset indstilling\", så åbn App-info for h4xtor share, tryk ⋮ "
+                        + "og \"Tillad begrænsede indstillinger\" først.",
+                PendingIntent.getActivity(this, 7,
+                        new Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT));
     }
 
     void stopMirror() {
@@ -1705,6 +1725,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         if (live != null) {
             live.stop();
             notifications.cancel(NOTIFICATION_MIRROR);
+            notifications.cancel(NOTIFICATION_CONTROL);
             startForegroundCompat(); // drop the mediaProjection type again
             message("Skærmdelingen er stoppet", false);
             changed();

@@ -30,6 +30,9 @@ Sender = Callable[[str, str, str], Awaitable[None]]
 Approver = Callable[[str, str], Awaitable[bool]]
 # (kind, value) -> one {"id", "name", "ok", "error"} per paired device
 SenderAll = Callable[[str, str], Awaitable[list[dict[str, Any]]]]
+# (device_id, "start" | "screen" | "input" | "stop", body) -> the phone's answer
+PhoneControl = Callable[[str, str, dict[str, Any]], Awaitable[dict[str, Any]]]
+PHONE_OPS = ("start", "screen", "input", "stop")
 
 
 def _hash(token: str) -> str:
@@ -46,6 +49,7 @@ class LocalApi:
         approver: Approver,
         host: str = "127.0.0.1",
         sender_all: SenderAll | None = None,
+        phone: PhoneControl | None = None,
     ) -> None:
         self.config = config
         self.port = port
@@ -54,6 +58,7 @@ class LocalApi:
         self.sender = sender
         self.approver = approver
         self.sender_all = sender_all
+        self.phone = phone
         self.runner: web.AppRunner | None = None
         self.app = web.Application(middlewares=[self._guard], client_max_size=1024 * 1024)
         self.app.add_routes(
@@ -64,6 +69,7 @@ class LocalApi:
                 web.post("/v1/send", self.send),
                 web.post("/v1/send-all", self.send_all),
                 web.post("/v1/disconnect", self.disconnect),
+                web.post("/v1/phone/{op}", self.phone_control),
             ]
         )
 
@@ -194,3 +200,31 @@ class LocalApi:
             raise web.HTTPNotImplemented(text="Sending to all devices is not available.")
         # Partial failure is a normal 200: every device reports its own result.
         return web.json_response({"results": await self.sender_all(kind, value)})
+
+    async def phone_control(self, request: web.Request) -> web.Response:
+        """An AI (or any approved local tool) sees and steers a phone's screen.
+
+        Off until the user switches on "Lad en AI styre telefonen"; the phone must also allow
+        screen control and shows that it is shared."""
+        self._require(request)
+        op = request.match_info["op"]
+        if op not in PHONE_OPS:
+            raise web.HTTPNotFound(text="Unknown phone action.")
+        if self.phone is None or not self.config.get_flag("ai_control", False):
+            raise web.HTTPForbidden(
+                text="AI-styring er slået fra. Slå \"Lad en AI styre telefonen\" til i h4xtor "
+                "share → Indstillinger → Ekstra funktioner."
+            )
+        try:
+            payload = await request.json()
+        except ValueError as error:
+            raise web.HTTPBadRequest(text="Invalid JSON.") from error
+        if not isinstance(payload, dict):
+            raise web.HTTPBadRequest(text="Invalid JSON.")
+        device_id = str(payload.get("device_id") or "")
+        if device_id not in {device["id"] for device in self.devices()}:
+            raise web.HTTPNotFound(text="Unknown or unpaired device.")
+        try:
+            return web.json_response(await self.phone(device_id, op, payload))
+        except Exception as error:  # noqa: BLE001 - report the reason to the tool
+            raise web.HTTPBadGateway(text=str(error) or "The phone did not answer.") from error
