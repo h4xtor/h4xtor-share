@@ -10,7 +10,8 @@ desktop app, an Android app and a Chrome extension. Everything is local; nothing
 - **Test everything before handing anything over.** He does not want near-finished apps.
   Design and every sharing function must work.
 - When waiting on CI or builds, check back after **at most 10 minutes**, and always report the status.
-  Every message sent while waiting starts with a text progress bar with a percentage, e.g. `▓▓▓▓▓▓░░░░ 60 %`
+  Every message sent while waiting starts with a digital-looking progress bar in inline code (monospace), 20 cells,
+  e.g. `▕████████████░░░░░░░░▏ 60%`
   (estimate it from finished steps and how long CI jobs usually take).
 - GitHub (`h4xtor/h4xtor-share`, branch `main`) is the source of truth. You may commit, push and tag.
 
