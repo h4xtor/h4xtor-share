@@ -94,6 +94,8 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     private int landedSends = -1;
     /** A finger is on the screen: live progress waits, so a button is never rebuilt mid-tap. */
     private boolean touching;
+    /** Counts finger-downs, so a release posted for one tap never ends the next one. */
+    private int touches;
 
     // ---------------------------------------------------------------- lifecycle
     @Override
@@ -446,19 +448,28 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         int action = event.getActionMasked();
         if (action == android.view.MotionEvent.ACTION_DOWN) {
             touching = true;
+            touches++;
         }
         boolean handled = super.dispatchTouchEvent(event);
         if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
-            touching = false;
-            if (renderPending) {
-                // After the click has run; a scroll that is still flinging is left alone.
-                content.postDelayed(() -> {
-                    if (!touching && renderPending && service != null) {
-                        renderPending = false;
-                        onStateChanged();
-                    }
-                }, 350);
-            }
+            // Android runs the click in a message posted just now, and drops it if the button is
+            // rebuilt first (a status update already queued would do that): let go after the click.
+            int tap = touches;
+            content.post(() -> {
+                if (tap != touches) {
+                    return;
+                }
+                touching = false;
+                if (renderPending) {
+                    // A scroll that is still flinging is left alone.
+                    content.postDelayed(() -> {
+                        if (!touching && renderPending && service != null) {
+                            renderPending = false;
+                            onStateChanged();
+                        }
+                    }, 350);
+                }
+            });
         }
         return handled;
     }
@@ -793,7 +804,11 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             TextView scan = ui.button("SCAN QR-KODE", "primary");
             scan.setOnClickListener(v -> scanQr());
             buttons.addView(scan, ui.weight(1));
-            TextView mine = squareButton("▣", "Vis min QR-kode", v -> showMyQr());
+            TextView mine = squareButton("", "Vis min QR-kode", v -> showMyQr());
+            android.graphics.drawable.Drawable qr = getDrawable(R.drawable.ic_qr).mutate();
+            qr.setTint(ui.text);
+            mine.setForeground(qr);  // no text glyph reads as "QR code"; the real icon does
+            mine.setForegroundGravity(Gravity.CENTER);
             buttons.addView(mine, ui.wrap(8, 0, 0, 0));
         } else {
             TextView send = ui.button("SEND FILER", "primary");
@@ -1890,7 +1905,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         boolean queued = "queued".equals(item.status);
         boolean paused = "paused".equals(item.status);
         LinearLayout row = ui.row();
-        row.addView(ui.iconBadge(item.folder ? R.drawable.ic_folder : R.drawable.ic_file, 40,
+        row.addView(ui.iconBadge(item.folder ? R.drawable.ic_folder : R.drawable.ic_document, 40,
                 item.outgoing ? ui.accentSoft : ui.successSoft, item.outgoing ? ui.accent : ui.success));
         LinearLayout texts = ui.column();
         TextView name = ui.text(item.name, 15f, ui.text, true);
@@ -2136,7 +2151,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
                 case "folder": icon = R.drawable.ic_folder; break;
                 case "link": icon = R.drawable.ic_link; break;
                 case "clipboard": icon = R.drawable.ic_clipboard; break;
-                default: icon = R.drawable.ic_file;
+                default: icon = R.drawable.ic_document;
             }
             row.addView(ui.iconBadge(icon, 34, ui.surfaceAlt, ui.muted));
         }
