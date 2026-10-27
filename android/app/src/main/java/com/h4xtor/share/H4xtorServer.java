@@ -90,6 +90,8 @@ public final class H4xtorServer {
     private final Map<String, PendingPairing> pairings = new ConcurrentHashMap<>();
     private final Map<String, Long> qrSecrets = new ConcurrentHashMap<>();
     private final Map<String, Transfer> transfers = new ConcurrentHashMap<>();
+    /** Finished files (id -> size): a sender that lost our last answer gets "complete", not a copy. */
+    private final Map<String, Long> finished = new ConcurrentHashMap<>();
     private final Map<String, FolderState> folders = new ConcurrentHashMap<>();
     private final ExecutorService clients = Executors.newCachedThreadPool();
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -216,6 +218,10 @@ public final class H4xtorServer {
         } catch (Exception ignored) {
             // Peers routinely disconnect during LAN scans; that is not a user-facing error.
         }
+    }
+
+    static boolean isLoopback(String address) {
+        return address.startsWith("127.") || "::1".equals(address) || "0:0:0:0:0:0:0:1".equals(address);
     }
 
     static String remoteAddress(InetAddress address) {
@@ -366,6 +372,7 @@ public final class H4xtorServer {
             case "POST /api/v1/find":
             case "POST /api/v1/remote/volume":
             case "POST /api/v1/remote/speak":
+            case "POST /api/v1/wifi-direct/pc-offer":
             case "POST /api/v1/net/status": {
                 JSONObject body = readJsonBody(request, input);
                 sendJson(output, 200, command(auth, path, body));
@@ -468,10 +475,21 @@ public final class H4xtorServer {
         if (request.remote.isEmpty()) {
             return null;
         }
+        String address = request.remote;
+        if (isLoopback(address)) {
+            // Paired over the Bluetooth link: 127.0.0.1 is this phone itself. Keep a Wi-Fi
+            // address known from before, else the PC is (for now) reached on Bluetooth only.
+            address = "";
+            for (Peer known : identity.knownPeers()) {
+                if (known.deviceId.equals(peerId) && !isLoopback(known.address)) {
+                    address = known.address;
+                }
+            }
+        }
         Peer peer = new Peer(
                 peerId,
                 peerName,
-                request.remote,
+                address,
                 port,
                 fingerprint,
                 clip(reverse.optString("platform", "unknown"), 32),
@@ -501,6 +519,11 @@ public final class H4xtorServer {
         if (size < 0) {
             throw new HttpError(400, "Invalid file size.");
         }
+        Long done = finished.get(transferId);
+        if (done != null && done == size) {
+            sendJson(output, 200, new JSONObject().put("transfer_id", transferId).put("offset", size));
+            return;
+        }
         File directory = incomingDirectory();
         //noinspection ResultOfMethodCallIgnored
         directory.mkdirs();
@@ -518,6 +541,12 @@ public final class H4xtorServer {
     private void fileUpload(Request request, InputStream input, OutputStream output) throws Exception {
         String transferId = request.path.substring("/api/v1/files/".length());
         Transfer transfer = transfers.get(transferId);
+        Long finishedSize = finished.get(transferId);
+        if (transfer == null && finishedSize != null && finishedSize == requestedOffset(request)) {
+            sendJson(output, 200, new JSONObject().put("transfer_id", transferId)
+                    .put("offset", finishedSize).put("complete", true));
+            return;
+        }
         if (transfer == null) {
             throw new HttpError(404, "Transfer was not initialized.");
         }
@@ -545,6 +574,7 @@ public final class H4xtorServer {
             //noinspection ResultOfMethodCallIgnored
             transfer.part.delete();
             transfers.remove(transferId);
+            finished.put(transferId, transfer.size);
             listener.onFileReceived(transferId, transfer.peerName, transfer.name,
                     uri == null ? "" : uri.toString(), transfer.size);
         }

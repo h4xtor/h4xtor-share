@@ -61,6 +61,27 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         void onStopped();
     }
 
+    /** A PC made its own Wi-Fi Direct network and asks this phone to join it. */
+    public static final class PcWifiOffer {
+        public final String peerId;
+        public final String peerName;
+        public final String ssid;
+        public final String passphrase;
+        final List<String> addresses;
+
+        public List<String> addresses() {
+            return new ArrayList<>(addresses);
+        }
+
+        PcWifiOffer(String peerId, String peerName, String ssid, String passphrase, List<String> addresses) {
+            this.peerId = peerId;
+            this.peerName = peerName;
+            this.ssid = ssid;
+            this.passphrase = passphrase;
+            this.addresses = addresses;
+        }
+    }
+
     public interface ServiceAction {
         void run(ShareService service);
     }
@@ -77,6 +98,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     private static final int NOTIFICATION_SERVICE = 1;
     private static final int NOTIFICATION_TRANSFERS = 2;
     private static final int NOTIFICATION_SCREENSHOT = 201;
+    private static final int NOTIFICATION_PC_WIFI = 202;
     private static final long SCREENSHOT_REQUEST_TTL_MS = 5 * 60_000L;
     private static final int CLIPBOARD_SUPPRESS_MS = 3000;
     private static final long WIFI_DIRECT_IDLE_MS = 10 * 60_000L;
@@ -96,11 +118,16 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         public volatile String status = "active";
         public volatile String uri = "";
         public volatile String error = "";
+        volatile String peerId = "";
         final long created = System.currentTimeMillis();
         long lastTime = SystemClock.elapsedRealtime();
         long lastSent;
         H4xtorClient.CancelToken cancel;
         Runnable retry;
+        Runnable startNow;
+        volatile boolean pauseRequested;
+        volatile boolean busy;
+        long runs;
         public volatile long startedAt = SystemClock.elapsedRealtime();
         public volatile long finishedAt;
         public volatile double peakSpeed;
@@ -166,6 +193,12 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     private DiscoveryController discovery;
     private UdpDiscovery udp;
     private WifiDirectController wifiDirect;
+    private WifiJoinController wifiJoin;
+    private final Map<String, Peer> beforeDirect = new ConcurrentHashMap<>();
+    private volatile PcWifiOffer pcOffer;
+    private BluetoothController bluetooth;
+    /** The Wi-Fi route of a PC while it is reached over Bluetooth, to switch back afterwards. */
+    private final Map<String, Peer> beforeBluetooth = new ConcurrentHashMap<>();
     private SmsBridge sms;
     private RemoteTools remote;
     private NetGateway gateway;
@@ -217,6 +250,11 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         discovery = new DiscoveryController(this, identity, this);
         udp = new UdpDiscovery(identity, this, this::knownAddresses);
         wifiDirect = new WifiDirectController(this, identity);
+        wifiJoin = new WifiJoinController(this);
+        bluetooth = new BluetoothController(this, identity, new BluetoothController.Listener() {
+            @Override public void onBridgeUp(BluetoothBridge bridge, String pcId) { useBluetooth(bridge, pcId); }
+            @Override public void onBridgeDown(BluetoothBridge bridge) { leaveBluetooth(bridge); }
+        });
         notifications = getSystemService(NotificationManager.class);
         remote = new RemoteTools(this, main);
         gateway = new NetGateway(this);
@@ -245,6 +283,9 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         });
         registerClipboard();
         sms.syncObserver();
+        if (identity.flag("bluetooth", false) && hasBluetoothPermission()) {
+            bluetooth.start();
+        }
         try {
             startScreenshotWatcher();
         } catch (Exception ignored) {
@@ -291,6 +332,9 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         sms.stop();
         remote.shutdown();
         gateway.setEnabled(false);
+        if (wifiJoin != null) {
+            wifiJoin.leave();
+        }
         if (screenshotObserver != null) {
             getContentResolver().unregisterContentObserver(screenshotObserver);
         }
@@ -301,6 +345,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
                 // Already removed.
             }
         }
+        bluetooth.stop();
         discovery.stop();
         udp.stop();
         server.stop();
@@ -412,12 +457,33 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         }
         lastProgressNotify = now;
         List<TransferItem> active = new ArrayList<>();
+        int queued = 0;
         synchronized (transfers) {
             for (TransferItem item : transfers.values()) {
                 if ("active".equals(item.status)) {
                     active.add(item);
+                } else if ("queued".equals(item.status)) {
+                    queued++;
                 }
             }
+        }
+        if (active.isEmpty() && queued > 0) {
+            acquireLocks();
+            try {
+                notifications.notify(NOTIFICATION_TRANSFERS, new Notification.Builder(this, CHANNEL_TRANSFERS)
+                        .setSmallIcon(R.drawable.ic_stat_share)
+                        .setContentTitle(queued == 1 ? "1 fil venter" : queued + " filer venter")
+                        .setContentText("Starter om et øjeblik")
+                        .setOngoing(true)
+                        .setOnlyAlertOnce(true)
+                        .setColor(Ui.ACCENT_LIGHT)
+                        .setProgress(100, 0, true)
+                        .setContentIntent(openAppIntent())
+                        .build());
+            } catch (Exception ignored) {
+                // Notifications may be disabled.
+            }
+            return;
         }
         if (active.isEmpty()) {
             notifications.cancel(NOTIFICATION_TRANSFERS);
@@ -436,7 +502,8 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         String title = active.size() == 1
                 ? (first.outgoing ? "Sender " : "Modtager ") + first.name
                 : active.size() + " overførsler i gang";
-        String text = percent + "%  ·  " + Ui.formatBytes(sent) + " af " + Ui.formatBytes(total);
+        String text = percent + "%  ·  " + Ui.formatBytes(sent) + " af " + Ui.formatBytes(total)
+                + (queued > 0 ? "  ·  " + queued + " i kø" : "");
         try {
             notifications.notify(NOTIFICATION_TRANSFERS, new Notification.Builder(this, CHANNEL_TRANSFERS)
                     .setSmallIcon(R.drawable.ic_stat_share)
@@ -591,7 +658,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         int count = 0;
         synchronized (transfers) {
             for (TransferItem item : transfers.values()) {
-                if ("active".equals(item.status)) {
+                if (isRunning(item)) {
                     count++;
                 }
             }
@@ -601,7 +668,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
 
     public void clearFinished() {
         synchronized (transfers) {
-            transfers.values().removeIf(item -> !"active".equals(item.status));
+            transfers.values().removeIf(item -> !isOpen(item));
         }
         changed();
     }
@@ -609,7 +676,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     /** Drop one finished row from the list; the file itself stays. */
     public void removeTransfer(String id) {
         TransferItem item = transfers.get(id);
-        if (item != null && !"active".equals(item.status)) {
+        if (item != null && !isOpen(item)) {
             transfers.remove(id);
             changed();
         }
@@ -807,7 +874,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         // One address = one device: drop stale records (reinstalled app, old cache).
         for (Peer other : new ArrayList<>(peers.values())) {
             if (other.deviceId.equals(peer.deviceId) || !other.address.equals(peer.address)
-                    || other.port != peer.port) {
+                    || other.port != peer.port || peer.address.isEmpty()) {
                 continue;
             }
             if (!identity.isOutboundTrusted(other.deviceId)) {
@@ -818,14 +885,17 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         }
         Peer existing = peers.get(peer.deviceId);
         final Peer merged = existing != null && !existing.address.equals(peer.address)
-                && isOnline(peer.deviceId) && "wifi-direct".equals(existing.transport)
+                && isOnline(peer.deviceId)
+                && ("wifi-direct".equals(existing.transport) || "bluetooth".equals(existing.transport))
                 ? existing
                 : existing == null ? peer : existing.mergedWith(peer);
         peers.put(peer.deviceId, merged);
-        if (identity.isOutboundTrusted(peer.deviceId)) {
+        if (identity.isOutboundTrusted(peer.deviceId) && !"bluetooth".equals(merged.transport)) {
             identity.remember(merged);
         }
-        if (existing == null || !existing.address.equals(merged.address)) {
+        if (merged.address.isEmpty()) {
+            online.putIfAbsent(merged.deviceId, false); // reached on Bluetooth only
+        } else if (existing == null || !existing.address.equals(merged.address)) {
             network.execute(() -> {
                 try {
                     long time = client.ping(merged, 2_000);
@@ -1017,6 +1087,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
     @Override
     public void onPeerPaired(Peer peer) {
         upsert(peer, true);
+        bluetooth.promotePending(peer.deviceId); // paired over Bluetooth: keep using that link
         notifications.cancel(100);
         message("Forbundet med " + peer.name + " ✓", false);
         main.post(() -> {
@@ -1379,6 +1450,30 @@ public final class ShareService extends Service implements H4xtorServer.Listener
                 return ok();
             case "/api/v1/net/status":
                 return gateway.status(identity.flag("net_share", false));
+            case "/api/v1/wifi-direct/pc-offer": {
+                String ssid = body.optString("ssid", "");
+                String pass = body.optString("passphrase", "");
+                if (ssid.isEmpty() || ssid.length() > 32 || ShareLogic.p2pPassError(pass) != null) {
+                    throw new H4xtorServer.HttpError(400, "Ugyldigt netværksnavn eller kode.");
+                }
+                List<String> addresses = new ArrayList<>();
+                org.json.JSONArray list = body.optJSONArray("addresses");
+                for (int index = 0; list != null && index < list.length() && index < 8; index++) {
+                    String address = list.optString(index, "");
+                    if (address.matches("\\d{1,3}(\\.\\d{1,3}){3}")) {
+                        addresses.add(address);
+                    }
+                }
+                pcOffer = new PcWifiOffer(peerId, peerName, ssid, pass, addresses);
+                changed();
+                if (listeners.isEmpty()) {
+                    notifyEvent(NOTIFICATION_PC_WIFI, peerName + " har lavet Wi-Fi Direct",
+                            "Tryk for at forbinde telefonen direkte til " + ssid + ".", null);
+                } else {
+                    message(peerName + " har lavet Wi-Fi Direct – tryk Forbind øverst", false);
+                }
+                return new JSONObject().put("accepted", true);
+            }
             default:
                 throw new H4xtorServer.HttpError(404, "Not found.");
         }
@@ -1487,7 +1582,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         TransferItem item = newTransfer(file.getName(), false, target);
         item.total = file.length();
         runTransfer(item, current -> {
-            client.sendFile(target, file, (name, sent, total) -> progress(current, sent, total), current.cancel);
+            client.sendFile(route(target), file, (name, sent, total) -> progress(current, sent, total), current.cancel);
             recordSent(target, "file", file.getName(), file.length());
             //noinspection ResultOfMethodCallIgnored
             file.delete();
@@ -1499,6 +1594,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         TransferItem item = new TransferItem(
                 java.util.UUID.randomUUID().toString(), name, true, folder, peer.name);
         item.cancel = new H4xtorClient.CancelToken();
+        item.peerId = peer.deviceId;
         transfers.put(item.id, item);
         changed();
         return item;
@@ -1521,48 +1617,252 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         main.post(() -> updateTransferNotification(false));
     }
 
+    /**
+     * Queue a send. Three run at a time; the rest wait as "queued" (shown as "I kø"),
+     * so a long list never looks stuck at 0 %. "Start nu" runs one straight away.
+     */
     private void runTransfer(TransferItem item, TransferJob job) {
-        item.startedAt = SystemClock.elapsedRealtime();
-        item.finishedAt = 0;
-        item.status = "active";
-        item.error = "";
-        item.cancel = new H4xtorClient.CancelToken();
-        item.retry = () -> runTransfer(item, job);
+        final long run;
+        synchronized (item) {
+            item.finishedAt = 0;
+            item.status = "queued";
+            item.error = "";
+            item.pauseRequested = false;
+            item.cancel = new H4xtorClient.CancelToken();
+            item.retry = () -> runTransfer(item, job);
+            run = ++item.runs;
+            item.startNow = () -> network.execute(() -> execute(item, job, run));
+        }
         changed();
-        transfersExecutor.execute(() -> {
+        main.post(() -> updateTransferNotification(true));
+        transfersExecutor.execute(() -> execute(item, job, run));
+    }
+
+    private void execute(TransferItem item, TransferJob job, long run) {
+        synchronized (item) {
+            // Paused, stopped, started with "Start nu" or re-queued meanwhile: nothing to do here.
+            if (item.runs != run || !"queued".equals(item.status)) {
+                return;
+            }
+            item.status = "active";
+        }
+        // "Fortsæt" right after "Pause": let the previous run finish closing first, so two runs
+        // never upload the same file at once.
+        long until = SystemClock.elapsedRealtime() + 15_000;
+        while (item.busy && SystemClock.elapsedRealtime() < until) {
+            SystemClock.sleep(50);
+        }
+        item.busy = true;
+        try {
+            item.startedAt = SystemClock.elapsedRealtime();
+            item.lastTime = item.startedAt;
+            item.lastSent = item.sent;
+            item.speed = 0;
+            changed();
+            main.post(() -> updateTransferNotification(true));
             try {
                 job.run(item);
-                item.status = "done";
-                item.sent = item.total;
-                finished(item);
+                if (settle(item, run, "done")) {
+                    item.sent = item.total;
+                    finished(item);
+                }
             } catch (H4xtorClient.CancelledException error) {
-                item.status = "cancelled";
+                settle(item, run, item.pauseRequested ? "paused" : "cancelled");
             } catch (Exception error) {
-                item.status = item.cancel.isCancelled() ? "cancelled" : "failed";
-                item.error = H4xtorClient.safeMessage(error);
-                android.util.Log.w("h4xtor", "transfer " + item.name + " failed", error);
-                if (!item.cancel.isCancelled()) {
+                if (item.cancel.isCancelled()) {
+                    settle(item, run, item.pauseRequested ? "paused" : "cancelled");
+                } else if (settle(item, run, "failed")) {
+                    item.error = H4xtorClient.safeMessage(error);
+                    android.util.Log.w("h4xtor", "transfer " + item.name + " failed", error);
                     message("Overførsel fejlede: " + item.error, true);
                 }
             }
-            changed();
-            main.post(() -> updateTransferNotification(true));
-        });
+        } finally {
+            item.busy = false;
+        }
+        changed();
+        main.post(() -> updateTransferNotification(true));
+    }
+
+    /** Publish how a run ended, unless the user already started a newer run of the same file. */
+    private static boolean settle(TransferItem item, long run, String status) {
+        synchronized (item) {
+            if (item.runs != run) {
+                return false;
+            }
+            item.status = status;
+            return true;
+        }
+    }
+
+    /** Sending, waiting in the queue, or receiving: the work is not finished yet. */
+    public static boolean isRunning(TransferItem item) {
+        return "active".equals(item.status) || "queued".equals(item.status);
+    }
+
+    /** Still open: running, or paused by the user and ready to continue. */
+    public static boolean isOpen(TransferItem item) {
+        return isRunning(item) || "paused".equals(item.status);
+    }
+
+    /** 1 for the next file to start, 2 for the one after … (0 when not queued). */
+    public int queuePosition(TransferItem item) {
+        if (!"queued".equals(item.status)) {
+            return 0;
+        }
+        int position = 0;
+        synchronized (transfers) {
+            for (TransferItem other : transfers.values()) {
+                if ("queued".equals(other.status)) {
+                    position++;
+                }
+                if (other == item) {
+                    return position;
+                }
+            }
+        }
+        return position;
+    }
+
+    /** Pause one send: it keeps its place and continues where it stopped. */
+    public void pause(String id) {
+        TransferItem item = transfers.get(id);
+        if (item == null || !item.outgoing) {
+            return;
+        }
+        synchronized (item) {
+            if ("queued".equals(item.status)) {
+                item.status = "paused";
+            } else if ("active".equals(item.status)) {
+                item.pauseRequested = true;
+                item.status = "paused";
+                if (item.cancel != null) {
+                    item.cancel.cancel();
+                }
+            } else {
+                return;
+            }
+        }
+        changed();
+        main.post(() -> updateTransferNotification(true));
+    }
+
+    /** Continue a paused, stopped or failed send (from where it stopped). */
+    public void resume(String id) {
+        TransferItem item = transfers.get(id);
+        if (item != null && item.outgoing && item.retry != null && !isRunning(item)
+                && !"done".equals(item.status)) {
+            item.retry.run();
+        }
+    }
+
+    /** "Start nu": run a queued (or paused) send at once instead of waiting for a free place. */
+    public void startNow(String id) {
+        TransferItem item = transfers.get(id);
+        if (item == null) {
+            return;
+        }
+        if ("paused".equals(item.status)) {
+            resume(id);
+        }
+        Runnable now;
+        synchronized (item) {
+            now = "queued".equals(item.status) ? item.startNow : null;
+        }
+        if (now != null) {
+            now.run();
+        }
+    }
+
+    public int pauseAll() {
+        int count = 0;
+        for (TransferItem item : transfers()) {
+            if (item.outgoing && isRunning(item)) {
+                pause(item.id);
+                count++;
+            }
+        }
+        return count;
+    }
+
+    public int resumeAll() {
+        int count = 0;
+        List<TransferItem> items = transfers();
+        Collections.reverse(items); // oldest first keeps the original order in the queue
+        for (TransferItem item : items) {
+            if (item.outgoing && "paused".equals(item.status)) {
+                resume(item.id);
+                count++;
+            }
+        }
+        return count;
+    }
+
+    public int stopAll() {
+        int count = 0;
+        for (TransferItem item : transfers()) {
+            if (item.outgoing && isOpen(item)) {
+                cancel(item.id);
+                count++;
+            }
+        }
+        return count;
+    }
+
+    /** {running or queued, paused} outgoing sends, for the "Pause alle / Fortsæt alle / Stop alle" row. */
+    public int[] controlCounts() {
+        int running = 0;
+        int paused = 0;
+        for (TransferItem item : transfers()) {
+            if (!item.outgoing) {
+                continue;
+            }
+            if (isRunning(item)) {
+                running++;
+            } else if ("paused".equals(item.status)) {
+                paused++;
+            }
+        }
+        return new int[]{running, paused};
     }
 
     private interface TransferJob {
         void run(TransferItem item) throws Exception;
     }
 
+    /** The PC's route right now: a transfer may start on Wi-Fi and be resumed over Bluetooth, or back. */
+    private Peer route(Peer peer) {
+        Peer now = peers.get(peer.deviceId);
+        return now != null ? now : peer;
+    }
+
+    /** The same file already on its way to the same device (a share sheet opened twice). */
+    private TransferItem activeSend(Peer peer, Uri uri) {
+        synchronized (transfers) {
+            for (TransferItem item : transfers.values()) {
+                if (item.outgoing && isOpen(item) && peer.deviceId.equals(item.peerId)
+                        && uri.toString().equals(item.uri)) {
+                    return item;
+                }
+            }
+        }
+        return null;
+    }
+
     public List<String> sendUris(Peer peer, List<Uri> uris) {
         List<String> ids = new ArrayList<>();
         for (Uri uri : uris) {
+            TransferItem running = activeSend(peer, uri);
+            if (running != null) {
+                ids.add(running.id);
+                continue;
+            }
             H4xtorClient.SourceInfo info = client.describe(uri);
             TransferItem item = newTransfer(info.name, false, peer);
             item.total = Math.max(0, info.size);
             item.uri = uri.toString(); // the phone's own copy: lets "Åbn" open what was sent
             runTransfer(item, current -> {
-                client.sendFile(peer, uri, (name, sent, total) -> progress(current, sent, total), current.cancel);
+                client.sendFile(route(peer), uri, (name, sent, total) -> progress(current, sent, total), current.cancel);
                 recordSent(peer, "file", info.name, info.size, uri.toString());
             });
             ids.add(item.id);
@@ -1578,7 +1878,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         String name = client.treeName(tree);
         TransferItem item = newTransfer(name, true, peer);
         runTransfer(item, current -> {
-            client.sendFolder(peer, tree, (folder, sent, total) -> progress(current, sent, total), current.cancel);
+            client.sendFolder(route(peer), tree, (folder, sent, total) -> progress(current, sent, total), current.cancel);
             recordSent(peer, "folder", name, current.total);
         });
     }
@@ -1710,7 +2010,8 @@ public final class ShareService extends Service implements H4xtorServer.Listener
 
     public void cancel(String id) {
         TransferItem item = transfers.get(id);
-        if (item != null && item.cancel != null) {
+        if (item != null && item.cancel != null && !"done".equals(item.status)) {
+            item.pauseRequested = false;
             item.cancel.cancel();
             item.status = "cancelled";
             changed();
@@ -1720,7 +2021,7 @@ public final class ShareService extends Service implements H4xtorServer.Listener
 
     public void retry(String id) {
         TransferItem item = transfers.get(id);
-        if (item != null && item.retry != null && !"active".equals(item.status)) {
+        if (item != null && item.retry != null && !isRunning(item)) {
             item.retry.run();
         }
     }
@@ -1987,6 +2288,25 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         });
     }
 
+    /** Use the user's own name and code; a running group restarts with them right away. */
+    public void chooseWifiDirect(String nameSuffix, String pass) {
+        wifiDirect.choose(nameSuffix, pass);
+        restartWifiDirectIfActive();
+    }
+
+    public void automaticWifiDirect() {
+        wifiDirect.useAutomatic();
+        restartWifiDirectIfActive();
+    }
+
+    private void restartWifiDirectIfActive() {
+        if (wifiDirect.isActive()) {
+            startWifiDirect(); // start() removes the old group first
+        } else {
+            changed();
+        }
+    }
+
     public void stopWifiDirect() {
         wifiDirect.stop(new WifiDirectController.Callback() {
             @Override public void onGroupStarted(String ssid, String passphrase) { }
@@ -2014,6 +2334,206 @@ public final class ShareService extends Service implements H4xtorServer.Listener
                 message("Kunne ikke sende til " + peer.name + ": " + H4xtorClient.safeMessage(error), true);
             }
         });
+    }
+
+    // ------------------------------------------- Wi-Fi Direct made by the PC
+    public PcWifiOffer pcOffer() {
+        return pcOffer;
+    }
+
+    public void dismissPcOffer() {
+        pcOffer = null;
+        notifications.cancel(NOTIFICATION_PC_WIFI);
+        changed();
+    }
+
+    public WifiJoinController wifiJoin() {
+        return wifiJoin;
+    }
+
+    /** Join the PC's own network (must be called from the screen: Android asks the user). */
+    public void joinPcWifi(String ssid, String passphrase, String peerId, List<String> offered) {
+        pcOffer = null;
+        notifications.cancel(NOTIFICATION_PC_WIFI);
+        message("Forbinder til " + ssid + " – tryk Forbind i Android-boksen", false);
+        wifiJoin.join(ssid, passphrase, new WifiJoinController.Listener() {
+            @Override
+            public void onJoined(String name, List<String> gateways) {
+                List<String> candidates = new ArrayList<>(gateways);
+                for (String address : offered == null ? new ArrayList<String>() : offered) {
+                    if (!candidates.contains(address)) {
+                        candidates.add(address);
+                    }
+                }
+                for (String fallback : ShareLogic.PC_DIRECT_ADDRESSES) {
+                    if (!candidates.contains(fallback)) {
+                        candidates.add(fallback);
+                    }
+                }
+                network.execute(() -> announceOnDirect(name, peerId, candidates));
+                changed();
+            }
+
+            @Override
+            public void onJoinFailed(String reason) {
+                message(reason, true);
+                changed();
+            }
+
+            @Override
+            public void onLeft(String name) {
+                restoreAfterDirect();
+                message("Wi-Fi Direct med PC'en er slut – tilbage på dit normale netværk", false);
+                changed();
+            }
+        });
+        changed();
+    }
+
+    public void leavePcWifi() {
+        wifiJoin.leave();
+        restoreAfterDirect();
+        changed();
+    }
+
+    /** Tell the PC (its address on the new network) that this phone is here. */
+    private void announceOnDirect(String ssid, String peerId, List<String> candidates) {
+        String reached = null;
+        for (Peer known : pairedPeers()) {
+            if (!known.isDesktop() || (peerId != null && !peerId.equals(known.deviceId))) {
+                continue;
+            }
+            for (String address : candidates) {
+                Peer routed = new Peer(known.deviceId, known.name, address, known.port, known.fingerprint,
+                        known.platform, "wifi-direct", known.capabilities);
+                try {
+                    client.announceDirect(routed, ssid);
+                } catch (Exception ignored) {
+                    continue;
+                }
+                if (!"wifi-direct".equals(known.transport)) {
+                    beforeDirect.put(known.deviceId, known);
+                }
+                peers.put(known.deviceId, routed);
+                online.put(known.deviceId, true);
+                reached = known.name;
+                break;
+            }
+        }
+        restartDiscovery(); // PCs not paired yet show up on the new network too
+        if (reached != null) {
+            message("Forbundet direkte med " + reached + " via Wi-Fi Direct", false);
+        } else {
+            message("Forbundet til " + ssid + ", men PC'en svarer ikke endnu. Den dukker op, så snart den gør.",
+                    true);
+        }
+        changed();
+    }
+
+    private void restoreAfterDirect() {
+        for (Peer peer : new ArrayList<>(peers.values())) {
+            Peer before = beforeDirect.remove(peer.deviceId);
+            if (before == null || !"wifi-direct".equals(peer.transport)) {
+                continue;
+            }
+            peers.put(peer.deviceId, before);
+            online.put(peer.deviceId, false);
+            network.execute(() -> {
+                try {
+                    rtt.put(before.deviceId, client.ping(before, 2_000));
+                    online.put(before.deviceId, true);
+                } catch (Exception ignored) {
+                    online.put(before.deviceId, false);
+                }
+                changed();
+            });
+        }
+    }
+
+    // ------------------------------------------------------------ Bluetooth
+    public boolean hasBluetoothPermission() {
+        return android.os.Build.VERSION.SDK_INT < 31
+                || checkSelfPermission(android.Manifest.permission.BLUETOOTH_CONNECT)
+                == android.content.pm.PackageManager.PERMISSION_GRANTED;
+    }
+
+    public boolean bluetoothEnabled() {
+        return identity.flag("bluetooth", false);
+    }
+
+    /** Let paired PCs connect over Bluetooth (they do so by themselves when Wi-Fi can't reach). */
+    public void setBluetoothEnabled(boolean enabled) {
+        identity.setFlag("bluetooth", enabled);
+        if (enabled) {
+            String problem = bluetooth.start();
+            if (problem != null) {
+                message(problem, true);
+            }
+        } else {
+            bluetooth.stop();
+        }
+        changed();
+    }
+
+    /** The PC currently reached over Bluetooth, or null. */
+    public Peer bluetoothPeer() {
+        for (Peer peer : peers.values()) {
+            if ("bluetooth".equals(peer.transport)) {
+                return peer;
+            }
+        }
+        return null;
+    }
+
+    private void useBluetooth(BluetoothBridge bridge, String pcId) {
+        Peer known = peers.get(pcId);
+        if (known == null) {
+            bridge.close();
+            return;
+        }
+        if (!"bluetooth".equals(known.transport)) {
+            beforeBluetooth.put(pcId, known);
+        }
+        Peer routed = new Peer(known.deviceId, known.name, "127.0.0.1", bridge.port(), known.fingerprint,
+                known.platform, "bluetooth", known.capabilities);
+        peers.put(pcId, routed);
+        online.put(pcId, true);
+        message("Forbundet med " + known.name + " via Bluetooth", false);
+        changed();
+    }
+
+    private void leaveBluetooth(BluetoothBridge bridge) {
+        for (Peer peer : new ArrayList<>(peers.values())) {
+            if (!"bluetooth".equals(peer.transport) || peer.port != bridge.port()) {
+                continue;
+            }
+            Peer before = beforeBluetooth.remove(peer.deviceId);
+            if (before == null) { // fall back to the address remembered from Wi-Fi
+                for (Peer stored : identity.knownPeers()) {
+                    if (stored.deviceId.equals(peer.deviceId)) {
+                        before = stored;
+                    }
+                }
+            }
+            if (before == null) {
+                peers.remove(peer.deviceId);
+                continue;
+            }
+            final Peer restored = before;
+            peers.put(peer.deviceId, restored);
+            online.put(peer.deviceId, false);
+            network.execute(() -> {
+                try {
+                    rtt.put(restored.deviceId, client.ping(restored, 2_000));
+                    online.put(restored.deviceId, true);
+                } catch (Exception ignored) {
+                    online.put(restored.deviceId, false);
+                }
+                changed();
+            });
+            message("Bluetooth-forbindelsen til " + peer.name + " er slut", false);
+        }
+        changed();
     }
 
     public void renameDevice(String name) {

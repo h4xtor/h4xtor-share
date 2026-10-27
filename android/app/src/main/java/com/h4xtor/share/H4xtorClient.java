@@ -30,7 +30,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 import javax.net.ssl.HostnameVerifier;
 import javax.net.ssl.HttpsURLConnection;
@@ -294,6 +299,13 @@ public final class H4xtorClient {
                 .put("port", AppIdentity.PORT), 15_000);
     }
 
+    /** Tell a PC that made its own Wi-Fi Direct network that this phone has joined it. */
+    public void announceDirect(Peer peer, String ssid) throws Exception {
+        authedPost(peer, "/api/v1/wifi-direct/joined", new JSONObject()
+                .put("ssid", ssid)
+                .put("port", AppIdentity.PORT), 4_000);
+    }
+
     /** v1.2: mirror a phone notification (posted/removed) to a PC that supports "notifications". */
     public void pushNotification(Peer peer, JSONObject payload) throws Exception {
         authedPost(peer, "/api/v1/notification", payload, 10_000);
@@ -504,6 +516,49 @@ public final class H4xtorClient {
         void onProgress(long sent, long total);
     }
 
+    /**
+     * Over Bluetooth a file goes up in small pieces, one request each. A single big request
+     * would fill ~4 MB of socket buffers at once: the progress bar jumps to the end and then
+     * stands still for minutes while the link drains, and pings queue behind it until the
+     * PC looks offline. Each piece is answered by the receiver, so progress is real.
+     */
+    static final long BLUETOOTH_PIECE = 128 * 1024;
+    /** No upload progress for this long: the link is gone (a blocked write would wait ~15 min). */
+    static final long STALL_MS = 45_000;
+    private static final ScheduledExecutorService WATCHDOG = Executors.newSingleThreadScheduledExecutor(body -> {
+        Thread thread = new Thread(body, "h4x-stall");
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    /** Calls {@code onStall} once when {@link #moved()} has not been called for {@code stallMs}. */
+    static final class Stall {
+        private final AtomicLong last = new AtomicLong(System.nanoTime());
+        private final AtomicBoolean fired = new AtomicBoolean();
+        private final ScheduledFuture<?> check;
+
+        Stall(long stallMs, Runnable onStall) {
+            long period = Math.max(50, Math.min(5_000, stallMs / 4));
+            check = WATCHDOG.scheduleWithFixedDelay(() -> {
+                if (System.nanoTime() - last.get() > stallMs * 1_000_000L && fired.compareAndSet(false, true)) {
+                    onStall.run();
+                }
+            }, period, period, TimeUnit.MILLISECONDS);
+        }
+
+        void moved() {
+            last.set(System.nanoTime());
+        }
+
+        boolean fired() {
+            return fired.get();
+        }
+
+        void stop() {
+            check.cancel(false);
+        }
+    }
+
     private JSONObject upload(
             Peer peer,
             String path,
@@ -511,6 +566,27 @@ public final class H4xtorClient {
             long offset,
             ByteProgress listener,
             CancelToken cancel) throws Exception {
+        long piece = "bluetooth".equals(peer.transport) ? BLUETOOTH_PIECE : Long.MAX_VALUE;
+        try (InputStream raw = source.open()) {
+            skipFully(raw, offset);
+            InputStream input = new BufferedInputStream(raw, CHUNK_SIZE);
+            listener.onProgress(offset, source.size);
+            while (true) {
+                long length = Math.min(piece, source.size - offset);
+                JSONObject result = uploadPiece(peer, path, input, offset, length, source.size, listener, cancel);
+                offset += length;
+                if (offset >= source.size || result.optBoolean("complete", false)) {
+                    return result;
+                }
+                if (result.optLong("offset", -1) != offset) {
+                    throw new IllegalStateException("Modtageren mistede en del af filen – tryk Fortsæt");
+                }
+            }
+        }
+    }
+
+    private JSONObject uploadPiece(Peer peer, String path, InputStream input, long offset, long length,
+                                   long size, ByteProgress listener, CancelToken cancel) throws Exception {
         String fingerprint = identity.outboundFingerprint(peer.deviceId);
         String token = identity.outboundToken(peer.deviceId);
         HttpsURLConnection connection = open(new URL(peer.endpoint() + path), "PUT", pinnedFactory(fingerprint), 60_000);
@@ -521,33 +597,39 @@ public final class H4xtorClient {
         connection.setRequestProperty("X-H4xtor-Offset", Long.toString(offset));
         connection.setRequestProperty("Content-Type", "application/octet-stream");
         connection.setDoOutput(true);
-        connection.setFixedLengthStreamingMode(source.size - offset);
-        try (InputStream raw = source.open()) {
-            skipFully(raw, offset);
-            try (InputStream input = new BufferedInputStream(raw, CHUNK_SIZE);
-                 OutputStream output = new BufferedOutputStream(connection.getOutputStream(), CHUNK_SIZE)) {
+        connection.setFixedLengthStreamingMode(length);
+        Stall stall = new Stall(STALL_MS, connection::disconnect);
+        try {
+            try (OutputStream output = new BufferedOutputStream(connection.getOutputStream(), CHUNK_SIZE)) {
                 byte[] buffer = new byte[CHUNK_SIZE];
                 long sent = offset;
-                listener.onProgress(sent, source.size);
-                while (true) {
+                long remaining = length;
+                while (remaining > 0) {
                     cancel.check();
-                    int read = input.read(buffer);
+                    int read = input.read(buffer, 0, (int) Math.min(buffer.length, remaining));
                     if (read < 0) {
-                        break;
+                        throw new IllegalStateException("Filen blev kortere under overførslen");
                     }
                     output.write(buffer, 0, read);
+                    stall.moved();
                     sent += read;
-                    listener.onProgress(sent, source.size);
+                    remaining -= read;
+                    listener.onProgress(sent, size);
                 }
                 output.flush();
             }
+            stall.stop(); // waiting for the answer is covered by the read timeout
             return readJson(connection);
         } catch (Exception error) {
             if (cancel.isCancelled()) {
                 throw new CancelledException();
             }
+            if (stall.fired()) {
+                throw new java.io.IOException("Forbindelsen gik i stå – tryk Fortsæt for at prøve igen");
+            }
             throw error;
         } finally {
+            stall.stop();
             connection.disconnect();
         }
     }

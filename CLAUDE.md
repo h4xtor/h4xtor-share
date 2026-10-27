@@ -26,6 +26,8 @@ Never use the deleted repo `h4xtor/H4xtorShare` or old folders such as `C:\AI\Fr
 | `src/h4xtor_share/server.py` / `client.py` | Protocol v1 (HTTPS on port 47474, pinned TLS fingerprints) |
 | `src/h4xtor_share/local_api.py` | Loopback API on 127.0.0.1:47476, used by the Chrome extension |
 | `src/h4xtor_share/web_share.py` + `web_page.py` | iPhone/browser sharing: plain HTTP on the LAN, port 47478, guarded by a random key in the QR link. Off until switched on (page "iPhone") |
+| `src/h4xtor_share/bluetooth.py` | Bluetooth bridge ("h4xtor-bt/1"): multiplexes the normal HTTPS connections over one RFCOMM link. Android side: `BluetoothBridge.java` + `BluetoothController.java` (same frame bytes, tested on both sides). The PC connects; the phone listens |
+| `src/h4xtor_share/wifidirect.py` / `wifidirect_host.py` | Wi-Fi Direct: the PC joins the phone's group / the PC makes its own network (Windows: WinRT `WiFiDirectAdvertisementPublisher` in legacy mode via a PowerShell helper; Linux: `nmcli` hotspot). Android side: `WifiDirectController.java` (phone hosts) and `WifiJoinController.java` (phone joins the PC's network with `WifiNetworkSpecifier`, then `POST /api/v1/wifi-direct/joined`) |
 | `src/h4xtor_share/integration.py` | Windows integration: right-click menu (AllFilesystemObjects, NeverDefault), Send-to, autostart, Chrome |
 | `src/h4xtor_share/updater.py` + `update_pages.py` | Auto-update from GitHub Releases (HTTPS, SHA-256), changelog parsing, the Windows swap helper (`--apply-update`) with rollback |
 | `src/h4xtor_share/netmerge.py` + `netmerge_page.py` + `sysproxy.py` | "Wi-Fi + 5G" (net-merge style): local HTTP/SOCKS5 proxy on 127.0.0.1:47480 spreading connections over the PC's adapters and paired phones (pinned-TLS `CONNECT` to the phone's port 47474); system proxy via a PAC file so a crash never breaks the internet |
@@ -59,7 +61,7 @@ gradle -p android testDebugUnitTest lintDebug assembleDebug
    a `.sha256` per binary and `CHANGELOG.md` (fixed names: the in-app updater looks for them), and uses
    the changelog entry as release notes.
 
-The latest release is **v1.3.3**. Without tag-push rights, start a release from Actions → Release → Run workflow (tag input).
+The latest release is **v1.3.9**. Without tag-push rights, start a release from Actions → Release → Run workflow (tag input).
 
 
 ## Known limits (be honest about these)
@@ -70,4 +72,21 @@ The latest release is **v1.3.3**. Without tag-push rights, start a release from 
   (Indstillinger → "Send med det samme, når du kopierer"); sideloaded APKs on Android 13+ first need
   App-info → ⋮ → "Tillad begrænsede indstillinger". Copies via keyboard shortcuts are not caught;
   then the app/notification/tile/"Send til PC" paths still work. PC → phone always works.
+- Bluetooth needs the phone and PC paired in the OS Bluetooth settings first (and "Tillad forbindelse
+  via Bluetooth" on in the phone app). Since v1.3.7 the PC finds phones with "Søg via Bluetooth"
+  (paired devices whose class of device says phone; all when unknown) and can pair with the code
+  over the link: the phone keeps an unpaired PC's link open for 10 minutes (`pending` in
+  `BluetoothController`), and a peer reached only on Bluetooth is remembered with an empty address.
+  It works on Windows and Linux only (no RFCOMM sockets in Python on macOS) and is 10–50× slower than Wi-Fi. CI tests the
+  bridge over TCP (the emulator has no Bluetooth: `files/bt_debug_port`), so the radio part
+  (Windows SDP lookup by UUID, Android `listenUsingRfcommWithServiceRecord`) is only proven on
+  real hardware.
+- Wi-Fi Direct made by the PC depends on the Wi-Fi card/driver (Windows legacy Wi-Fi Direct) and
+  NetworkManager on Linux; macOS cannot. CI proves the WinRT types load on Windows
+  (`test_windows_winrt_types_load`) and that the phone shows the offer card; the radio part is
+  only proven on real hardware. The phone joins with `WifiNetworkSpecifier` (Android shows a
+  "Forbind" box, foreground only) and binds the app to that network while joined.
+- Phone sends: three run at a time, the rest are `queued` ("I kø"). `pause` cancels the run and
+  keeps the resumable id, so "Fortsæt" continues at the PC's offset. The e2e test slows the PC
+  receiver with `ShareServer.receive_delay` to see the queue and pause it.
 - The status dashboard (Claude artifact) only updates when Claude writes to it.

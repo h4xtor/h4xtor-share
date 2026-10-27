@@ -180,87 +180,6 @@ def test_scrollframe_wheel_works_over_child_widgets() -> None:
         root.destroy()
 
 
-def test_monkey_hops_while_busy_and_lands_again() -> None:
-    import tkinter as tk
-
-    from h4xtor_share.ui_kit import Monkey, Theme
-
-    try:
-        root = tk.Tk()
-    except tk.TclError as error:
-        pytest.skip(f"Tk unavailable: {error}".splitlines()[0])
-    try:
-        monkey = Monkey(root, Theme(root, dark=False), size=100)
-        ground = monkey.bbox("all")[1]
-        monkey.set_busy(True)
-        for _ in range(3):
-            monkey._hop()
-        assert monkey.bbox("all")[1] < ground  # off the ground
-        monkey.set_busy(False)
-        monkey._hop()
-        assert monkey.bbox("all")[1] == ground
-    finally:
-        root.destroy()
-
-
-def test_monkey_opens_mouth_and_ears_on_click() -> None:
-    import tkinter as tk
-
-    from h4xtor_share.ui_kit import Monkey, Theme
-
-    try:
-        root = tk.Tk()
-    except tk.TclError as error:
-        pytest.skip(f"Tk unavailable: {error}".splitlines()[0])
-    try:
-        monkey = Monkey(root, Theme(root, dark=False), size=100)
-        monkey.pack()
-        root.update()  # an unmapped widget gets no mouse events
-        ear, mouth = monkey._ears[0][0], monkey._mouth
-        ear_at_rest = monkey.coords(ear)
-        mouth_at_rest = monkey.coords(mouth)
-        monkey.event_generate("<Button-1>", x=10, y=10)  # a click, as the user does it
-        monkey._grin()
-        assert monkey.coords(ear)[3] > ear_at_rest[3]  # taller ears
-        assert monkey.coords(mouth)[3] > mouth_at_rest[3]  # mouth open
-        assert monkey.itemcget(mouth, "style") == "chord"
-        for _ in monkey.GRIN:
-            monkey._grin()
-        assert monkey.coords(ear) == ear_at_rest
-        assert monkey.itemcget(mouth, "style") == "arc"
-    finally:
-        root.destroy()
-
-
-def test_monkey_points_at_new_device_and_nods_when_ready() -> None:
-    import tkinter as tk
-
-    from h4xtor_share.ui_kit import Monkey, Theme
-
-    try:
-        root = tk.Tk()
-    except tk.TclError as error:
-        pytest.skip(f"Tk unavailable: {error}".splitlines()[0])
-    try:
-        monkey = Monkey(root, Theme(root, dark=False), size=100)
-        arm = monkey._arm[0]
-        assert monkey.itemcget(arm, "state") == "hidden"  # no arm at rest
-        monkey.point()
-        assert monkey.itemcget(arm, "state") == "normal"
-        for _ in monkey.POINT:
-            monkey._gesture_frame()
-        assert monkey.itemcget(arm, "state") == "hidden"  # tucked away again
-
-        ground = monkey.bbox("all")[1]
-        monkey.nod()
-        assert monkey.bbox("all")[1] > ground  # head dips
-        for _ in monkey.NOD:
-            monkey._gesture_frame()
-        assert monkey.bbox("all")[1] == ground
-    finally:
-        root.destroy()
-
-
 @pytest.mark.skipif(
     not _can_build_ui(),
     reason="Tk/tkdnd display server unavailable",
@@ -998,3 +917,375 @@ def test_wifi_5g_page_switches_proxy_and_finds_sharing_phone(tmp_path, monkeypat
         app.close()
     assert calls[-1] == "restore {'x': 1}"
     assert app.config_store.data["netmerge_enabled"] is True
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_bluetooth_fallback_switches_route_and_back(tmp_path, monkeypatch) -> None:
+    import socket
+
+    from h4xtor_share import bluetooth
+    from h4xtor_share.models import Peer
+
+    app, peers = _paired_app(1, tmp_path, monkeypatch, ("bluetooth",))
+    phone = peers[0]
+    opened: list[tuple[str, str]] = []
+    phone_ends: list[bluetooth.Bridge] = []
+
+    def fake_open_bridge(address, device_id, local_port, expected_id=None, on_closed=None):
+        # The "phone" end runs the real bridge too, over a socket pair instead of RFCOMM.
+        opened.append((address, expected_id))
+        left, right = socket.socketpair()
+        phone_ends.append(bluetooth.Bridge(right, phone.device_id, 1, odd=False).start())
+        pc = bluetooth.Bridge(left, device_id, local_port, odd=True, on_closed=on_closed).start()
+        assert pc.wait_hello(5) == expected_id
+        return pc
+
+    monkeypatch.setattr(bluetooth, "supported", lambda: True)
+    monkeypatch.setattr(bluetooth, "paired_devices", lambda: [("AA:BB:CC:DD:EE:FF", "Mobil")])
+    monkeypatch.setattr(bluetooth, "open_bridge", fake_open_bridge)
+    try:
+        # Wi-Fi can't reach the phone: the health check asks for Bluetooth by itself.
+        app.event_queue.put(("bt_maybe", phone))
+        _pump(app, lambda: app.peers[phone.device_id].transport == "bluetooth")
+        routed = app.peers[phone.device_id]
+        bridge = app._bt_bridges[phone.device_id]
+        assert (routed.address, routed.port) == ("127.0.0.1", bridge.port)
+        assert opened == [("AA:BB:CC:DD:EE:FF", phone.device_id)]
+        assert app.config_store.data["bt_addresses"][phone.device_id] == "AA:BB:CC:DD:EE:FF"
+        # The temporary bridge address is never saved as the phone's address.
+        assert app.config_store.data["known_peers"][phone.device_id]["address"] == "192.168.1.50"
+
+        # At most one automatic attempt a minute.
+        app._maybe_bluetooth(app._bt_before[phone.device_id])
+        assert len(opened) == 1
+
+        # The phone shows up on Wi-Fi again: stay on Bluetooth until that address answers…
+        newer = Peer(phone.device_id, phone.name, "192.168.1.77", 47474, phone.fingerprint,
+                     "android", capabilities=phone.capabilities)
+        app._upsert_peer(newer)
+        assert app.peers[phone.device_id].transport == "bluetooth"
+        assert app._bt_before[phone.device_id].address == "192.168.1.77"
+        # …then switch back to it and close the bridge.
+        app.event_queue.put(("bt_wifi_back", phone.device_id))
+        _pump(app, lambda: app.peers[phone.device_id].transport != "bluetooth")
+        assert app.peers[phone.device_id].address == "192.168.1.77"
+        assert phone.device_id not in app._bt_bridges and bridge.closed
+        _pump(app, lambda: phone_ends[0].closed)  # the phone notices the link is gone
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_bluetooth_finds_and_pairs_a_phone_never_seen_on_wifi(tmp_path, monkeypatch) -> None:
+    """Paired only in Windows' Bluetooth settings: search, pair with code, send, reconnect."""
+    import asyncio
+    import socket
+    import threading
+
+    from h4xtor_share import bluetooth
+    from h4xtor_share.config import Config
+    from h4xtor_share.crypto import ensure_certificate, server_ssl_context
+    from h4xtor_share.models import ClipboardReceived, PairingPrompt
+    from h4xtor_share.server import ShareServer
+
+    # The "phone": the real protocol-v1 server, reachable only through the bridge.
+    phone_config = Config(tmp_path / "phone" / "config.json")
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        phone_config.data.update(port=int(probe.getsockname()[1]), device_name="S24 Ultra",
+                                 platform="android")
+    cert, key, phone_fp = ensure_certificate(phone_config.path.parent, "S24 Ultra")
+    phone_events: list[object] = []
+    loop = asyncio.new_event_loop()
+    threading.Thread(target=loop.run_forever, daemon=True).start()
+    phone_server = ShareServer(phone_config, server_ssl_context(cert, key), phone_fp,
+                               phone_events.append, host="127.0.0.1")
+    asyncio.run_coroutine_threadsafe(phone_server.start(), loop).result(20)
+    phone_id = phone_config.device_id
+
+    monkeypatch.setattr(bluetooth, "supported", lambda: True)  # macOS too: the radio is faked
+    app = _new_app()
+    opened: list[tuple[str, str | None]] = []
+    phone_ends: list[bluetooth.Bridge] = []
+
+    def fake_open_bridge(address, device_id, local_port, expected_id=None, on_closed=None):
+        opened.append((address, expected_id))
+        if address != "22:22:22:22:22:22":  # the headphones: no h4xtor share there
+            raise OSError(10108, "service not found")
+        left, right = socket.socketpair()
+        phone_ends.append(
+            bluetooth.Bridge(right, phone_id, phone_config.port, odd=False).start()
+        )
+        pc = bluetooth.Bridge(left, device_id, local_port, odd=True, on_closed=on_closed).start()
+        assert pc.wait_hello(5) == phone_id
+        return pc
+
+    paired = [
+        ("11:11:11:11:11:11", "WH-1000XM5", False),
+        ("22:22:22:22:22:22", "Galaxy S24", True),  # Bluetooth name differs from the app name
+    ]
+    monkeypatch.setattr(bluetooth, "supported", lambda: True)
+    monkeypatch.setattr(bluetooth, "paired_devices", lambda: paired)
+    monkeypatch.setattr(bluetooth, "open_bridge", fake_open_bridge)
+
+    def auto_code(peer, response) -> None:  # stands in for typing the code shown on the phone
+        prompt = next(e for e in phone_events if isinstance(e, PairingPrompt))
+
+        async def confirm():
+            await app.client.confirm_pairing(peer, str(response["pairing_id"]), prompt.code)
+            return peer
+
+        app.runtime.submit(confirm(), "pair_confirmed")
+
+    monkeypatch.setattr(app, "_prompt_for_pairing_code", auto_code)
+    try:
+        from h4xtor_share.ui_kit import Button
+
+        def buttons(widget) -> list[Button]:
+            found = [widget] if isinstance(widget, Button) else []
+            for child in widget.winfo_children():
+                found += buttons(child)
+            return found
+
+        search = [b for b in buttons(app) if b._text == "Søg via Bluetooth"]
+        assert search, "no 'Søg via Bluetooth' button"
+        search[0].command()  # what a click on it runs
+        _pump(app, lambda: phone_id in app.peers, 15)
+        found = app.peers[phone_id]
+        assert (found.name, found.transport, found.address) == ("S24 Ultra", "bluetooth",
+                                                                "127.0.0.1")
+        assert not app.config_store.is_trusted(phone_id)
+        assert opened == [("22:22:22:22:22:22", None)]  # only the phone, not the headphones
+        card_texts = " ".join(_texts(app.device_cards[phone_id].card))
+        assert "fundet på Bluetooth" in card_texts and "127.0.0.1" not in card_texts
+
+        # Click the device: pair with the code, over Bluetooth.
+        app.pair_with_code(found)
+        # Trust is stored first; the UI remembers the peer a moment later.
+        _pump(app, lambda: app.config_store.is_trusted(phone_id)
+              and phone_id in app.config_store.data.get("known_peers", {}), 15)
+        assert phone_config.is_trusted(app.config_store.device_id)  # both ways
+        known = app.config_store.data["known_peers"][phone_id]
+        assert (known["address"], known["transport"]) == ("", "bluetooth")
+
+        # Sharing works over the link.
+        asyncio.run_coroutine_threadsafe(
+            app.client.send_clipboard(app.peers[phone_id], "hej via bluetooth"), app.runtime.loop
+        ).result(20)
+        assert any(isinstance(e, ClipboardReceived) and e.text == "hej via bluetooth"
+                   for e in phone_events)
+
+        # Out of range: the phone stays in the list (offline) instead of vanishing…
+        phone_ends[0].close()
+        _pump(app, lambda: phone_id not in app._bt_bridges)
+        kept = app.peers[phone_id]
+        assert (kept.address, kept.transport) == ("", "bluetooth")
+        assert not app.peer_status[phone_id].online
+        # …and comes back on Bluetooth by itself (the remembered MAC first).
+        app.event_queue.put(("bt_maybe", kept))
+        _pump(app, lambda: phone_id in app._bt_bridges, 15)
+        assert opened[-1] == ("22:22:22:22:22:22", phone_id)
+        assert app.peers[phone_id].address == "127.0.0.1"
+    finally:
+        app.close()
+        asyncio.run_coroutine_threadsafe(phone_server.stop(), loop).result(20)
+        loop.call_soon_threadsafe(loop.stop)
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_bluetooth_search_explains_why_nothing_was_found(tmp_path, monkeypatch) -> None:
+    from h4xtor_share import bluetooth
+
+    monkeypatch.setattr(bluetooth, "supported", lambda: True)
+    app = _new_app()
+    shown: list[str] = []
+    monkeypatch.setattr(app.toast, "show", lambda text, *a, **k: shown.append(text))
+    try:
+        monkeypatch.setattr(bluetooth, "paired_devices", lambda: [])
+        app.scan_bluetooth(manual=True)
+        _pump(app, lambda: not app._bt_scanning and any("Ingen parrede" in t for t in shown))
+
+        def refuse(*_a, **_k):
+            raise OSError(10108, "service not found")
+
+        phone = [("AA:AA:AA:AA:AA:AA", "S24", True)]
+        monkeypatch.setattr(bluetooth, "paired_devices", lambda: phone)
+        monkeypatch.setattr(bluetooth, "open_bridge", refuse)
+        app.scan_bluetooth(manual=True)
+        _pump(app, lambda: any("Tillad forbindelse via Bluetooth" in t for t in shown))
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_pc_makes_wifi_direct_and_the_phone_joins(tmp_path, monkeypatch) -> None:
+    from h4xtor_share import wifidirect_host
+    from h4xtor_share.models import Peer, PeerStatus, WifiDirectJoined
+
+    started: list[str] = []
+    stopped: list[str] = []
+    monkeypatch.setattr(wifidirect_host, "supported", lambda: None)
+    monkeypatch.setattr(
+        wifidirect_host.DirectHost,
+        "start",
+        lambda self, timeout=25.0: (
+            started.append(self.ssid),
+            setattr(self, "started_at", 1.0),
+            setattr(self, "addresses", ["192.168.137.1"]),
+        )
+        and self.addresses,
+    )
+    monkeypatch.setattr(
+        wifidirect_host.DirectHost, "running", property(lambda self: self.started_at > 0)
+    )
+    monkeypatch.setattr(
+        wifidirect_host.DirectHost,
+        "stop",
+        lambda self: (stopped.append(self.ssid), setattr(self, "started_at", 0.0)),
+    )
+    app, peers = _paired_app(1, tmp_path, monkeypatch, ("wifi-direct-pc",))
+    phone = peers[0]
+    app.peer_status[phone.device_id] = PeerStatus(phone.device_id, True, 5.0)
+    offers = _recorder(app, "offer_pc_wifi_direct")
+    joined_phone = Peer(
+        phone.device_id, phone.name, "192.168.137.42", 47474, phone.fingerprint, "android",
+        capabilities=phone.capabilities,
+    )
+    info: list = []
+
+    async def get_info(address, port, timeout_seconds=5.0):
+        info.append((address, port))
+        return joined_phone
+
+    app.client.get_info = get_info
+    try:
+        app.show_page("settings")
+        app.direct_name_var.set("DIRECT-h4-Test")
+        app.direct_pass_var.set("hemmelig")
+        app.toggle_direct_host()
+        _pump(app, lambda: bool(offers))
+        assert started == ["DIRECT-h4-Test"]
+        assert "Kører" in app.direct_status.cget("text")
+        assert "192.168.137.1" in app.direct_status.cget("text")
+        assert offers[0][0].device_id == phone.device_id
+        assert offers[0][1:] == ("DIRECT-h4-Test", "hemmelig", ["192.168.137.1"])
+        stored = app.config_store.data["direct_host"]
+        assert stored == {"ssid": "DIRECT-h4-Test", "pass": "hemmelig"}
+
+        app._handle_event(
+            "core_event",
+            WifiDirectJoined(phone.device_id, phone.name, "192.168.137.42", 47474, "DIRECT-h4-T"),
+        )
+        _pump(app, lambda: app.peers[phone.device_id].transport == "wifi-direct")
+        assert info[0] == ("192.168.137.42", 47474)
+        assert app.peers[phone.device_id].address == "192.168.137.42"
+        assert "forbundet: Mobil" in app.direct_status.cget("text")
+
+        app.toggle_direct_host()
+        assert stopped == ["DIRECT-h4-Test"]
+        assert "Slukket" in app.direct_status.cget("text")
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_pc_wifi_direct_rejects_bad_names_before_starting(tmp_path, monkeypatch) -> None:
+    from h4xtor_share import wifidirect_host
+
+    monkeypatch.setattr(wifidirect_host, "supported", lambda: None)
+    app = _new_app()
+    errors: list[str] = []
+    app._show_error = lambda error: errors.append(str(error))
+    try:
+        app.direct_name_var.set("Mit netværk")
+        app.start_direct_host()
+        assert errors and "DIRECT-h4-" in errors[0]
+        assert app.direct_host is None
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_stop_all_cancels_every_running_send(tmp_path, monkeypatch) -> None:
+    from concurrent.futures import Future
+
+    app = _new_app()
+    try:
+        running, finished = Future(), Future()
+        finished.set_result(None)
+        app.batches.update(a=running, b=finished)
+        cancelled: list[str] = []
+        app.cancel_batch = cancelled.append
+        app.stop_all_transfers()
+        assert cancelled == ["a"]
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_pc_wifi_direct_can_be_retried_after_a_failed_start(tmp_path, monkeypatch) -> None:
+    from h4xtor_share import wifidirect, wifidirect_host
+
+    def fail(self, timeout=25.0):
+        raise wifidirect.WifiDirectError("NetworkManager kunne ikke lave netværket: nej")
+
+    monkeypatch.setattr(wifidirect_host, "supported", lambda: None)
+    monkeypatch.setattr(wifidirect_host.DirectHost, "start", fail)
+    app = _new_app()
+    errors: list[str] = []
+    app._show_error = lambda error: errors.append(str(error))
+    try:
+        app.direct_name_var.set("DIRECT-h4-Test")
+        app.direct_pass_var.set("hemmelig")
+        app.start_direct_host()
+        _pump(app, lambda: bool(errors) and app.direct_host is None)
+        assert "NetworkManager" in errors[0]
+        assert "Slukket" in app.direct_status.cget("text")
+        assert str(app.direct_name_entry.cget("state")) == "normal"
+        assert app.direct_toggle.enabled
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_send_page_orbit_shows_devices_and_picks_one(tmp_path, monkeypatch) -> None:
+    from h4xtor_share.app import TransferState
+    from h4xtor_share.models import PeerStatus
+
+    app, peers = _paired_app(2, tmp_path, monkeypatch)
+    try:
+        for peer in peers:
+            app.peer_status[peer.device_id] = PeerStatus(peer.device_id, True, 4.0)
+        app._reorder_cards()
+        app.update()
+        names = [node["name"] for node in app.orbit.nodes]
+        assert sorted(names) == ["Bærbar", "Mobil"]
+        assert all(node["sub"] == "wifi · 4 ms" for node in app.orbit.nodes)
+        app._orbit_pick(peers[1].device_id)  # a click on a node on the map
+        assert app.selected_id == peers[1].device_id
+        assert "Bærbar" in app.greeting_sub.cget("text")
+        assert [n["id"] for n in app.orbit.nodes if n["selected"]] == [peers[1].device_id]
+        app.transfers["t"] = TransferState("t", "ferie.mp4", "send", "Bærbar", total=10, sent=4)
+        app._update_transfer_badge()
+        assert app.orbit.sending == {peers[1].device_id}
+        app.orbit._animate()  # one frame of the motion (ring, pulse, beams, lights, blink)
+        app.transfers["t"].status = "done"
+        app._update_transfer_badge()
+        assert app.orbit._hop > 0  # the monkey hops when the send has landed
+        assert app.orbit.sending == set()
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_menu_groups_and_connections_page() -> None:
+    app = _new_app()
+    try:
+        keys = [key for key, _icon, _label in app.NAV_ITEMS]
+        assert keys[:3] == ["share", "transfers", "clipboard"]
+        assert "connections" in keys and "connections" in app.pages
+        app.show_page("connections")
+        assert app.active_page == "connections"
+        assert app.direct_status.winfo_toplevel() is app
+    finally:
+        app.close()

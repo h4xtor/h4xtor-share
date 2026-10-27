@@ -32,11 +32,19 @@
     <uses-permission android:name="android.permission.READ_SMS" />
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Optional "Forbind via Bluetooth": a paired PC connects to this phone (asked at runtime). -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <!-- "Fjernbetjening": set the wallpaper from the PC. -->
     <uses-permission android:name="android.permission.SET_WALLPAPER" />
 
     <uses-feature
         android:name="android.hardware.wifi.direct"
+        android:required="false" />
+    <uses-feature
+        android:name="android.hardware.bluetooth"
         android:required="false" />
     <uses-feature
         android:name="android.hardware.camera"
@@ -91,6 +99,7 @@
 
         <activity
             android:name=".ShareTargetActivity"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboard|keyboardHidden|navigation|uiMode|density"
             android:excludeFromRecents="true"
             android:exported="true"
             android:label="h4xtor share"

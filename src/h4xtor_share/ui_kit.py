@@ -14,60 +14,64 @@ import tkinter.font as tkfont
 from collections.abc import Callable
 from typing import Any
 
-# Palettes modelled on Claude.ai: warm paper whites, warm charcoal darks,
-# one terracotta accent and very quiet borders.
+# "Aurora" palettes (the mix design): a deep night-blue base with a teal → sky accent,
+# a warm orange for Bluetooth and the monkey, and quiet glass-like card borders.
 LIGHT = {
-    "bg": "#FAF9F5",
-    "sidebar": "#F5F4ED",
+    "bg": "#F4F6FB",
+    "sidebar": "#EDF1F8",
     "card": "#FFFFFF",
-    "card_hover": "#F8F7F2",
-    "border": "#E8E6DC",
-    "border_strong": "#D9D6C9",
-    "text": "#141413",
-    "muted": "#73726C",
-    "faint": "#A3A19A",
-    "accent": "#C6613F",
-    "accent_hover": "#B0532F",
-    "accent_soft": "#F5E6DE",
+    "card_hover": "#F3F7FB",
+    "border": "#DDE3EE",
+    "border_strong": "#C9D2E2",
+    "text": "#0F172A",
+    "muted": "#55607A",
+    "faint": "#8A93AA",
+    "accent": "#0D9488",
+    "accent_hover": "#0F766E",
+    "accent_soft": "#DDF4F1",
     "accent_text": "#FFFFFF",
-    "success": "#2E8B57",
-    "success_soft": "#E3F2E9",
+    "accent2": "#0284C7",
+    "accent3": "#EA580C",
+    "success": "#0F8A5F",
+    "success_soft": "#DDF3EA",
     "warning": "#B7791F",
     "warning_soft": "#FBF0DC",
     "danger": "#C2412D",
     "danger_soft": "#FBE5E1",
-    "neutral_soft": "#EFEDE6",
-    "nav_active": "#EAE8E0",
-    "track": "#ECE9E0",
+    "neutral_soft": "#E9EDF5",
+    "nav_active": "#DDF4F1",
+    "track": "#E3E8F1",
     "entry": "#FFFFFF",
-    "shadow": "#EDEAE1",
+    "shadow": "#E3E8F1",
 }
 
 DARK = {
-    "bg": "#262624",
-    "sidebar": "#1F1E1D",
-    "card": "#30302E",
-    "card_hover": "#363633",
-    "border": "#3E3E3A",
-    "border_strong": "#4D4D48",
-    "text": "#F5F4EE",
-    "muted": "#A6A39A",
-    "faint": "#77756D",
-    "accent": "#D97757",
-    "accent_hover": "#E38A6C",
-    "accent_soft": "#3E2D25",
-    "accent_text": "#FFFFFF",
-    "success": "#5BC38E",
-    "success_soft": "#24372B",
-    "warning": "#E2A84B",
-    "warning_soft": "#3A2F1C",
-    "danger": "#EF6B55",
-    "danger_soft": "#41261F",
-    "neutral_soft": "#383835",
-    "nav_active": "#2E2E2B",
-    "track": "#41413C",
-    "entry": "#30302E",
-    "shadow": "#1A1A19",
+    "bg": "#0E1022",
+    "sidebar": "#0A0C1B",
+    "card": "#161A33",
+    "card_hover": "#1C2140",
+    "border": "#262B4A",
+    "border_strong": "#343A63",
+    "text": "#EEF2FF",
+    "muted": "#A3ABC6",
+    "faint": "#6E7698",
+    "accent": "#2DD4BF",
+    "accent_hover": "#5EEAD4",
+    "accent_soft": "#123A3E",
+    "accent_text": "#0A0B16",
+    "accent2": "#38BDF8",
+    "accent3": "#FB923C",
+    "success": "#34D399",
+    "success_soft": "#123329",
+    "warning": "#FBBF24",
+    "warning_soft": "#3A3015",
+    "danger": "#F87171",
+    "danger_soft": "#3D1E24",
+    "neutral_soft": "#1E2342",
+    "nav_active": "#13303A",
+    "track": "#232847",
+    "entry": "#12152B",
+    "shadow": "#070815",
 }
 
 PLATFORM_STYLE = {
@@ -76,7 +80,7 @@ PLATFORM_STYLE = {
     "linux": ("#E8A33D", "L"),
     "darwin": ("#8E8E93", "M"),
     "macos": ("#8E8E93", "M"),
-    "all": ("#D97757", "★"),
+    "all": ("#2DD4BF", "★"),
 }
 
 
@@ -151,7 +155,8 @@ class Theme:
         return self._fonts[key]
 
     def title_font(self, size: int) -> tkfont.Font:
-        return self.font(size, "normal", self.serif)
+        # The mix design: tight, bold sans headings (no serif).
+        return self.font(size, "bold", self.display_family)
 
     def ui_title_font(self, size: int) -> tkfont.Font:
         return self.font(size, "bold", self.display_family)
@@ -567,7 +572,8 @@ class Card(tk.Canvas):
     ) -> None:
         self.theme = theme
         self.fill = fill or theme.c["card"]
-        self.outline = outline or theme.c["border"]
+        # Default glass frame: the border with a hint of aurora sky in it.
+        self.outline = outline or mix_color(theme.c["border"], theme.c["accent2"], 0.18)
         self.radius = theme.px(radius)
         self.padding = theme.px(padding)
         # The body must be (partly) visible inside the canvas, otherwise Tk never
@@ -608,7 +614,7 @@ class Card(tk.Canvas):
         height = self.winfo_height()
         if width < 4 or height < 4:
             return
-        item = round_rect(
+        round_rect(
             self,
             1,
             1,
@@ -619,7 +625,17 @@ class Card(tk.Canvas):
             outline=self.outline,
             tags=("bg",),
         )
-        self.tag_lower(item)
+        # Glass: light catching the top edge, brightest in the middle, fading at the corners.
+        r = self.radius
+        span = width - 2 * r
+        segments = 24
+        for index in range(segments):
+            f = index / segments
+            glow = 1 - abs(f - 0.4) * 1.6  # the light source sits a little left of centre
+            x1 = r + f * span
+            self.create_line(x1, 1, x1 + span / segments + 1, 1, tags=("bg",), width=1,
+                             fill=mix_color("#FFFFFF", self.outline, 1 - 0.38 * max(0.0, glow)))
+        self.tag_lower("bg")
 
 
 class ScrollFrame(tk.Frame):
@@ -850,183 +866,382 @@ def entry(parent: tk.Misc, theme: Theme, variable: tk.Variable, **kwargs: Any) -
     )
 
 
+MONKEY_BROWN = "#8B5A3C"
+MONKEY_FACE = "#F2D3B1"
+MONKEY_INNER = "#E9B98F"
+MONKEY_DARK = "#3B2A20"
+
+
+def draw_monkey(canvas: tk.Canvas, cx: float, cy: float, size: float, tag: str = "monkey") -> None:
+    """Draw the mascot centred on (cx, cy). Eyes carry the extra tag ``<tag>-eye`` for blinking."""
+    s = size / 100.0
+    ox, oy = cx - size / 2, cy - size / 2
+
+    def circle(x: float, y: float, r: float, fill: str, extra: tuple[str, ...] = ()) -> None:
+        canvas.create_oval(ox + (x - r) * s, oy + (y - r) * s, ox + (x + r) * s, oy + (y + r) * s,
+                           fill=fill, outline="", tags=(tag, *extra))
+
+    for x in (16, 84):  # ears
+        circle(x, 50, 14, MONKEY_BROWN)
+        circle(x, 50, 8, MONKEY_INNER)
+    circle(50, 50, 33, MONKEY_BROWN)  # head
+    canvas.create_line(ox + 44 * s, oy + 19 * s, ox + 50 * s, oy + 11 * s, ox + 55 * s, oy + 18 * s,
+                       fill=MONKEY_BROWN, width=max(2, 4 * s), smooth=True, capstyle="round",
+                       tags=(tag,))
+    circle(39, 45, 12, MONKEY_FACE)  # face lobes
+    circle(61, 45, 12, MONKEY_FACE)
+    canvas.create_oval(ox + 28 * s, oy + 50 * s, ox + 72 * s, oy + 80 * s, fill=MONKEY_FACE,
+                       outline="", tags=(tag,))  # muzzle
+    for x in (40, 60):  # eyes
+        circle(x, 45, 4.4, MONKEY_DARK, (f"{tag}-eye",))
+        circle(x + 1.4, 43.4, 1.4, "#FFFFFF", (f"{tag}-eye",))
+    for x in (46, 54):  # nostrils
+        circle(x, 60, 1.6, MONKEY_DARK)
+    canvas.create_arc(ox + 40 * s, oy + 58 * s, ox + 60 * s, oy + 74 * s, start=200, extent=140,
+                      style="arc", outline=MONKEY_DARK, width=max(1.5, 2.6 * s), tags=(tag,))
+
+
 class Monkey(tk.Canvas):
     """A small friendly monkey mascot, drawn with vector shapes (scales cleanly)."""
 
-    BROWN = "#8B5A3C"
-    FACE = "#F2D3B1"
-    INNER = "#E9B98F"
-    DARK = "#3B2A20"
+    BROWN = MONKEY_BROWN
+    FACE = MONKEY_FACE
+    INNER = MONKEY_INNER
+    DARK = MONKEY_DARK
 
-    # One hop: fraction of the widget height the monkey is lifted, then a short rest.
-    HOP = (0.0, 0.05, 0.085, 0.1, 0.085, 0.05, 0.0, 0.0, 0.0)
-    # One tap: how wide the mouth is open and how much bigger the ears are (0–1).
-    GRIN = (0.4, 0.8, 1.0, 1.0, 1.0, 0.75, 0.4, 0.0)
-    # "Look, a new device": the arm comes out, jabs twice and goes back.
-    POINT = (0.3, 0.7, 1.0, 0.7, 1.0, 0.7, 1.0, 0.8, 0.4, 0.0)
-    # "Connected and ready": two dips of the head.
-    NOD = (0.4, 1.0, 0.5, 0.0, 0.4, 1.0, 0.5, 0.0)
-
-    def __init__(self, parent: tk.Misc, theme: Theme, size: int = 64) -> None:
+    def __init__(
+        self, parent: tk.Misc, theme: Theme, size: int = 64, bg: str | None = None
+    ) -> None:
         super().__init__(
-            parent, width=size, height=size, bg=theme.c["bg"], highlightthickness=0, bd=0
+            parent, width=size, height=size, bg=bg or theme.c["bg"], highlightthickness=0, bd=0
         )
-        self._size = size
-        self._busy = False
-        self._hopping = False
-        self._step = 0
-        self._offset = 0.0
-        self._pending: str | None = None
-        self._scale = size / 100.0
-        self._ears: list[tuple[int, float, float, float]] = []
-        self._mouth = 0
-        self._grin_step = len(self.GRIN)
-        self._grin_pending: str | None = None
-        self._arm: list[int] = []
-        self._dip = 0.0
-        self._gesture: tuple[str, tuple[float, ...]] = ("nod", self.NOD)
-        self._gesture_step = len(self.NOD)
-        self._gesture_pending: str | None = None
-        self._draw(self._scale)
-        self.configure(cursor="hand2")
-        self.bind("<Button-1>", self._tapped)
+        draw_monkey(self, size / 2, size / 2, size)
 
-    def set_busy(self, busy: bool) -> None:
-        """Hop while something is being sent or received; land again when it stops."""
-        self._busy = busy
-        if busy and not self._hopping:
-            self._hopping = True
-            self._step = 0
-            self._hop()
 
-    def _hop(self) -> None:
-        try:
-            if self._pending is not None:
-                with contextlib.suppress(tk.TclError):
-                    self.after_cancel(self._pending)
-                self._pending = None
-            if not self._busy:
-                self.move("all", 0, self._offset)
-                self._offset = 0.0
-                self._hopping = False
-                return
-            lift = self.HOP[self._step % len(self.HOP)] * self._size
-            self.move("all", 0, self._offset - lift)
-            self._offset = lift
-            self._step += 1
-            self._pending = self.after(60, self._hop)
-        except tk.TclError:  # the window closed mid-hop
-            self._hopping = False
+def mix_color(a: str, b: str, amount: float) -> str:
+    """Blend hex colour *a* towards *b* (0 → a, 1 → b). Tk has no alpha, so fades blend."""
+    amount = max(0.0, min(1.0, amount))
+    ra, ga, ba = (int(a[i : i + 2], 16) for i in (1, 3, 5))
+    rb, gb, bb = (int(b[i : i + 2], 16) for i in (1, 3, 5))
+    red = round(ra + (rb - ra) * amount)
+    green = round(ga + (gb - ga) * amount)
+    blue = round(ba + (bb - ba) * amount)
+    return f"#{red:02x}{green:02x}{blue:02x}"
 
-    def _tapped(self, _event: tk.Event) -> None:
-        """Tap or click: the monkey opens its mouth and perks up its ears."""
-        self._grin_step = 0
-        if self._grin_pending is None:
-            self._grin()
 
-    def _grin(self) -> None:
-        try:
-            self._grin_pending = None
-            if self._grin_step >= len(self.GRIN):
-                return
-            self._set_face(self.GRIN[self._grin_step])
-            self._grin_step += 1
-            self._grin_pending = self.after(55, self._grin)
-        except tk.TclError:  # the window closed mid-grin
-            self._grin_pending = None
+AURORA = ("#2DD4BF", "#38BDF8", "#8B5CF6", "#FB923C")
 
-    def point(self) -> None:
-        """A new device turned up: the monkey points at the list."""
-        self._start_gesture("point", self.POINT)
 
-    def nod(self) -> None:
-        """A device is connected and ready: a friendly nod."""
-        self._start_gesture("nod", self.NOD)
+def aurora_glow(
+    canvas: tk.Canvas, cx: float, cy: float, radius: float, color: str, base: str,
+    strength: float = 0.32, steps: int = 14, tag: str = "aurora",
+) -> None:
+    """A soft radial glow (Tk has no alpha: concentric ovals fading into *base*)."""
+    for index in range(steps):
+        f = 1 - index / steps  # 1 = outermost
+        r = radius * f
+        amount = 1 - strength * (1 - f) ** 1.6  # faint at the edge, strongest inside
+        canvas.create_oval(cx - r, cy - r, cx + r, cy + r, outline="",
+                           fill=mix_color(color, base, amount), tags=(tag,))
 
-    def _start_gesture(self, kind: str, frames: tuple[float, ...]) -> None:
-        if self._gesture_pending is not None and self._gesture[0] != kind:
-            self._set_gesture(self._gesture[0], 0.0)  # drop the half-done one cleanly
-        self._gesture = (kind, frames)
-        self._gesture_step = 0
-        if self._gesture_pending is None:
-            self._gesture_frame()
 
-    def _gesture_frame(self) -> None:
-        try:
-            self._gesture_pending = None
-            kind, frames = self._gesture
-            if self._gesture_step >= len(frames):
-                return
-            self._set_gesture(kind, frames[self._gesture_step])
-            self._gesture_step += 1
-            self._gesture_pending = self.after(70, self._gesture_frame)
-        except tk.TclError:  # the window closed mid-gesture
-            self._gesture_pending = None
+def glass_orb(
+    canvas: tk.Canvas, x: float, y: float, r: float, fill: str, outline: str,
+    tags: tuple[str, ...], width: int = 2,
+) -> None:
+    """A frosted glass bubble: body, a bright rim and a light sheen at the top-left."""
+    canvas.create_oval(x - r, y - r, x + r, y + r, fill=fill, outline=outline, width=width,
+                       tags=tags)
+    # The sheen: a hairline inner rim over the upper half, like light on curved glass.
+    sheen = mix_color("#FFFFFF", fill, 0.84)
+    inner = r - max(3, r * 0.1)
+    canvas.create_arc(x - inner, y - inner, x + inner, y + inner, start=20, extent=140,
+                      style="arc", outline=sheen, width=1, tags=tags)
 
-    def _set_gesture(self, kind: str, factor: float) -> None:
-        if kind == "nod":
-            dip = factor * 0.07 * self._size
-            self.move("all", 0, dip - self._dip)
-            self._dip = dip
-        else:
-            self._set_arm(factor)
 
-    def _set_arm(self, factor: float) -> None:
-        if factor <= 0:
-            for item in self._arm:
-                self.itemconfigure(item, state="hidden")
+class AuroraBar(tk.Canvas):
+    """A thin glowing stripe in the aurora colours (teal → sky → violet → orange).
+
+    It shimmers slowly: the colours glide along the stripe.
+    """
+
+    FRAME_MS = 120
+
+    def __init__(self, parent: tk.Misc, theme: Theme, thickness: int = 3,
+                 vertical: bool = False) -> None:
+        self.theme = theme
+        self.vertical = vertical
+        self.base = parent.cget("bg")
+        size = {"width": thickness} if vertical else {"height": thickness}
+        super().__init__(parent, bg=self.base, highlightthickness=0, bd=0, **size)
+        self._shift = 0.0
+        self._after: str | None = None
+        self.bind("<Configure>", lambda _e: self._draw(), add="+")
+        self.bind("<Map>", lambda _e: self._start(), add="+")
+        self.bind("<Destroy>", lambda _e: self._stop(), add="+")
+
+    @staticmethod
+    def color_at(f: float) -> str:
+        stops = (*AURORA, AURORA[0])
+        pos = (f % 1.0) * (len(stops) - 1)
+        index = int(pos)
+        return mix_color(stops[index], stops[index + 1], pos - index)
+
+    def _draw(self) -> None:
+        self.delete("all")
+        length = self.winfo_height() if self.vertical else self.winfo_width()
+        thick = self.winfo_width() if self.vertical else self.winfo_height()
+        if length < 4:
             return
-        s, dy = self._scale, self._dip - self._offset
-        hand_x, hand_y = 74 + 14 * factor, 84 + 10 * factor
-        self.coords(self._arm[0], 56 * s, 74 * s + dy, hand_x * s, hand_y * s + dy)
-        self.coords(
-            self._arm[1],
-            (hand_x - 5.5) * s, (hand_y - 5.5) * s + dy,
-            (hand_x + 5.5) * s, (hand_y + 5.5) * s + dy,
-        )
-        for item in self._arm:
-            self.itemconfigure(item, state="normal")
+        segments = 48
+        step = length / segments
+        for index in range(segments):
+            f = index / segments
+            edge = min(1.0, min(f, 1 - f) * 6)  # fade the ends so the stripe floats
+            color = mix_color(self.color_at(f * 0.75 + self._shift), self.base, (1 - edge) * 0.85)
+            a, b = index * step, (index + 1) * step + 1
+            if self.vertical:
+                self.create_rectangle(0, a, thick, b, fill=color, outline="")
+            else:
+                self.create_rectangle(a, 0, b, thick, fill=color, outline="")
 
-    def _set_face(self, factor: float) -> None:
-        s = self._scale
-        dy = self._dip - self._offset  # hop and nod moved every shape; these coords are absolute
-        for item, x, y, r in self._ears:
-            # 0.14 sideways: more and the outer ear would be clipped by the widget edge.
-            wide, tall = r * (1 + 0.14 * factor), r * (1 + 0.35 * factor)
-            self.coords(
-                item, (x - wide) * s, (y - tall) * s + dy, (x + wide) * s, (y + tall) * s + dy
+    def _start(self) -> None:
+        if self._after is None:
+            self._after = self.after(self.FRAME_MS, self._frame)
+
+    def _stop(self) -> None:
+        if self._after is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._after)
+            self._after = None
+
+    def _frame(self) -> None:
+        self._after = None
+        try:
+            if not self.winfo_exists():
+                return
+            if self.winfo_ismapped():
+                self._shift = (self._shift + 0.006) % 1.0
+                self._draw()
+        except tk.TclError:
+            return
+        self._after = self.after(self.FRAME_MS, self._frame)
+
+
+class OrbitMap(tk.Canvas):
+    """The mix design's device map: the monkey (this computer) in the middle, devices on an orbit.
+
+    A dashed ring turns slowly, a ring pulses out from the monkey, beams join it to the
+    devices and small lights travel along a beam while something is being sent. The
+    monkey blinks now and then and hops when a send has landed. Click a device to pick it.
+    """
+
+    FRAME_MS = 50
+
+    def __init__(
+        self,
+        parent: tk.Misc,
+        theme: Theme,
+        size: int = 360,
+        bg: str | None = None,
+        on_pick: Callable[[str], None] | None = None,
+        on_add: Callable[[], None] | None = None,
+        label: str = "",
+    ) -> None:
+        self.theme = theme
+        self.size = size
+        self.base = bg or theme.c["bg"]
+        super().__init__(parent, width=size, height=size, bg=self.base, highlightthickness=0, bd=0)
+        self.on_pick = on_pick
+        self.on_add = on_add
+        self.nodes: list[dict[str, Any]] = []
+        self.sending: set[str] = set()
+        self.label = label
+        self._tick = 0
+        self._hop = 0
+        self._blink = 0
+        self._after: str | None = None
+        self.bind("<Destroy>", lambda _e: self._stop(), add="+")
+        self.bind("<Map>", lambda _e: self._start(), add="+")
+        self._draw()
+
+    # ------------------------------------------------------------- public api
+    def set_nodes(self, nodes: list[dict[str, Any]]) -> None:
+        """Each node: id, name, sub (one short line), online (bool), selected (bool)."""
+        if nodes != self.nodes:
+            self.nodes = [dict(node) for node in nodes]
+            self._draw()
+
+    def set_sending(self, ids: set[str]) -> None:
+        if ids != self.sending:
+            self.sending = set(ids)
+            self._draw()
+
+    def set_label(self, text: str) -> None:
+        if text != self.label:
+            self.label = text
+            self.itemconfigure("hub-label", text=text)
+
+    def celebrate(self) -> None:
+        self._hop = 18
+
+    # --------------------------------------------------------------- drawing
+    @property
+    def center(self) -> float:
+        return self.size / 2
+
+    def _positions(self) -> list[tuple[float, float]]:
+        import math
+
+        count = len(self.nodes) + (1 if self.on_add else 0)
+        radius = self.size * 0.37
+        out = []
+        for index in range(count):
+            angle = math.radians(-35 + index * (360 / max(count, 1)) if count > 1 else -35)
+            out.append(
+                (self.center + radius * math.cos(angle), self.center + radius * math.sin(angle))
             )
-        self.coords(self._mouth, 40 * s, 58 * s + dy, 60 * s, (74 + 12 * factor) * s + dy)
-        if factor > 0.15:  # a filled chord reads as an open mouth, the plain arc as a smile
-            self.itemconfigure(self._mouth, style="chord", fill=self.DARK)
-        else:
-            self.itemconfigure(self._mouth, style="arc", fill="")
+        return out
 
-    def _circle(self, x: float, y: float, r: float, s: float, fill: str) -> int:
-        return self.create_oval(
-            (x - r) * s, (y - r) * s, (x + r) * s, (y + r) * s, fill=fill, outline=""
-        )
+    def _draw(self) -> None:
+        c = self.theme.c
+        px = self.theme.px
+        self.delete("all")
+        mid = self.center
+        # Aurora behind the map: three soft glows that drift slowly (see _animate).
+        s = self.size
+        # Glows stay inside the canvas (with room to drift) so no hard edge shows.
+        aurora_glow(self, s * 0.34, s * 0.32, s * 0.29, AURORA[0], self.base, 0.42,
+                    tag="aurora-a")
+        aurora_glow(self, s * 0.70, s * 0.36, s * 0.25, AURORA[2], self.base, 0.38,
+                    tag="aurora-b")
+        aurora_glow(self, s * 0.56, s * 0.70, s * 0.25, AURORA[1], self.base, 0.34,
+                    tag="aurora-c")
+        self._drift = [0.0] * 6
+        ring = self.size * 0.43
+        for index in range(36):  # dashed outer orbit (rotated each frame)
+            self.create_arc(mid - ring, mid - ring, mid + ring, mid + ring, start=index * 10,
+                            extent=4, style="arc", outline=c["border_strong"], width=1,
+                            tags=("orbit",))
+        inner = self.size * 0.26
+        self.create_oval(mid - inner, mid - inner, mid + inner, mid + inner,
+                         outline=c["border"], width=1)
+        self.create_oval(mid, mid, mid, mid, outline=c["accent"], width=2, tags=("pulse",))
+        positions = self._positions()
+        for node, (x, y) in zip(self.nodes, positions, strict=False):
+            live = node.get("online") and (node.get("selected") or node["id"] in self.sending)
+            self.create_line(mid, mid, x, y, fill=c["accent"] if live else c["border"],
+                             width=2 if live else 1, dash=(4, 6), tags=("beam",))
+        hub = self.size * 0.17
+        for step in range(1, 5):  # a soft halo around the monkey
+            r = hub + step * self.theme.px(2)
+            self.create_oval(mid - r, mid - r, mid + r, mid + r, width=2, tags=("halo",),
+                             outline=mix_color(c["accent"], self.base, 0.55 + step * 0.1))
+        glass_orb(self, mid, mid, hub, c["card"], c["accent"], ("hub",))
+        draw_monkey(self, mid, mid, hub * 1.35, "monkey")
+        self.create_text(mid, mid + hub + px(14), text=self.label, fill=c["muted"],
+                         font=self.theme.font(9, family=self.theme.mono), tags=("hub-label",))
+        node_r = self.size * 0.12
+        for node, (x, y) in zip(self.nodes, positions, strict=False):
+            tag = f"node-{node['id']}"
+            ring_color = (
+                c["accent"] if node.get("selected") else
+                c["accent2"] if node["id"] in self.sending else c["border_strong"]
+            )
+            if node.get("online") and node.get("selected"):
+                for step in range(1, 4):
+                    r = node_r + step * px(2)
+                    self.create_oval(x - r, y - r, x + r, y + r, width=2, tags=(tag, "node"),
+                                     outline=mix_color(ring_color, self.base, 0.55 + step * 0.13))
+            glass_orb(self, x, y, node_r, c["card"] if node.get("online") else c["sidebar"],
+                      ring_color, (tag, "node"))
+            name = node["name"] if len(node["name"]) <= 11 else node["name"][:10] + "…"
+            self.create_text(x, y - px(6), text=name, tags=(tag, "node"),
+                             fill=c["text"] if node.get("online") else c["muted"],
+                             font=self.theme.font(9, "bold"))
+            self.create_text(x, y + px(9), text=node.get("sub", ""), tags=(tag, "node"),
+                             fill=c["accent"] if node.get("online") else c["faint"],
+                             font=self.theme.font(8, family=self.theme.mono))
+            self.tag_bind(tag, "<Button-1>", lambda _e, key=node["id"]: self._pick(key))
+            self.tag_bind(tag, "<Enter>", lambda _e: self.configure(cursor="hand2"))
+            self.tag_bind(tag, "<Leave>", lambda _e: self.configure(cursor=""))
+        if self.on_add and len(positions) > len(self.nodes):
+            x, y = positions[len(self.nodes)]
+            r = node_r * 0.72
+            self.create_oval(x - r, y - r, x + r, y + r, outline=c["border_strong"], dash=(3, 4),
+                             width=1, tags=("add",))
+            self.create_text(x, y, text="+", fill=c["muted"], font=self.theme.font(16),
+                             tags=("add",))
+            self.tag_bind("add", "<Button-1>", lambda _e: self.on_add and self.on_add())
+            self.tag_bind("add", "<Enter>", lambda _e: self.configure(cursor="hand2"))
+            self.tag_bind("add", "<Leave>", lambda _e: self.configure(cursor=""))
+        self._dots = []
+        for node, (x, y) in zip(self.nodes, positions, strict=False):
+            if node["id"] in self.sending:
+                for _ in range(2):
+                    dot = self.create_oval(0, 0, 0, 0, fill=c["accent"], outline="",
+                                           tags=("dot",))
+                    self._dots.append((dot, x, y))
+        self.tag_raise("node")
 
-    def _draw(self, s: float) -> None:
-        self._arm = [  # first, so it comes out from behind the head; only shown while pointing
-            self.create_line(56 * s, 74 * s, 74 * s, 84 * s, fill=self.BROWN,
-                             width=max(2, 8 * s), capstyle="round", state="hidden"),
-            self._circle(74, 84, 5.5, s, self.BROWN),
-        ]
-        self.itemconfigure(self._arm[1], state="hidden")
-        for x in (16, 84):  # ears
-            for r, fill in ((14, self.BROWN), (8, self.INNER)):
-                self._ears.append((self._circle(x, 50, r, s, fill), x, 50, r))
-        self._circle(50, 50, 33, s, self.BROWN)  # head
-        self.create_line(44 * s, 19 * s, 50 * s, 11 * s, 55 * s, 18 * s, fill=self.BROWN,
-                         width=max(2, 4 * s), smooth=True, capstyle="round")
-        self._circle(39, 45, 12, s, self.FACE)  # face lobes
-        self._circle(61, 45, 12, s, self.FACE)
-        self.create_oval(28 * s, 50 * s, 72 * s, 80 * s, fill=self.FACE, outline="")  # muzzle
-        for x in (40, 60):  # eyes
-            self._circle(x, 45, 4.4, s, self.DARK)
-            self._circle(x + 1.4, 43.4, 1.4, s, "#FFFFFF")
-        for x in (46, 54):  # nostrils
-            self._circle(x, 60, 1.6, s, self.DARK)
-        self._mouth = self.create_arc(40 * s, 58 * s, 60 * s, 74 * s, start=200, extent=140,
-                                      style="arc", outline=self.DARK, width=max(1.5, 2.6 * s))
+    def _pick(self, key: str) -> None:
+        if self.on_pick:
+            self.on_pick(key)
+
+    # ------------------------------------------------------------- animation
+    def _start(self) -> None:
+        if self._after is None:
+            self._after = self.after(self.FRAME_MS, self._frame)
+
+    def _stop(self) -> None:
+        if self._after is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._after)
+            self._after = None
+
+    def _frame(self) -> None:
+        self._after = None
+        try:
+            if not self.winfo_exists():
+                return
+            if self.winfo_ismapped():
+                self._animate()
+        except tk.TclError:
+            return
+        self._after = self.after(self.FRAME_MS, self._frame)
+
+    def _animate(self) -> None:
+        c = self.theme.c
+        self._tick += 1
+        mid = self.center
+        if self._tick % 4 == 0:  # the aurora drifts on slow sine paths
+            import math
+
+            amp = self.size * 0.04
+            for index, tag in enumerate(("aurora-a", "aurora-b", "aurora-c")):
+                t = self._tick / (90 + index * 25)
+                nx, ny = amp * math.sin(t + index * 2), amp * math.cos(t * 0.8 + index)
+                self.move(tag, nx - self._drift[index * 2], ny - self._drift[index * 2 + 1])
+                self._drift[index * 2], self._drift[index * 2 + 1] = nx, ny
+        for index, item in enumerate(self.find_withtag("orbit")):
+            self.itemconfigure(item, start=(index * 10 + self._tick * 0.6) % 360)
+        phase = (self._tick % 60) / 60.0  # pulse every 3 s
+        hub = self.size * 0.17
+        r = hub + phase * self.size * 0.17
+        self.coords("pulse", mid - r, mid - r, mid + r, mid + r)
+        self.itemconfigure("pulse", outline=mix_color(c["accent"], self.base, phase))
+        self.itemconfigure("beam", dashoffset=-(self._tick % 10))
+        for index, (dot, x, y) in enumerate(self._dots):
+            t = ((self._tick * 0.06) + index * 0.5) % 1.0
+            dx, dy = mid + (x - mid) * t, mid + (y - mid) * t
+            size = 4 if index % 2 == 0 else 3
+            self.coords(dot, dx - size, dy - size, dx + size, dy + size)
+        if self._hop:  # bounce after a send landed
+            self._hop -= 1
+            step = -2 if self._hop % 6 >= 3 else 2
+            self.move("monkey", 0, step)
+            self.move("monkey-eye", 0, step)
+        self._blink = (self._blink + 1) % 100  # blink every 5 s
+        state = "hidden" if self._blink in (0, 1, 2) else "normal"
+        self.itemconfigure("monkey-eye", state=state)
+

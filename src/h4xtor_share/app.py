@@ -28,9 +28,9 @@ from typing import Any
 
 from tkinterdnd2 import DND_FILES, TkinterDnD
 
-from h4xtor_share import __version__, integration, wifidirect
+from h4xtor_share import __version__, bluetooth, integration, wifidirect, wifidirect_host
 from h4xtor_share.client import PeerClient
-from h4xtor_share.config import Config
+from h4xtor_share.config import DEFAULT_PORT, Config
 from h4xtor_share.crypto import ensure_certificate, server_ssl_context
 from h4xtor_share.discovery import DiscoveryService, local_ipv4_addresses
 from h4xtor_share.history import HistoryStore, is_link
@@ -47,6 +47,7 @@ from h4xtor_share.models import (
     PeerPaired,
     PeerStatus,
     TransferProgress,
+    WifiDirectJoined,
     WifiDirectOffer,
 )
 from h4xtor_share.netmerge_page import NetMergePageMixin
@@ -58,11 +59,13 @@ from h4xtor_share.server import ShareServer
 from h4xtor_share.tray import TrayIcon
 from h4xtor_share.udp import UdpDiscovery
 from h4xtor_share.ui_kit import (
+    AuroraBar,
     Avatar,
     Button,
     Card,
     Modal,
     Monkey,
+    OrbitMap,
     ProgressBar,
     QrCanvas,
     ScrollFrame,
@@ -130,6 +133,57 @@ def _format_eta(seconds: float) -> str:
         return f"{minutes} min {rest:02d} s tilbage"
     hours, minutes = divmod(minutes, 60)
     return f"{hours} t {minutes} min tilbage"
+
+
+def full_size_image_url(url: str) -> str:
+    """Google Photos shows a scaled copy ("…=w1280-h960"); "=s0" asks for full size."""
+    import urllib.parse
+
+    parts = urllib.parse.urlsplit(url)
+    if not parts.hostname or not parts.hostname.endswith("googleusercontent.com"):
+        return url
+    head, sep, _size = parts.path.rpartition("=")
+    if not sep or "/" in _size:
+        return url
+    return urllib.parse.urlunsplit(parts._replace(path=f"{head}=s0"))
+
+
+def download_name(url: str, content_type: str, stamp: str) -> str:
+    """File name for a picture sent from the web: keep a real name, else "Billede-<tid>.jpg"."""
+    import mimetypes
+    import urllib.parse
+
+    name = Path(urllib.parse.urlsplit(url).path).name[:120]
+    suffix = Path(name).suffix
+    if suffix and len(suffix) <= 6 and "=" not in name:
+        return name
+    extension = mimetypes.guess_extension(content_type.split(";")[0].strip()) or ""
+    extension = {".jpe": ".jpg", ".jpeg": ".jpg"}.get(extension, extension)
+    if content_type.startswith("image/"):
+        return f"Billede-{stamp}{extension}"
+    return f"{name or 'download'}{extension}"
+
+
+def refresh_chrome_extension(target: Path) -> bool:
+    """Chrome loads the extension from a copy; after an app update, bring the copy up to date.
+
+    Chrome picks up the new files the next time it starts. Nothing happens until the
+    user has installed the extension once ("Installér" copies it there).
+    """
+    source = Path(__file__).with_name("chrome_extension")
+    try:
+        if not (target / "manifest.json").is_file() or not source.is_dir():
+            return False
+        if (target / "manifest.json").read_bytes() == (source / "manifest.json").read_bytes():
+            return False
+        # The manifest goes last: if copying stops halfway it still differs, so the
+        # next start tries again instead of leaving a half-updated extension.
+        ignore = shutil.ignore_patterns("manifest.json")
+        shutil.copytree(source, target, dirs_exist_ok=True, ignore=ignore)
+        shutil.copy2(source / "manifest.json", target / "manifest.json")
+        return True
+    except OSError:
+        return False
 
 
 def friendly_error(error: BaseException, peers: Any = ()) -> str:
@@ -385,18 +439,24 @@ class DeviceCard:
         selected = paired and app.selected_id == peer.device_id and not app.target_all
         platform_label = PLATFORM_LABELS.get(peer.platform.lower(), peer.platform.title())
         transport = TRANSPORT_LABELS.get(peer.transport, peer.transport)
+        where = "" if peer.transport == "bluetooth" else peer.address
         self.name_label.configure(text=peer.name + ("   ✓ valgt" if selected else ""))
         if paired:
             state = "Online" if online else "Offline"
             self.dot.configure(fg=c["success"] if online else c["faint"])
             self.meta_label.configure(
-                text=f"{state}  ·  {platform_label}  ·  {transport}  ·  {peer.address}"
+                text="  ·  ".join(
+                    part for part in (state, platform_label, transport, where) if part
+                )
             )
         else:
             self.dot.configure(fg=c["accent"] if online else c["faint"])
             self.meta_label.configure(
-                text=f"Ikke forbundet  ·  fundet på {transport}  ·  {platform_label}  ·  "
-                f"{peer.address}"
+                text="  ·  ".join(
+                    part
+                    for part in ("Ikke forbundet", f"fundet på {transport}", platform_label, where)
+                    if part
+                )
             )
         self.signal.set(status.rtt_ms if online and status is not None else None)
         assert self.card is not None
@@ -415,6 +475,17 @@ class DeviceCard:
                 label="Send udklipsholder", command=lambda: app.send_clipboard(self.peer)
             )
             menu.add_command(label="Fjernbetjening", command=lambda: app.open_remote(self.peer))
+            if self.peer.device_id in app._bt_bridges:
+                menu.add_command(
+                    label="Afbryd Bluetooth", command=lambda: app.disconnect_bluetooth(self.peer)
+                )
+            elif bluetooth.supported() and (
+                self.peer.supports("bluetooth") or self.peer.platform == "android"
+            ):
+                menu.add_command(
+                    label="Forbind via Bluetooth",
+                    command=lambda: app.connect_bluetooth(self.peer, manual=True),
+                )
             menu.add_separator()
             menu.add_command(label="Fjern enhed…", command=lambda: app.confirm_remove(self.peer))
         else:
@@ -601,18 +672,35 @@ class TransferRow:
 
 
 class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD.Tk):
-    NAV_ITEMS = (
-        ("share", "⇄", "Del"),
-        ("transfers", "↕", "Overførsler"),
-        ("clipboard", "⧉", "Udklipsholder"),
-        ("notifications", "◈", "Notifikationer"),
-        ("sms", "✉", "SMS"),
-        ("remote", "◎", "Fjernbetjening"),
-        ("history", "◷", "Historik"),
-        ("iphone", "▯", "iPhone"),
-        ("netmerge", "⇶", "Wi-Fi + 5G"),
-        ("settings", "⚙", "Indstillinger"),
+    # Mix design: the menu in four small groups.
+    NAV_GROUPS = (
+        (
+            "DEL",
+            (
+                ("share", "⇄", "Send"),
+                ("transfers", "↕", "Overførsler"),
+                ("clipboard", "⧉", "Udklipsholder"),
+            ),
+        ),
+        (
+            "TELEFON",
+            (
+                ("notifications", "◈", "Notifikationer"),
+                ("sms", "✉", "SMS"),
+                ("remote", "◎", "Fjernbetjening"),
+            ),
+        ),
+        (
+            "FORBINDELSE",
+            (
+                ("connections", "≋", "Wi-Fi Direct & Bluetooth"),
+                ("iphone", "▯", "iPhone (browser)"),
+                ("netmerge", "⇶", "Wi-Fi + 5G"),
+            ),
+        ),
+        ("ANDET", (("history", "◷", "Historik"), ("settings", "⚙", "Indstillinger"))),
     )
+    NAV_ITEMS = tuple(item for _group, items in NAV_GROUPS for item in items)
 
     def __init__(
         self,
@@ -667,6 +755,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         # main() may have started the listener early; launches held meanwhile replay now.
         instance.set_handler(lambda message: self.event_queue.put(("ipc", message)))
         self.instance = instance
+        refresh_chrome_extension(self.config_store.path.parent / "chrome-extension")
         self.local_api = LocalApi(
             self.config_store,
             self.config_store.port + LOCAL_API_PORT_OFFSET,
@@ -704,6 +793,14 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         self._qr_secret: str | None = None
         self._pair_modals: dict[str, Modal] = {}
         self._previous_wifi: str | None = None
+        # Bluetooth: running bridges, the Wi-Fi route to switch back to, and attempt throttling.
+        self._bt_bridges: dict[str, bluetooth.Bridge] = {}
+        self._bt_before: dict[str, Peer] = {}
+        self._bt_trying: set[str] = set()
+        self._bt_last_try: dict[str, float] = {}
+        self._bt_macs: dict[str, str] = {}  # device id -> MAC of the running bridge
+        self._bt_scanning = False
+        self._bt_last_scan = -1e9
         self.scan_future: Future[Any] | None = None
         self._pending_send: list[Path] = list(initial_send or [])
 
@@ -811,9 +908,13 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         self.sidebar = tk.Frame(self, bg=c["sidebar"], width=px(236))
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
-        tk.Frame(self, bg=c["border"], width=1).pack(side="left", fill="y")
+        # Aurora glass: a softly shimmering aurora seam between menu and pages.
+        AuroraBar(self, self.theme, thickness=max(2, px(2)), vertical=True).pack(
+            side="left", fill="y"
+        )
         self.main = tk.Frame(self, bg=c["bg"])
         self.main.pack(side="left", fill="both", expand=True)
+        AuroraBar(self.main, self.theme, thickness=max(2, px(2))).pack(side="top", fill="x")
         self._build_sidebar()
 
         self.status_var = tk.StringVar(value="Starter…")
@@ -832,6 +933,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         self._build_iphone_page()
         self._build_netmerge_page()
         self._build_settings_page()
+        self._build_connections_page()
         self.after(60000, self._notif_tick)
         for frame in self.pages.values():
             frame.grid(row=0, column=0, sticky="nsew")
@@ -846,28 +948,31 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         c = self.theme.c
         px = self.theme.px
         brand = tk.Frame(self.sidebar, bg=c["sidebar"])
-        brand.pack(fill="x", padx=px(18), pady=(px(20), px(18)))
+        brand.pack(fill="x", padx=px(16), pady=(px(18), px(16)))
+        Monkey(brand, self.theme, size=px(30), bg=c["sidebar"]).pack(side="left")
         tk.Label(
             brand,
-            text="✻",
-            bg=c["sidebar"],
-            fg=c["accent"],
-            font=self.theme.font(17, family=self.theme.symbol),
-        ).pack(side="left")
-        tk.Label(
-            brand,
-            text="h4xtor share",
+            text="h4xtor",
             bg=c["sidebar"],
             fg=c["text"],
             font=self.theme.title_font(15),
         ).pack(side="left", padx=(px(8), 0))
+        tk.Label(
+            brand,
+            text="share",
+            bg=c["sidebar"],
+            fg=c["accent"],
+            font=self.theme.title_font(15),
+        ).pack(side="left", padx=(px(4), 0))
 
         # "New chat"-style primary action at the top, like Claude.ai.
         new = tk.Frame(self.sidebar, bg=c["sidebar"], cursor="hand2")
         new.pack(fill="x", padx=px(10), pady=(0, px(10)))
         plus = tk.Canvas(new, width=px(26), height=px(26), bg=c["sidebar"], highlightthickness=0)
         plus.create_oval(1, 1, px(26) - 1, px(26) - 1, fill=c["accent"], outline=c["accent"])
-        plus.create_text(px(13), px(13), text="+", fill="#FFFFFF", font=self.theme.font(13, "bold"))
+        plus.create_text(
+            px(13), px(13), text="+", fill=c["accent_text"], font=self.theme.font(13, "bold")
+        )
         plus.pack(side="left", padx=(px(8), px(10)), pady=px(6))
         new_label = tk.Label(
             new,
@@ -890,7 +995,19 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
 
         self.nav_rows: dict[str, tuple[tk.Frame, tk.Label, tk.Label]] = {}
         self.nav_badges: dict[str, tk.Label] = {}
+        group_of = {key: group for group, items in self.NAV_GROUPS for key, _i, _l in items}
+        last_group = ""
         for key, icon, label in self.NAV_ITEMS:
+            if group_of[key] != last_group:
+                last_group = group_of[key]
+                tk.Label(
+                    self.sidebar,
+                    text=last_group,
+                    bg=c["sidebar"],
+                    fg=c["faint"],
+                    font=self.theme.font(8, family=self.theme.mono),
+                    anchor="w",
+                ).pack(fill="x", padx=px(20), pady=(px(10), px(2)))
             row = tk.Frame(self.sidebar, bg=c["sidebar"], cursor="hand2")
             row.pack(fill="x", padx=px(10), pady=px(1))
             icon_label = tk.Label(
@@ -1044,6 +1161,16 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         Button(
             top, self.theme, "Scan netværk", self.scan_lan, kind="ghost", size="sm", icon="⟳"
         ).pack(side="right", padx=(0, px(4)))
+        if bluetooth.supported():
+            Button(
+                top,
+                self.theme,
+                "Søg via Bluetooth",
+                lambda: self.scan_bluetooth(manual=True),
+                kind="ghost",
+                size="sm",
+                icon="ᛒ",
+            ).pack(side="right", padx=(0, px(4)))
 
         scroll = ScrollFrame(page, self.theme)
         scroll.pack(fill="both", expand=True)
@@ -1052,7 +1179,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         center.pack(fill="x", padx=px(48), pady=(px(26), px(30)))
 
         def recenter(event: tk.Event) -> None:
-            pad = max(px(32), (event.width - px(760)) // 2)
+            pad = max(px(28), (event.width - px(980)) // 2)
             center.pack_configure(padx=pad)
 
         scroll.canvas.bind("<Configure>", recenter, add="+")
@@ -1060,18 +1187,49 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         self.banner = tk.Frame(center, bg=c["bg"])
         self.banner.pack(fill="x")
 
+        # Mix design: the orbit map (the monkey is this computer) next to the headline.
         hero = tk.Frame(center, bg=c["bg"])
-        hero.pack(pady=(px(18), px(22)))
-        self.monkey = Monkey(hero, self.theme, size=px(72))
-        self.monkey.pack(side="left", padx=(0, px(16)))
-        self.greeting_label = tk.Label(
+        hero.pack(fill="x", pady=(px(4), px(18)))
+        self.orbit = OrbitMap(
             hero,
-            text="Velkommen til H4xtor Share",
+            self.theme,
+            size=px(320),
+            on_pick=self._orbit_pick,
+            on_add=self.show_qr_pairing,
+            label=f"{self.config_store.device_name} · klar",
+        )
+        self.orbit.pack(side="left")
+        words = tk.Frame(hero, bg=c["bg"])
+        words.pack(side="left", fill="both", expand=True, padx=(px(24), 0))
+        self.route_chips = tk.Frame(words, bg=c["bg"])
+        self.route_chips.pack(anchor="w", pady=(px(36), px(14)))
+        self.greeting_label = tk.Label(
+            words,
+            text="Slip noget herind.",
             bg=c["bg"],
             fg=c["text"],
             font=self.theme.title_font(26),
+            anchor="w",
         )
-        self.greeting_label.pack(side="left")
+        self.greeting_label.pack(fill="x")
+        self.greeting_sub = tk.Label(
+            words,
+            text="Aben bringer det frem.",
+            bg=c["bg"],
+            fg=c["accent"],
+            font=self.theme.title_font(17),
+            anchor="w",
+        )
+        self.greeting_sub.pack(fill="x", pady=(px(2), 0))
+        tk.Label(
+            words,
+            text="Træk filer ind overalt · Ctrl+V sender udklip · klik en enhed på kortet",
+            bg=c["bg"],
+            fg=c["faint"],
+            font=self.theme.font(9),
+            anchor="w",
+        ).pack(fill="x", pady=(px(10), 0))
+        self._sends_landed = 0
 
         # The composer: Claude's prompt box, but for files, links and text.
         self.composer = Card(center, self.theme, padding=14, radius=20, outline=c["border_strong"])
@@ -1186,7 +1344,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         head.pack(fill="x", pady=(0, px(2)))
         self.lan_title = tk.Label(
             head,
-            text="Fundet på netværket",
+            text="Fundet i nærheden",
             bg=c["bg"],
             fg=c["muted"],
             font=self.theme.font(9, "bold"),
@@ -1196,8 +1354,8 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         tk.Label(
             self.lan_section,
             text=(
-                "Enheder med h4xtor share på dit Wi-Fi, som du ikke har forbundet. "
-                "Klik Forbind – eller ✕ for at skjule."
+                "Enheder med h4xtor share på dit Wi-Fi eller via Bluetooth, som du ikke har "
+                "forbundet. Klik Forbind – eller ✕ for at skjule."
             ),
             bg=c["bg"],
             fg=c["faint"],
@@ -1224,11 +1382,16 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         ).pack(fill="x", pady=(0, px(10)))
         chips = tk.Frame(frame, bg=c["bg"])
         chips.pack(fill="x")
-        for label, icon, command in (
+        chip_actions: list[tuple[str, str, Callable[[], None]]] = [
             ("Forbind din telefon med QR", "▣", self.show_qr_pairing),
             ("Scan netværket", "⟳", self.scan_lan),
             ("Tilføj via IP-adresse", "⌁", self.add_manual_peer),
-        ):
+        ]
+        if bluetooth.supported():
+            chip_actions.append(
+                ("Søg via Bluetooth", "ᛒ", lambda: self.scan_bluetooth(manual=True))
+            )
+        for label, icon, command in chip_actions:
             Button(chips, self.theme, label, command, kind="secondary", size="sm", icon=icon).pack(
                 side="left", padx=(0, px(8))
             )
@@ -1356,6 +1519,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         for card in self.device_cards.values():
             card.update(card.peer)
         self._draw_drop_zone()
+        self._refresh_orbit()
 
     def _drop_target_peer(self) -> Peer | None:
         if self._all_selected():
@@ -1382,12 +1546,89 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         for card in self.device_cards.values():
             card.update(card.peer)
         self._draw_drop_zone()
+        self._refresh_orbit()
+
+    def _orbit_pick(self, device_id: str) -> None:
+        if self.config_store.is_trusted(device_id):
+            self.select_peer(device_id)
+
+    def _refresh_orbit(self) -> None:
+        """Feed the orbit map, the headline and the route chips from the current state."""
+        orbit = getattr(self, "orbit", None)
+        if orbit is None:
+            return
+        c = self.theme.c
+        target = self._drop_target_peer()
+        everyone = self._all_selected()
+        sending_names = {
+            state.peer_name
+            for state in self.transfers.values()
+            if state.direction == "send" and state.status == "active"
+        }
+        trusted = [p for p in self.peers.values() if self.config_store.is_trusted(p.device_id)]
+
+        def online(peer: Peer) -> bool:
+            status = self.peer_status.get(peer.device_id)
+            return status is not None and status.online
+
+        trusted.sort(key=lambda p: (0 if online(p) else 1, p.name.lower()))
+        nodes = []
+        sending = set()
+        for peer in trusted[:5]:
+            status = self.peer_status.get(peer.device_id)
+            if online(peer):
+                route = {"wifi-direct": "direct", "bluetooth": "bt"}.get(peer.transport, "wifi")
+                ping = f" · {int(status.rtt_ms)} ms" if status and status.rtt_ms else ""
+                sub = route + ping
+            else:
+                sub = "offline"
+            selected = everyone or (target is not None and target.device_id == peer.device_id)
+            nodes.append(
+                {"id": peer.device_id, "name": peer.name, "sub": sub,
+                 "online": online(peer), "selected": selected}
+            )
+            if peer.name in sending_names:
+                sending.add(peer.device_id)
+        orbit.set_nodes(nodes)
+        orbit.set_sending(sending)
+        name = self.config_store.device_name
+        orbit.set_label(f"{name} · sender…" if sending else f"{name} · klar")
+        who = "alle dine enheder" if everyone else target.name if target else "dine enheder"
+        self.greeting_sub.configure(text=f"Aben bringer det til {who}.")
+        # Route chips: LAN · Wi-Fi Direct · Bluetooth
+        for child in self.route_chips.winfo_children():
+            child.destroy()
+        addresses = _sorted_lan_addresses()
+        host = getattr(self, "direct_host", None)
+        chips = [
+            ("● LAN " + (addresses[0] if addresses else "–"), "accent" if addresses else "neutral"),
+            ("● DIRECT kører" if host is not None and host.running else "○ DIRECT slukket",
+             "accent" if host is not None and host.running else "neutral"),
+        ]
+        if bluetooth.supported():
+            chips.append(("● BT klar", "warning"))
+        for text, tone in chips:
+            fg = {"accent": c["accent"], "warning": c["accent3"]}.get(tone, c["muted"])
+            tk.Label(
+                self.route_chips,
+                text=f" {text} ",
+                bg=c["bg"],
+                fg=fg,
+                font=self.theme.font(9, family=self.theme.mono),
+                highlightthickness=1,
+                highlightbackground=fg if tone != "neutral" else c["border_strong"],
+                padx=self.theme.px(6),
+                pady=self.theme.px(3),
+            ).pack(side="left", padx=(0, self.theme.px(8)))
 
     # ---------------------------------------------------------- transfers page
     def _build_transfers_page(self) -> None:
         px = self.theme.px
         page, actions = self._page(
             "transfers", "Overførsler", "Alt der sendes og modtages – live, og kan genoptages."
+        )
+        Button(actions, self.theme, "Stop alle", self.stop_all_transfers, kind="ghost").pack(
+            side="left", padx=(0, px(8))
         )
         Button(actions, self.theme, "Ryd færdige", self.clear_finished_transfers).pack(side="left")
         Button(actions, self.theme, "Åbn mappe", self.open_incoming_folder, kind="ghost").pack(
@@ -2293,44 +2534,6 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             side="right"
         )
 
-        direct = section("Wi-Fi Direct")
-        tk.Label(
-            direct.body,
-            text=(
-                "Del uden router: Tryk “Wi-Fi Direct” i h4xtor share på telefonen. Er telefonen "
-                "allerede forbundet, kobler PC'en selv på. Ellers indtast netværk og kode herunder."
-            ),
-            bg=c["card"],
-            fg=c["muted"],
-            font=self.theme.font(9),
-            anchor="w",
-            justify="left",
-            wraplength=px(620),
-        ).pack(fill="x")
-        wifi_row = tk.Frame(direct.body, bg=c["card"])
-        wifi_row.pack(fill="x", pady=(px(10), 0))
-        self.wifi_ssid_var = tk.StringVar(value="")
-        self.wifi_pass_var = tk.StringVar(value="")
-        entry(wifi_row, self.theme, self.wifi_ssid_var, width=24).pack(side="left", ipady=px(6))
-        entry(wifi_row, self.theme, self.wifi_pass_var, width=20, show="•").pack(
-            side="left", padx=(px(8), 0), ipady=px(6)
-        )
-        Button(
-            wifi_row,
-            self.theme,
-            "Forbind",
-            lambda: self.join_wifi_direct(self.wifi_ssid_var.get(), self.wifi_pass_var.get()),
-            kind="primary",
-        ).pack(side="left", padx=(px(8), 0))
-        tk.Label(
-            direct.body,
-            text="Netværksnavn (DIRECT-…)        Adgangskode",
-            bg=c["card"],
-            fg=c["faint"],
-            font=self.theme.font(8),
-            anchor="w",
-        ).pack(fill="x", pady=(px(4), 0))
-
         self.paired_section = section("Forbundne enheder")
         self._refresh_paired_list()
 
@@ -2501,7 +2704,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         await self.server.stop()
 
     def _known_addresses(self) -> list[str]:
-        return [peer.address for peer in self.config_store.known_peers()]
+        return [peer.address for peer in self.config_store.known_peers() if peer.address]
 
     def _receive_core_event(self, event: object) -> None:
         self.event_queue.put(("core_event", event))
@@ -2600,12 +2803,45 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             self.status_var.set(value)
         elif tag == "clipboard_broadcast":
             self._refresh_recent_clips()
+        elif tag == "direct_host_started":
+            self._direct_host_up(value)
+        elif tag == "direct_host_failed":
+            if self.direct_host is value:
+                self.direct_host = None
+            self._refresh_direct_host()
+        elif tag == "direct_host_stopped":
+            self._direct_host_down(value)
+        elif tag == "direct_offered":
+            names = value
+            if names:
+                who = ", ".join(names)
+                self.toast.show(f"Sendt til {who} – tryk Forbind på telefonen", "success")
+        elif tag == "direct_phone_joined":
+            peer = value
+            self._upsert_peer(peer)
+            self.select_peer(peer.device_id)
+            self._refresh_direct_host()
+            self._notify(f"{peer.name} er forbundet direkte via Wi-Fi Direct", "success")
         elif tag == "wifi_joined":
             peer = value
             self._upsert_peer(peer)
             self.select_peer(peer.device_id)
             self._show_wifi_banner()
             self.toast.show(f"Forbundet direkte med {peer.name} via Wi-Fi Direct", "success")
+        elif tag == "bt_up":
+            if value is not None:
+                self._bluetooth_up(*value)
+        elif tag == "bt_down":
+            self._bluetooth_down(value)
+        elif tag == "bt_maybe":
+            self._maybe_bluetooth(value)
+        elif tag == "bt_scanned":
+            self._bluetooth_scanned(value)
+        elif tag == "bt_wifi_back":
+            bridge = self._bt_bridges.get(value)
+            # Not mid-transfer: that would break the file; switch at the next health check.
+            if bridge is not None and not bridge.busy:
+                bridge.close()  # bt_down puts the Wi-Fi route back
         elif tag == "wifi_restored":
             self._show_wifi_banner()
             self.toast.show("Tilbage på dit normale Wi-Fi")
@@ -2729,6 +2965,8 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
                 self._refresh_web_page()  # "Hentet ✓"
         elif isinstance(event, WifiDirectOffer):
             self._offer_wifi_direct(event)
+        elif isinstance(event, WifiDirectJoined):
+            self._phone_joined_direct(event)
 
     def _record_remote_text(self, peer_id: str, text: str, received: bool) -> None:
         peer = self.peers.get(peer_id)
@@ -2748,7 +2986,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         # One address = one device. A different id on the same address is either a
         # stale record (old mDNS cache, reinstalled app) or a reused DHCP lease.
         for other_id, other in list(self.peers.items()):
-            if other_id == peer.device_id or other.address != peer.address:
+            if other_id == peer.device_id or other.address != peer.address or not peer.address:
                 continue
             if other.port != peer.port:
                 continue
@@ -2759,6 +2997,15 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             elif not trusted and other_status is not None and other_status.online:
                 return  # the paired device is alive on this address; this one is stale
         existing = self.peers.get(peer.device_id)
+        if (
+            existing is not None
+            and existing.transport == "bluetooth"
+            and peer.transport != "bluetooth"
+            and peer.device_id in self._bt_bridges
+        ):
+            # Stay on Bluetooth; the health check tries this Wi-Fi address and switches back.
+            self._bt_before[peer.device_id] = peer
+            return
         if existing is not None and existing.address != peer.address:
             status = self.peer_status.get(peer.device_id)
             if status is not None and status.online and existing.transport == "wifi-direct":
@@ -2773,7 +3020,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
                     existing.transport,
                     peer.capabilities or existing.capabilities,
                 )
-            elif status is not None and status.online:
+            elif status is not None and status.online and peer.transport != "bluetooth":
                 self.event_queue.put(("status", f"{peer.name} fundet på {peer.address}"))
         if existing is not None and not peer.capabilities:
             peer = Peer(
@@ -2793,8 +3040,6 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         if card is None:
             card = DeviceCard(self, self.device_list, peer)
             self.device_cards[peer.device_id] = card
-            if self._mascot_ready():
-                self.monkey.point()  # look, a new device
         else:
             card.update(peer)
         self._reorder_cards()
@@ -2829,13 +3074,14 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         self.paired_title.configure(
             text=f"Dine enheder  ·  {online} online" if paired else "Dine enheder"
         )
+        self._refresh_orbit()
         if paired:
             self.paired_empty.pack_forget()
         else:
             self.paired_empty.pack(fill="x", before=self.paired_list)
         if lan:
             self.lan_section.pack(fill="x", pady=(px(18), 0))
-            self.lan_title.configure(text=f"Fundet på netværket  ·  {len(lan)}")
+            self.lan_title.configure(text=f"Fundet i nærheden  ·  {len(lan)}")
         else:
             self.lan_section.pack_forget()
 
@@ -2924,12 +3170,6 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         self.peer_status[status.device_id] = status
         if previous is None or previous.online != status.online:
             self.history.record_connection(peer, status.online, status.rtt_ms)
-            if (
-                status.online
-                and self.config_store.is_trusted(status.device_id)
-                and self._mascot_ready()
-            ):
-                self.monkey.nod()  # connected and ready
             card = self.device_cards.get(peer.device_id)
             if card is not None:
                 card.update(peer)
@@ -2943,6 +3183,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
     async def _check_peer_health(self) -> None:
         peers = list(self.peers.values())
         if not peers:
+            self.event_queue.put(("bt_maybe", None))
             return
         results = await asyncio.gather(
             *(self.client.ping(peer) for peer in peers),
@@ -2951,8 +3192,17 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         for peer, result in zip(peers, results, strict=True):
             if isinstance(result, BaseException):
                 self.event_queue.put(("peer_status", PeerStatus(peer.device_id, False, None)))
+                self.event_queue.put(("bt_maybe", peer))
             else:
                 self.event_queue.put(("peer_status", PeerStatus(peer.device_id, True, result)))
+        if not any(not isinstance(result, BaseException) for result in results):
+            self.event_queue.put(("bt_maybe", None))  # nothing online: look on Bluetooth
+        # On Bluetooth: as soon as the phone answers on Wi-Fi again, go back to the faster path.
+        for device_id, before in list(self._bt_before.items()):
+            if device_id in self._bt_bridges:
+                with contextlib.suppress(Exception):
+                    await self.client.ping(before)
+                    self.event_queue.put(("bt_wifi_back", device_id))
 
     def _schedule_health_checks(self) -> None:
         if self._closing:
@@ -3346,6 +3596,632 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             raise RuntimeError(f"Telefonen svarer ikke på Wi-Fi Direct: {last}")
 
         self.runtime.submit(run(), "wifi_joined")
+
+    # ------------------------------------------- Wi-Fi Direct made by this PC
+    def _build_direct_host(self, body: tk.Frame) -> None:
+        """"Opret her på PC'en": name, code, start/stop, Wi-Fi QR and "Send til telefonen"."""
+        c = self.theme.c
+        px = self.theme.px
+        self.direct_host: wifidirect_host.DirectHost | None = None
+        stored = self.config_store.data.get("direct_host") or {}
+        name = stored.get("ssid") or wifidirect_host.default_name(self.config_store.device_name)
+        self.direct_name_var = tk.StringVar(value=str(name))
+        self.direct_pass_var = tk.StringVar(
+            value=str(stored.get("pass") or wifidirect_host.random_passphrase())
+        )
+        tk.Label(
+            body,
+            text="Opret netværk her på PC'en",
+            bg=c["card"],
+            fg=c["text"],
+            font=self.theme.font(10, "bold"),
+            anchor="w",
+        ).pack(fill="x")
+        tk.Label(
+            body,
+            text=(
+                "Ingen router? PC'en laver selv et lille netværk, som telefonen kobler direkte på. "
+                "PC'ens normale internet virker stadig, og telefonen beholder sin mobildata."
+            ),
+            bg=c["card"],
+            fg=c["muted"],
+            font=self.theme.font(9),
+            anchor="w",
+            justify="left",
+            wraplength=px(620),
+        ).pack(fill="x", pady=(px(2), 0))
+        row = tk.Frame(body, bg=c["card"])
+        row.pack(fill="x", pady=(px(10), 0))
+        self.direct_name_entry = self._labelled_entry(
+            row, "Netværksnavn (DIRECT-h4-…)", self.direct_name_var, 24
+        )
+        self.direct_pass_entry = self._labelled_entry(
+            row, "Kode (8–63 tegn)", self.direct_pass_var, 14, gap=px(8)
+        )
+        self.direct_toggle = Button(
+            row, self.theme, "Start netværk", self.toggle_direct_host, kind="primary"
+        )
+        self.direct_toggle.pack(side="left", padx=(px(8), 0), anchor="s")
+        self.direct_status = tk.Label(
+            body,
+            text="",
+            bg=c["card"],
+            fg=c["muted"],
+            font=self.theme.font(9, family=self.theme.mono),
+            anchor="w",
+            justify="left",
+        )
+        self.direct_status.pack(fill="x", pady=(px(8), 0))
+        actions = tk.Frame(body, bg=c["card"])
+        actions.pack(fill="x", pady=(px(8), 0))
+        self.direct_send = Button(
+            actions, self.theme, "Send til telefonen", self.offer_direct_host, size="sm"
+        )
+        self.direct_send.pack(side="left")
+        self.direct_qr = Button(
+            actions, self.theme, "Vis Wi-Fi-QR", self.show_direct_qr, kind="ghost", size="sm"
+        )
+        self.direct_qr.pack(side="left", padx=(px(8), 0))
+        self._refresh_direct_host()
+
+    def _build_connections_page(self) -> None:
+        """Mix design: Wi-Fi Direct (make it here or join the phone's) and Bluetooth, together."""
+        c = self.theme.c
+        px = self.theme.px
+        page, _actions = self._page(
+            "connections",
+            "Forbindelser",
+            "Aben vælger selv den hurtigste vej. Her laver du en direkte forbindelse uden router.",
+        )
+        scroll = ScrollFrame(page, self.theme)
+        scroll.pack(fill="both", expand=True, padx=(px(36), px(24)), pady=(0, px(16)))
+        inner = scroll.inner
+
+        def section(title: str) -> Card:
+            tk.Label(
+                inner,
+                text=title.upper(),
+                bg=c["bg"],
+                fg=c["faint"],
+                font=self.theme.font(8, family=self.theme.mono),
+                anchor="w",
+            ).pack(fill="x", pady=(px(6), px(8)))
+            card = Card(inner, self.theme, radius=20)
+            card.pack(fill="x", pady=(0, px(16)))
+            return card
+
+        direct = section("Wi-Fi Direct")
+        self._build_direct_host(direct.body)
+        self._divider(direct.body)
+        tk.Label(
+            direct.body,
+            text="Kobl på telefonens netværk",
+            bg=c["card"],
+            fg=c["text"],
+            font=self.theme.font(10, "bold"),
+            anchor="w",
+        ).pack(fill="x")
+        tk.Label(
+            direct.body,
+            text=(
+                "Tryk “Start Wi-Fi Direct” i h4xtor share på telefonen. Er telefonen allerede "
+                "forbundet, kobler PC'en selv på. Ellers indtast netværk og kode herunder."
+            ),
+            bg=c["card"],
+            fg=c["muted"],
+            font=self.theme.font(9),
+            anchor="w",
+            justify="left",
+            wraplength=px(620),
+        ).pack(fill="x", pady=(px(2), 0))
+        wifi_row = tk.Frame(direct.body, bg=c["card"])
+        wifi_row.pack(fill="x", pady=(px(10), 0))
+        self.wifi_ssid_var = tk.StringVar(value="")
+        self.wifi_pass_var = tk.StringVar(value="")
+        self._labelled_entry(wifi_row, "Telefonens netværk (DIRECT-…)", self.wifi_ssid_var, 24)
+        self._labelled_entry(wifi_row, "Kode", self.wifi_pass_var, 14, gap=px(8), show="•")
+        Button(
+            wifi_row,
+            self.theme,
+            "Forbind",
+            lambda: self.join_wifi_direct(self.wifi_ssid_var.get(), self.wifi_pass_var.get()),
+            kind="primary",
+        ).pack(side="left", padx=(px(8), 0), anchor="s")
+
+        blue = section("Bluetooth")
+        tk.Label(
+            blue.body,
+            text=(
+                "Nødvejen, når der hverken er Wi-Fi eller Wi-Fi Direct. Langsommere – "
+                "fint til tekst, links og billeder. Par telefonen i Windows' "
+                "Bluetooth-indstillinger først."
+            ),
+            bg=c["card"],
+            fg=c["muted"],
+            font=self.theme.font(9),
+            anchor="w",
+            justify="left",
+            wraplength=px(620),
+        ).pack(fill="x")
+        if bluetooth.supported():
+            Button(
+                blue.body,
+                self.theme,
+                "Søg via Bluetooth",
+                lambda: self.scan_bluetooth(manual=True),
+                size="sm",
+            ).pack(anchor="w", pady=(px(10), 0))
+        else:
+            tk.Label(
+                blue.body,
+                text="Bluetooth virker kun på Windows og Linux.",
+                bg=c["card"],
+                fg=c["faint"],
+                font=self.theme.font(9),
+                anchor="w",
+            ).pack(fill="x", pady=(px(8), 0))
+
+    def _labelled_entry(
+        self, row: tk.Frame, label: str, variable: tk.StringVar, width: int, gap: int = 0, **kwargs
+    ) -> tk.Entry:
+        c = self.theme.c
+        column = tk.Frame(row, bg=c["card"])
+        column.pack(side="left", padx=(gap, 0), anchor="s")
+        tk.Label(
+            column, text=label, bg=c["card"], fg=c["muted"], font=self.theme.font(8), anchor="w"
+        ).pack(fill="x", pady=(0, self.theme.px(3)))
+        field = entry(column, self.theme, variable, width=width, **kwargs)
+        field.pack(fill="x", ipady=self.theme.px(6))
+        return field
+
+    def _refresh_direct_host(self) -> None:
+        if not hasattr(self, "direct_status"):
+            return
+        host = self.direct_host
+        unsupported = wifidirect_host.supported()
+        running = host is not None and host.running
+        starting = host is not None and not running
+        if unsupported:
+            text = unsupported
+        elif running and host is not None:
+            phones = [
+                peer.name
+                for peer in self.peers.values()
+                if peer.transport == "wifi-direct" and peer.address in self._direct_clients
+            ]
+            joined = f"forbundet: {', '.join(phones)}" if phones else "venter på telefonen"
+            text = (
+                f"● Kører   {host.ssid}   kode {host.passphrase}\n"
+                f"  PC'ens adresse {', '.join(host.addresses[:2]) or '–'}   ·   {joined}"
+            )
+        elif starting:
+            text = "Starter Wi-Fi Direct …"
+        else:
+            text = "○ Slukket"
+        self.direct_status.configure(
+            text=text, fg=self.theme.c["success"] if running else self.theme.c["muted"]
+        )
+        self.direct_toggle.set_text("Stop netværk" if running else "Start netværk")
+        self.direct_toggle.set_enabled(not unsupported and not starting)
+        state = "disabled" if running or starting else "normal"
+        self.direct_name_entry.configure(state=state)
+        self.direct_pass_entry.configure(state=state)
+        self.direct_send.set_enabled(running)
+        self.direct_qr.set_enabled(running)
+
+    @property
+    def _direct_clients(self) -> set[str]:
+        return getattr(self, "_direct_client_addresses", set())
+
+    def toggle_direct_host(self) -> None:
+        host = self.direct_host
+        if host is not None and host.running:
+            self.stop_direct_host()
+        else:
+            self.start_direct_host()
+
+    def start_direct_host(self) -> None:
+        ssid = self.direct_name_var.get().strip()
+        passphrase = self.direct_pass_var.get().strip()
+        try:
+            host = wifidirect_host.DirectHost(ssid, passphrase)
+        except wifidirect.WifiDirectError as error:
+            self._show_error(error)
+            return
+        self.config_store.data["direct_host"] = {"ssid": ssid, "pass": passphrase}
+        self.config_store.save()
+        host.on_stopped = lambda line: self.event_queue.put(("direct_host_stopped", line))
+        self.direct_host = host
+        self._direct_client_addresses = set()
+        self._refresh_direct_host()
+        self.toast.show(f"Starter {ssid} …", duration_ms=8000)
+
+        async def run() -> list[str]:
+            try:
+                return await asyncio.to_thread(host.start)
+            except Exception:
+                # Back on the UI thread: clear the half-started host so the fields and
+                # "Start netværk" work again for a retry.
+                self.event_queue.put(("direct_host_failed", host))
+                raise
+
+        self.runtime.submit(run(), "direct_host_started")
+
+    def stop_direct_host(self) -> None:
+        host, self.direct_host = self.direct_host, None
+        if host is not None:
+            host.on_stopped = None
+            host.stop()
+        self._leave_direct_peers()
+        self._refresh_direct_host()
+        self.toast.show("Wi-Fi Direct er slukket")
+
+    def _direct_host_up(self, addresses: list[str]) -> None:
+        self._refresh_direct_host()
+        host = self.direct_host
+        if host is None:
+            return
+        self.toast.show(f"{host.ssid} kører – tryk Forbind på telefonen", "success")
+        self.offer_direct_host(quiet=True)
+
+    def _direct_host_down(self, line: str) -> None:
+        if self.direct_host is None:
+            return
+        self.direct_host = None
+        self._leave_direct_peers()
+        self._refresh_direct_host()
+        self._show_error(RuntimeError(wifidirect_host.friendly_windows_error(line)))
+
+    def _leave_direct_peers(self) -> None:
+        # The health check marks the phones offline and finds them on the LAN again.
+        self._direct_client_addresses = set()
+
+    def _direct_phones(self) -> list[Peer]:
+        """Paired phones that can be told about this PC's network right now."""
+        out = []
+        for peer in self.peers.values():
+            status = self.peer_status.get(peer.device_id)
+            if (
+                peer.supports("wifi-direct-pc")
+                and self.config_store.is_trusted(peer.device_id)
+                and status is not None
+                and status.online
+            ):
+                out.append(peer)
+        return out
+
+    def offer_direct_host(self, quiet: bool = False) -> None:
+        host = self.direct_host
+        if host is None or not host.running:
+            return
+        phones = self._direct_phones()
+        if not phones:
+            if not quiet:
+                self.toast.show(
+                    "Ingen telefon er online lige nu. Scan Wi-Fi-QR'en med h4xtor share i stedet.",
+                    duration_ms=7000,
+                )
+            return
+
+        async def run() -> list[str]:
+            reached = []
+            for phone in phones:
+                with contextlib.suppress(Exception):
+                    await self.client.offer_pc_wifi_direct(
+                        phone, host.ssid, host.passphrase, host.addresses
+                    )
+                    reached.append(phone.name)
+            return reached
+
+        self.runtime.submit(run(), "direct_offered")
+
+    def show_direct_qr(self) -> None:
+        host = self.direct_host
+        if host is None or not host.running:
+            return
+        c = self.theme.c
+        px = self.theme.px
+        modal = Modal(self, self.theme, "Wi-Fi Direct", width=520)
+        modal.heading(
+            "Scan med telefonen",
+            "Åbn h4xtor share → Scan QR-kode. Telefonen kobler selv på netværket og finder PC'en. "
+            "Telefonens kamera-app virker også.",
+        )
+        layout = tk.Frame(modal.body, bg=c["bg"])
+        layout.pack(fill="x", pady=(px(16), 0))
+        card = Card(layout, self.theme, padding=12, fill="#FFFFFF", outline=c["border"])
+        card.pack(side="left", anchor="n")
+        qr = QrCanvas(card.body, self.theme, size=200)
+        qr.pack()
+        qr.show(qr_matrix(wifidirect_host.wifi_qr_payload(host.ssid, host.passphrase)))
+        tk.Label(
+            layout,
+            text=f"Netværk\n{host.ssid}\n\nKode\n{host.passphrase}",
+            bg=c["bg"],
+            fg=c["text"],
+            font=self.theme.font(11, family=self.theme.mono),
+            anchor="w",
+            justify="left",
+        ).pack(side="left", padx=(px(20), 0), anchor="n")
+        buttons = tk.Frame(modal.body, bg=c["bg"])
+        buttons.pack(fill="x", pady=(px(16), 0))
+        Button(buttons, self.theme, "Luk", modal.close, kind="ghost").pack(side="right")
+        modal.present()
+
+    def _phone_joined_direct(self, event: WifiDirectJoined) -> None:
+        """A phone joined our network: reach it at its new address."""
+        self._direct_client_addresses = {*self._direct_clients, event.address}
+
+        async def run() -> Peer:
+            last: Exception | None = None
+            for _attempt in range(6):
+                try:
+                    info = await self.client.get_info(event.address, event.port, timeout_seconds=3)
+                except Exception as error:  # noqa: BLE001
+                    last = error
+                    await asyncio.sleep(1)
+                    continue
+                if info.device_id != event.peer_id:
+                    raise RuntimeError("En anden enhed svarede på Wi-Fi Direct-adressen.")
+                return Peer(
+                    info.device_id,
+                    info.name,
+                    info.address,
+                    info.port,
+                    info.fingerprint,
+                    info.platform,
+                    "wifi-direct",
+                    info.capabilities,
+                )
+            raise RuntimeError(f"{event.peer_name} svarer ikke på Wi-Fi Direct: {last}")
+
+        self.runtime.submit(run(), "direct_phone_joined")
+
+    # ------------------------------------------------------------- Bluetooth
+    def connect_bluetooth(self, peer: Peer, manual: bool = False) -> None:
+        """Reach a paired phone over Bluetooth (manual from the menu, else automatic)."""
+        if peer.device_id in self._bt_trying or peer.device_id in self._bt_bridges:
+            return
+        self._bt_trying.add(peer.device_id)
+        self._bt_last_try[peer.device_id] = time.monotonic()
+        if manual:
+            self.toast.show(f"Forbinder til {peer.name} via Bluetooth…", duration_ms=8000)
+        remembered = str(self.config_store.data.get("bt_addresses", {}).get(peer.device_id) or "")
+
+        def attempt() -> tuple[Peer, bluetooth.Bridge, str] | None:
+            paired = bluetooth.paired_devices()
+            last: Exception | None = None
+            for address in bluetooth.candidates(paired, peer.name, remembered, everything=manual):
+                try:
+                    bridge = bluetooth.open_bridge(
+                        address,
+                        self.config_store.device_id,
+                        self.config_store.port,
+                        expected_id=peer.device_id,
+                        on_closed=lambda item: self.event_queue.put(("bt_down", item)),
+                    )
+                except OSError as error:
+                    last = error
+                    continue
+                return peer, bridge, address
+            if not manual:
+                return None  # automatic attempts stay quiet
+            hint = (
+                "Par telefonen under Windows' Bluetooth-indstillinger, og slå "
+                "'Tillad forbindelse via Bluetooth' til i h4xtor share på telefonen (fanen Del)."
+            )
+            if not paired:
+                raise RuntimeError(f"Ingen parrede Bluetooth-enheder. {hint}")
+            reason = bluetooth.describe(last) if last is not None else "ingen telefon fundet"
+            raise RuntimeError(f"{peer.name} svarer ikke over Bluetooth: {reason} {hint}")
+
+        async def run() -> tuple[Peer, bluetooth.Bridge, str] | None:
+            try:
+                return await asyncio.to_thread(attempt)
+            finally:
+                self._bt_trying.discard(peer.device_id)
+
+        self.runtime.submit(run(), "bt_up")
+
+    def disconnect_bluetooth(self, peer: Peer) -> None:
+        bridge = self._bt_bridges.get(peer.device_id)
+        if bridge is not None:
+            bridge.close()
+
+    def _maybe_bluetooth(self, peer: Peer | None) -> None:
+        """Phone offline on Wi-Fi: try Bluetooth by itself, at most once a minute.
+
+        ``None`` means nothing answers at all: then look for phones on Bluetooth every few
+        minutes, so a phone that was never on the same Wi-Fi still shows up.
+        """
+        if not bluetooth.supported():
+            return
+        if peer is None:
+            if not self._bt_scanning and time.monotonic() - self._bt_last_scan > 180:
+                self.scan_bluetooth(manual=False)
+            return
+        if (
+            peer.device_id in self._bt_bridges
+            or peer.platform != "android"
+            or not self.config_store.is_trusted(peer.device_id)
+            or time.monotonic() - self._bt_last_try.get(peer.device_id, -1e9) < 60
+        ):
+            return
+        self.connect_bluetooth(peer)
+
+    def scan_bluetooth(self, manual: bool = True) -> None:
+        """Find h4xtor share on the phones paired with this PC in Bluetooth."""
+        if self._bt_scanning:
+            if manual:
+                self.toast.show("Søger allerede via Bluetooth…")
+            return
+        self._bt_scanning = True
+        self._bt_last_scan = time.monotonic()
+        if manual:
+            self.toast.show("Søger efter telefoner via Bluetooth…", duration_ms=10000)
+        skip = set(self._bt_macs.values())
+
+        def search() -> tuple[list[tuple[str, bluetooth.Bridge]], dict[str, str], int]:
+            paired = bluetooth.paired_devices()
+            found, problems = bluetooth.scan(
+                self.config_store.device_id,
+                self.config_store.port,
+                paired,
+                skip=skip,
+                on_closed=lambda item: self.event_queue.put(("bt_down", item)),
+            )
+            return found, problems, len(paired)
+
+        async def run() -> dict[str, Any]:
+            try:
+                found, problems, paired = await asyncio.to_thread(search)
+                results: list[tuple[Peer, bluetooth.Bridge, str]] = []
+                for address, bridge in found:
+                    try:
+                        info = await self.client.get_info("127.0.0.1", bridge.port)
+                    except Exception as error:  # noqa: BLE001 - one phone must not stop the rest
+                        bridge.close()
+                        problems[address] = f"svarede ikke ({error})"
+                        continue
+                    if info.device_id != bridge.remote_id:
+                        bridge.close()
+                        continue
+                    # Its Wi-Fi address (if any) is unknown here; 127.0.0.1 is only the bridge.
+                    info = Peer(
+                        info.device_id,
+                        info.name,
+                        "",
+                        info.port,
+                        info.fingerprint,
+                        info.platform,
+                        "bluetooth",
+                        info.capabilities,
+                    )
+                    results.append((info, bridge, address))
+                return {
+                    "found": results,
+                    "problems": problems,
+                    "paired": paired,
+                    "manual": manual,
+                }
+            finally:
+                self._bt_scanning = False
+
+        self.runtime.submit(run(), "bt_scanned")
+
+    def _bluetooth_scanned(self, value: dict[str, Any]) -> None:
+        manual = bool(value.get("manual"))
+        found: list[tuple[Peer, bluetooth.Bridge, str]] = value.get("found") or []
+        names = []
+        for info, bridge, address in found:
+            if bridge.closed:
+                continue
+            if info.device_id in self._bt_bridges:
+                bridge.close()  # already linked (a manual connect finished meanwhile)
+                continue
+            trusted = self.config_store.is_trusted(info.device_id)
+            if not trusted and info.device_id in self.config_store.hidden_peers():
+                if not manual:
+                    bridge.close()
+                    continue
+                self.config_store.unhide_peer(info.device_id)
+            names.append(info.name)
+            self._bluetooth_up(info, bridge, address, quiet=not trusted)
+        if not manual:
+            return
+        if names:
+            pending = [
+                info.name for info, _b, _a in found
+                if not self.config_store.is_trusted(info.device_id)
+            ]
+            text = f"Fundet via Bluetooth: {', '.join(names)}"
+            if pending:
+                text += " – klik på enheden for at forbinde"
+            self.toast.show(text, "success", 8000)
+            return
+        problems: dict[str, str] = value.get("problems") or {}
+        if not value.get("paired"):
+            self.toast.show(
+                "Ingen parrede Bluetooth-enheder. Par telefonen under Windows' "
+                "Bluetooth-indstillinger først.",
+                "error",
+                9000,
+            )
+        elif problems:
+            reason = next(iter(problems.values()))
+            self.toast.show(
+                f"Ingen h4xtor share fundet via Bluetooth. {reason}",
+                "error",
+                10000,
+            )
+        else:
+            self.toast.show("Ingen telefoner blandt de parrede Bluetooth-enheder.", "error", 8000)
+
+    def _bluetooth_up(
+        self, peer: Peer, bridge: bluetooth.Bridge, address: str, quiet: bool = False
+    ) -> None:
+        if bridge.closed:
+            return
+        old = self._bt_bridges.get(peer.device_id)
+        if old is not None and old is not bridge:
+            bridge.close()
+            return
+        self._bt_bridges[peer.device_id] = bridge
+        self._bt_macs[peer.device_id] = address
+        self.config_store.data.setdefault("bt_addresses", {})[peer.device_id] = address
+        with contextlib.suppress(OSError):
+            self.config_store.save()
+        current = self.peers.get(peer.device_id, peer)
+        if current.transport != "bluetooth" and current.address:
+            self._bt_before[peer.device_id] = current
+        self._upsert_peer(
+            Peer(
+                current.device_id,
+                current.name,
+                "127.0.0.1",
+                bridge.port,
+                current.fingerprint,
+                current.platform,
+                "bluetooth",
+                current.capabilities,
+            )
+        )
+        routed = self.peers.get(peer.device_id)
+        if routed is not None and self.config_store.is_trusted(peer.device_id):
+            # A phone only ever seen on Bluetooth still shows up after a restart.
+            self.config_store.remember_peer(routed)
+        if not quiet:
+            self.toast.show(f"Forbundet med {current.name} via Bluetooth", "success")
+
+    def _bluetooth_down(self, bridge: bluetooth.Bridge) -> None:
+        for device_id, item in list(self._bt_bridges.items()):
+            if item is not bridge:
+                continue
+            del self._bt_bridges[device_id]
+            self._bt_macs.pop(device_id, None)
+            before = self._bt_before.pop(device_id, None)
+            current = self.peers.get(device_id)
+            if before is None and current is not None and current.transport == "bluetooth":
+                if not self.config_store.is_trusted(device_id):
+                    self._remove_peer_card(device_id)  # found on Bluetooth, never paired
+                    continue
+                # Only ever reached on Bluetooth: keep it, offline, until it is back.
+                before = Peer(
+                    current.device_id,
+                    current.name,
+                    "",
+                    DEFAULT_PORT,
+                    current.fingerprint,
+                    current.platform,
+                    "bluetooth",
+                    current.capabilities,
+                )
+                self._bt_last_try.pop(device_id, None)  # may try again right away
+            if before is not None:
+                self.peers.pop(device_id, None)  # the Wi-Fi route replaces the bridge outright
+                self._upsert_peer(before)
+                self.event_queue.put(("peer_status", PeerStatus(device_id, False, None)))
+                self.toast.show(f"Bluetooth-forbindelsen til {before.name} er slut")
 
     def restore_wifi(self) -> None:
         previous = self._previous_wifi
@@ -3811,6 +4687,16 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         self.batches[batch] = future
         self.show_page("transfers")
 
+    def stop_all_transfers(self) -> None:
+        """Stop every send that is still running (each can be sent again from the list)."""
+        running = [batch for batch, future in self.batches.items() if not future.done()]
+        if not running:
+            self.toast.show("Intet bliver sendt lige nu")
+            return
+        for batch in running:
+            self.cancel_batch(batch)
+        self.toast.show(f"Stoppede {_items(len(running))}")
+
     def cancel_batch(self, batch: str) -> None:
         future = self.batches.get(batch)
         if future is not None:
@@ -3962,8 +4848,12 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
     def _update_transfer_badge(self) -> None:
         states = list(self.transfers.values())
         active = sum(1 for state in states if state.status == "active")
+        landed = sum(1 for s in states if s.direction == "send" and s.status == "done")
+        if landed > getattr(self, "_sends_landed", 0) and hasattr(self, "orbit"):
+            self.orbit.celebrate()  # the monkey hops when a send has landed
+        self._sends_landed = landed
+        self._refresh_orbit()
         self.transfer_badge.configure(text=str(active) if active else "")
-        self.monkey.set_busy(active > 0)
         for key, label in TRANSFER_FILTERS:
             count = sum(1 for state in states if state.matches(key))
             text = f"{label}  {count}" if count else label
@@ -4192,26 +5082,24 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
     async def _send_download(self, peer: Peer, url: str) -> None:
         """Download a file from the web (e.g. an image) and send it as a real file."""
         import tempfile
-        import urllib.parse
 
         import aiohttp
 
-        name = Path(urllib.parse.urlsplit(url).path).name or "download"
         directory = Path(tempfile.mkdtemp(prefix="h4xtor-web-"))
-        target = directory / name[:120]
+        stamp = time.strftime("%Y%m%d-%H%M%S")
         timeout = aiohttp.ClientTimeout(total=120)
-        async with (
-            aiohttp.ClientSession(timeout=timeout, trust_env=True) as session,
-            session.get(url) as response,
-        ):
-            response.raise_for_status()
-            if "." not in target.name:
-                subtype = (response.content_type or "").split("/")[-1]
-                if subtype and len(subtype) < 8:
-                    target = target.with_name(f"{target.name}.{subtype}")
-            with target.open("wb") as output:
-                async for chunk in response.content.iter_chunked(256 * 1024):
-                    output.write(chunk)
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+            # Full size first (Google Photos); the shown copy if that is refused.
+            for attempt in dict.fromkeys([full_size_image_url(url), url]):
+                async with session.get(attempt) as response:
+                    if not response.ok and attempt != url:
+                        continue
+                    response.raise_for_status()
+                    target = directory / download_name(url, response.content_type or "", stamp)
+                    with target.open("wb") as output:
+                        async for chunk in response.content.iter_chunked(256 * 1024):
+                            output.write(chunk)
+                    break
 
         def progress(event: TransferProgress) -> None:
             self.event_queue.put(("core_event", ("", peer.name, event)))
@@ -4388,6 +5276,10 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         if self._closing:
             return
         self._closing = True
+        host = getattr(self, "direct_host", None)
+        if host is not None:
+            with contextlib.suppress(Exception):
+                host.stop()
         try:
             future = asyncio.run_coroutine_threadsafe(self._stop_services(), self.runtime.loop)
             future.result(timeout=4)

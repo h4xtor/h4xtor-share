@@ -15,10 +15,12 @@ ingen upload til nogen server, ingen størrelsesgrænse.
 | Hele mapper (med undermapper) | ✓ | ✓ |
 | Genoptag afbrudte overførsler | ✓ | ✓ |
 | Live fart, procent og tid tilbage | ✓ | ✓ |
-| Annullér undervejs | ✓ | ✓ |
+| Annullér undervejs | ✓ (også *Stop alle*) | ✓ – plus *Pause*, *Fortsæt*, *Start nu* og *Pause / Fortsæt / Stop alle* |
+| Kø med tydelig status (*Sender*, *I kø · nr. 2*, *På pause*, *Færdig*, *Fejlet*) | – | ✓ |
 | Links åbner direkte i browseren | ✓ | ✓ |
 | Udklipsholder-synk begge veje | ✓ | ✓ (når appen er åben, via notifikation eller kvikfelt) |
-| Wi-Fi Direct (uden router) | Kobler på telefonens gruppe | Starter gruppen |
+| Wi-Fi Direct (uden router) | Kobler på telefonens gruppe – **eller laver selv netværket** (Windows/Linux) | Starter gruppen – eller kobler på PC'ens med ét tryk |
+| Bluetooth (uden Wi-Fi) | Forbinder selv, når Wi-Fi ikke kan | *Tillad forbindelse via Bluetooth* |
 | Automatisk enhedssøgning (mDNS + UDP) | ✓ | ✓ |
 | Netværksscanning / manuel IP | ✓ | ✓ |
 | "Del"-menuen | "Send til" i Stifinder | Androids Del-ark |
@@ -49,16 +51,35 @@ Derefter:
 - **Links:** del et link fra telefonen, så åbner det i PC'ens browser med det samme (og omvendt).
 - **Udklipsholder:** kopiér på den ene – sæt ind på den anden.
 
+### Bluetooth – når der hverken er Wi-Fi eller Wi-Fi Direct
+
+1. Par telefonen og PC'en én gang i Bluetooth-indstillingerne (Windows: Indstillinger →
+   Bluetooth og enheder → Tilføj enhed).
+2. Slå **Tillad forbindelse via Bluetooth** til på telefonen (fanen *Del*).
+3. Når PC'en ikke kan nå telefonen over Wi-Fi, skifter den selv til Bluetooth – eller vælg
+   **Forbind via Bluetooth** i telefonens menu på PC'en. Alt virker som før, bare langsommere,
+   og PC'en skifter selv tilbage, så snart Wi-Fi virker igen.
+
 ### Wi-Fi Direct – når der ikke er nogen router
 
 1. Tryk **Start Wi-Fi Direct** i appen på telefonen.
 2. Er PC'en allerede parret, så tryk **Forbind <din PC> automatisk** – PC'en spørger og kobler selv på.
-   Ellers: skriv netværksnavn og kode under *Indstillinger → Wi-Fi Direct* på PC'en.
+   Ellers: skriv netværksnavn og kode under *Wi-Fi Direct & Bluetooth* i menuen på PC'en.
    Navnet er kort (fx `DIRECT-h4-427`), og koden er 8 tegn: små bogstaver og tal, uden tegn der ligner hinanden.
+   Vil du selv bestemme? Tryk **Vælg navn og kode** på telefonen: navnet bliver `DIRECT-h4-` + det, du skriver
+   (fx `DIRECT-h4-Lennart`, Android kræver den start), og koden skal være 8–63 tegn.
 3. Del som normalt – direkte mellem enhederne, uden internet.
 
 Mens PC'en er på telefonens Wi-Fi Direct-netværk, har den normalt ikke internet via
 Wi-Fi. Knappen **Tilbage til <dit Wi-Fi>** skifter tilbage med ét klik.
+
+**Eller lad PC'en lave netværket** (Windows og Linux): *Wi-Fi Direct & Bluetooth →
+Opret netværk her på PC'en → Start netværk*. Er telefonen parret og online, får den med det
+samme kortet **"<PC> har lavet Wi-Fi Direct" → Forbind** (Android viser sin egen
+"Forbind"-boks én gang). Ellers tryk **Vis Wi-Fi-QR** på PC'en og scan den med h4xtor share
+(eller kameraet). PC'en beholder sit normale internet, og telefonen beholder sin mobildata.
+På Windows bruges Wi-Fi Direct i "legacy"-tilstand (kræver et Wi-Fi-kort med Wi-Fi Direct,
+hvilket de fleste har); på Linux en NetworkManager-hotspot.
 
 ### Wi-Fi + 5G – mere fart, når I er flere
 
@@ -77,6 +98,7 @@ ingen. Telefonen tager imod `CONNECT` over den samme krypterede, parrede forbind
 af appen og sender trafikken ud over mobildata. Lukker appen, forsvinder PAC-filen, og browseren
 går direkte på nettet igen – internettet går aldrig i stykker.
 
+## Sikkerhed
 
 - Hver enhed har sit eget RSA-certifikat. Al trafik er TLS-krypteret.
 - Ved parring låses forbindelsen til den anden enheds certifikat-fingeraftryk
@@ -115,6 +137,8 @@ går direkte på nettet igen – internettet går aldrig i stykker.
 | `POST /api/v1/files/init` + `PUT /api/v1/files/<id>` | Fil med genoptagelse (`X-H4xtor-Offset`) |
 | `POST /api/v1/folders/init` + `PUT .../<folder>/<file>` + `POST /folders/complete` | Mappe |
 | `POST /api/v1/wifi-direct/offer` | Telefonen tilbyder PC'en sin Wi-Fi Direct-gruppe |
+| `POST /api/v1/wifi-direct/pc-offer` | PC'en tilbyder telefonen sit eget Wi-Fi Direct-netværk |
+| `POST /api/v1/wifi-direct/joined` | Telefonen fortæller PC'en, at den er på PC'ens netværk (og hvor) |
 | `POST /api/v1/notification`, `/sms/incoming` | Telefon → PC: notifikationer og nye SMS |
 | `POST /api/v1/notification/action`, `/sms/threads`, `/sms/messages`, `/sms/send` | PC → telefon: svar/afvis, læs og send SMS |
 | `POST /api/v1/screenshot`, `/find`, `/remote/volume`, `/remote/speak`, `PUT /remote/wallpaper` | PC → telefon: skærmbillede, find telefon, fjernbetjening |
@@ -154,13 +178,18 @@ og `CHANGELOG.md`. Udgivelsen fejler, hvis `CHANGELOG.md` mangler versionen.
   GNOME; andre skriveborde skal pege på `127.0.0.1:47480` selv. macOS kan bede om
   administratoradgang til at skifte proxy.
 
-- **Bluetooth-overførsel** er ikke med: Wi-Fi Direct er 10–50× hurtigere og dækker det
-  samme behov ("ingen router").
+- **Bluetooth** er 10–50× langsommere end Wi-Fi: fint til tekst, links, notifikationer og
+  billeder, men store filer tager tid. Det virker på Windows og Linux; macOS kan ikke
+  (Python har ingen Bluetooth-sockets der). PC'en og telefonen skal være parret i
+  Bluetooth-indstillingerne først.
 - Android tillader kun apps at læse udklipsholderen, når de er i forgrunden. Derfor
   synkroniseres telefonens udklipsholder, når appen åbnes, via notifikationsknappen eller
   via kvikfeltet *Send udklip*. Den anden vej (PC → telefon) virker altid.
 - macOS har ingen offentlig Wi-Fi Direct-API; en Mac kan dog koble på telefonens gruppe
   som almindeligt Wi-Fi.
+- **Wi-Fi Direct fra PC'en** afhænger af Wi-Fi-kortet og driveren. Siger Windows nej, viser
+  appen hvorfor – brug så telefonens Wi-Fi Direct i stedet. CI kan kun bevise, at Windows-delen
+  indlæses og at telefonen får tilbuddet; selve radio-forbindelsen er kun testet på rigtig hardware.
 - **Notifikationer, SMS og fjernbetjening kræver, at telefonen og PC'en er på samme netværk**
   (eller Wi-Fi Direct). Der er ingen sky-relæ som i Join – det er bevidst.
 - **Bankapps kan spærre, mens de følsomme funktioner er slået til.** Tilgængeligheds-tjenesten

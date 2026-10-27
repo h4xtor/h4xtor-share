@@ -222,9 +222,16 @@ def v12_checks(desktop: Desktop, phone: Peer) -> None:
     assert "flag_sms_enabled\" value=\"true" in prefs(), "SMS toggle not saved"
     shot("21-sms-enabled")
     desktop.events.clear()
+    # The emulator's modem sometimes drops the first fake SMS right after boot: send it
+    # again once if nothing arrived (the phone app itself is not involved in that).
     adb("emu", "sms", "send", "4512345678", "Hej fra mor", check=False)
-    sms: SmsReceived = desktop.wait_for(SmsReceived, timeout=60,
-                                        match=lambda event: "Hej fra mor" in event.body)
+    try:
+        sms: SmsReceived = desktop.wait_for(SmsReceived, timeout=40,
+                                            match=lambda event: "Hej fra mor" in event.body)
+    except AssertionError:
+        adb("emu", "sms", "send", "4512345678", "Hej fra mor", check=False)
+        sms = desktop.wait_for(SmsReceived, timeout=60,
+                               match=lambda event: "Hej fra mor" in event.body)
     ok("new SMS is pushed to the PC right away")
     threads = desktop.run(desktop.client.sms_threads(phone))
     assert any(str(t.get("thread_id")) == sms.thread_id for t in threads), threads
@@ -267,6 +274,254 @@ def v12_checks(desktop: Desktop, phone: Peer) -> None:
     ok("screenshot on demand arrives on the PC as a PNG")
     desktop.run(desktop.client.set_wallpaper(phone, picture.path))
     ok("wallpaper set from the PC")
+
+
+def bluetooth_checks(desktop: Desktop, phone: Peer) -> None:
+    """The real app's Bluetooth bridge against the PC's bridge (bluetooth.py).
+
+    The emulator has no usable Bluetooth, so the app also serves the bridge on a test
+    port (files/bt_debug_port). Everything above RFCOMM is the real code on both sides.
+    """
+    import socket
+
+    from h4xtor_share import bluetooth
+
+    shell(f"pm grant {PKG} android.permission.BLUETOOTH_CONNECT", check=False)
+    shell(f"run-as {PKG} sh -c 'echo 47495 > files/bt_debug_port'")
+    adb("forward", "tcp:47496", "tcp:47495")
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(2)
+    tap_text("^Del$")
+    time.sleep(1)
+    # The card is the last one on the page, right above the bottom navigation: check that
+    # the switch really turned on, and nudge the page up before trying again.
+    for _ in range(3):
+        tap_text("^Del$")  # a stray tap may have opened another tab
+        time.sleep(1)
+        assert scroll_to("^Tillad forbindelse via Bluetooth$"), "Bluetooth card missing"
+        tap_text("^Tillad forbindelse via Bluetooth$")
+        time.sleep(2)
+        if screen_has("(?i)^(allow|tillad)$", 3):  # permission dialog if pm grant was not enough
+            tap_text("(?i)^(allow|tillad)$")
+            time.sleep(1)
+        if 'flag_bluetooth" value="true"' in prefs():
+            break
+        shell("input swipe 540 1500 540 1000 400")
+        time.sleep(1)
+    shot("26b-bluetooth-on")
+    assert 'flag_bluetooth" value="true"' in prefs(), "could not switch Bluetooth on in the app"
+    bridge = None
+    for _ in range(10):
+        try:
+            link = socket.create_connection(("127.0.0.1", 47496), timeout=5)
+            link.settimeout(None)
+            candidate = bluetooth.Bridge(link, desktop.config.device_id, desktop.port).start()
+            if candidate.wait_hello(5) == phone.device_id:
+                bridge = candidate
+                break
+        except (OSError, ConnectionError):
+            pass
+        time.sleep(1.5)
+    assert bridge is not None, "the phone's Bluetooth bridge never answered"
+    ok("Bluetooth bridge: PC and phone say hello")
+
+    # PC -> phone through the bridge
+    over_bt = Peer(phone.device_id, phone.name, "127.0.0.1", bridge.port, phone.fingerprint,
+                   "android", "bluetooth", phone.capabilities)
+    desktop.run(desktop.client.send_clipboard(over_bt, "Hej via Bluetooth"))
+    time.sleep(2)
+    assert "Hej via Bluetooth" in prefs(), "text over Bluetooth did not reach the phone"
+    ok("Bluetooth: text PC -> phone")
+    desktop.run(desktop.client.send_link(over_bt, "https://example.com/via-bluetooth"))
+    time.sleep(3)
+    assert "via-bluetooth" in prefs(), "link over Bluetooth did not reach the phone"
+    ok("Bluetooth: link PC -> phone")
+    movie = WORK / "bt-film.bin"
+    movie.write_bytes(os.urandom(2 * 1024 * 1024 + 123))  # not a whole number of pieces
+    ids: set[str] = set()
+    desktop.run(desktop.client.send_file(over_bt, movie, lambda p: ids.add(p.transfer_id)),
+                timeout=180)
+    time.sleep(2)
+    listing = shell("ls -l /sdcard/Download/h4xtor-share/", check=False)
+    assert "bt-film.bin" in listing and str(movie.stat().st_size) in listing, listing
+    ok("Bluetooth: 2 MB file PC -> phone (in pieces), complete")
+    # The PC lost the phone's last answer and tries again with the same id: no second copy.
+    desktop.client._resumable[(phone.device_id, str(movie.resolve()))] = ids.pop()
+    desktop.run(desktop.client.send_file(over_bt, movie, lambda _p: None), timeout=60)
+    time.sleep(2)
+    listing = shell("ls /sdcard/Download/h4xtor-share/", check=False)
+    assert listing.count("bt-film") == 1, listing
+    ok("Bluetooth: a retry after a lost answer does not save the file twice on the phone")
+    album = WORK / "BTMappe"
+    (album / "sub").mkdir(parents=True)
+    (album / "sub" / "c.bin").write_bytes(os.urandom(300_000))
+    (album / "d.txt").write_text("d")
+    desktop.run(desktop.client.send_folder(over_bt, album, lambda _p: None), timeout=180)
+    time.sleep(2)
+    listing = shell("ls -lR /sdcard/Download/h4xtor-share/BTMappe", check=False)
+    assert "c.bin" in listing and "300000" in listing and "d.txt" in listing, listing
+    ok("Bluetooth: folder PC -> phone")
+
+    # phone -> PC: the phone now routes this PC over the bridge
+    # The files above may have moved the app to Overførsler: go back to the Del tab first.
+    linked = False
+    for _ in range(3):
+        shell(f"am start -W -n {PKG}/.MainActivity")
+        time.sleep(2)
+        tap_text("^Del$")
+        time.sleep(1)
+        if scroll_to("^Forbundet via Bluetooth$"):
+            linked = True
+            break
+    assert linked, "phone does not show the Bluetooth link"
+    shot("27-bluetooth-linked")
+    before = bridge.opened
+    desktop.events.clear()
+    for attempt in range(2):
+        tap_text("^Del$")
+        time.sleep(1)
+        box = next(n for n in ui_nodes() if n.get("class") == "android.widget.EditText")
+        x1, y1, x2, y2 = map(int, re.findall(r"\d+", box.get("bounds")))
+        shell(f"input tap {(x1 + x2) // 2} {(y1 + y2) // 2}")
+        shell("input keyevent KEYCODE_MOVE_END " + " ".join(["KEYCODE_DEL"] * 40))
+        shell(f"input text viabluetooth{attempt}")
+        time.sleep(1.5)
+        tap_text("^Send$")
+        try:
+            desktop.wait_for(ClipboardReceived, timeout=25,
+                             match=lambda e: e.text.startswith("viabluetooth"))
+            break
+        except AssertionError:
+            if attempt:
+                raise
+    assert bridge.opened > before, "phone -> PC did not use the Bluetooth bridge"
+    ok("Bluetooth: text phone -> PC through the bridge")
+
+    # File phone -> PC over the bridge (sent in small pieces), then reopening must not resend.
+    shell("input keyevent KEYCODE_BACK", check=False)  # hide the keyboard
+    out = shell("content query --uri content://media/external/downloads --projection _id "
+                "--where \"_display_name='ferie.jpg'\"", check=False)
+    found = re.search(r"_id=(\d+)", out)
+    assert found, out
+    uri = f"content://media/external/downloads/{found.group(1)}"
+    share = (f"am start -W -a android.intent.action.SEND -t image/jpeg "
+             f"--eu android.intent.extra.STREAM {uri} -n {PKG}/.ShareTargetActivity")
+    desktop.events.clear()
+    shell(share)
+    tap_text("^AdminPC$", timeout=20)  # two PCs are paired: the sheet asks
+    time.sleep(2)
+    shot("27b-bluetooth-file-progress")
+    assert bridge.busy, "the file did not go over the Bluetooth bridge"
+    received: FileReceived = desktop.wait_for(FileReceived, timeout=120)
+    assert received.path.read_bytes() == (WORK / "ferie.jpg").read_bytes(), "file changed"
+    deadline = time.time() + 20  # the sheet shows "✓ Sendt" and closes by itself
+    while "ShareTargetActivity" in shell("dumpsys activity activities | grep -i resumed",
+                                         check=False) and time.time() < deadline:
+        time.sleep(1)
+    shot("27c-bluetooth-file-sent")
+    assert time.time() < deadline, "the share sheet hangs after the file arrived"
+    ok("Bluetooth: 3 MB file phone -> PC through the bridge, the sheet finishes by itself")
+    time.sleep(3)
+    desktop.events.clear()
+    shell(f"am start -W -f 0x00100000 {share[len('am start -W '):]}")  # reopened from history
+    time.sleep(3)
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(12)
+    again = [e for e in desktop.events if isinstance(e, FileReceived)]
+    assert not again, f"the file was sent again when the app was reopened: {again}"
+    assert len(list((WORK / "AdminPC-in").glob("ferie*"))) == 2, "unexpected copies on the PC"
+    ok("Bluetooth: reopening the app does not send the file again")
+    # Link lost: the phone goes back to its Wi-Fi route by itself.
+    bridge.close()
+    time.sleep(4)
+    # Not BACK to hide the keyboard: with the keyboard already gone it closes the app.
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(1)
+    tap_text("^Del$")
+    time.sleep(1)
+    # The card sits below the fold: scroll to it, then its title is plain "Bluetooth" again.
+    assert scroll_to("^Bluetooth$"), "phone still shows the Bluetooth link"
+    assert not screen_has("^Forbundet via Bluetooth$", 2), "phone still shows the Bluetooth link"
+    shot("28-bluetooth-ended")
+    ok("Bluetooth: link lost, the phone switches back to Wi-Fi")
+
+    # ---- A PC that was never on the phone's Wi-Fi: found and paired over Bluetooth ----
+    stranger = Desktop("BTPC", 47482)
+    pending = None
+    for _ in range(10):
+        try:
+            link = socket.create_connection(("127.0.0.1", 47496), timeout=5)
+            link.settimeout(None)
+            candidate = bluetooth.Bridge(link, stranger.config.device_id, stranger.port).start()
+            if candidate.wait_hello(5) == phone.device_id:
+                pending = candidate
+                break
+        except (OSError, ConnectionError):
+            pass
+        time.sleep(1.5)
+    assert pending is not None, "the phone did not answer a PC it is not paired with"
+    time.sleep(2)
+    assert not pending.closed, "the phone dropped the Bluetooth link of a new PC"
+    info = stranger.run(stranger.client.get_info("127.0.0.1", pending.port))
+    assert info.device_id == phone.device_id
+    over = Peer(info.device_id, info.name, "127.0.0.1", pending.port, info.fingerprint,
+                "android", "bluetooth", info.capabilities)
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(2)
+    response = stranger.run(stranger.client.request_pairing(over))
+    code = ""
+    deadline = time.time() + 20
+    while not code and time.time() < deadline:
+        for node in ui_nodes():
+            if re.fullmatch(r"\d{3} \d{3}", node.get("text") or ""):
+                code = (node.get("text") or "").replace(" ", "")
+        time.sleep(0.5)
+    assert code, "the phone did not show a pairing code for the Bluetooth PC"
+    shot("29-bluetooth-pair-code")
+    tap_text("^OK$")
+    stranger.run(stranger.client.confirm_pairing(over, str(response["pairing_id"]), code))
+    assert stranger.config.is_trusted(phone.device_id), "the PC did not store the pairing"
+    stored = ""
+    for _ in range(20):  # SharedPreferences.apply() writes to disk a moment later
+        stored = prefs()
+        if f"out_token_{stranger.config.device_id}" in stored and "known_peers" in stored \
+                and stranger.config.device_id in stored.split("known_peers", 1)[1]:
+            break
+        time.sleep(0.5)
+    assert f"out_token_{stranger.config.device_id}" in stored, (
+        "the phone did not trust the PC; tokens: "
+        + ", ".join(re.findall(r'name="(out_token_[0-9a-f]+)"', stored)))
+    known = re.search(r'name="known_peers">(.*?)</string>', stored, re.S)
+    assert known and stranger.config.device_id in known.group(1), "PC not remembered"
+    assert "127.0.0.1" not in known.group(1), "the bridge address was saved as the PC's address"
+    ok("Bluetooth: a new PC finds the phone and pairs with a code over Bluetooth")
+    stranger.run(stranger.client.send_clipboard(over, "Parret via Bluetooth"))
+    time.sleep(2)
+    assert "Parret via Bluetooth" in prefs(), "text over the new Bluetooth pairing did not arrive"
+    # Android shows its own clipboard pop-up for the new text: get it out of the way first,
+    # or the taps below land on it instead of the app.
+    linked = False
+    for _ in range(3):
+        shell("input keyevent KEYCODE_BACK", check=False)
+        shell("input keyevent KEYCODE_HOME", check=False)
+        shell("cmd statusbar collapse", check=False)
+        time.sleep(5)
+        shell(f"am start -W -n {PKG}/.MainActivity")
+        time.sleep(2)
+        try:
+            tap_text("^Del$", timeout=8)
+        except AssertionError:
+            continue
+        time.sleep(1)
+        if scroll_to("^Forbundet via Bluetooth$"):
+            linked = True
+            break
+    assert linked, "phone does not use the link for the new PC"
+    shot("29b-bluetooth-paired-new-pc")
+    ok("Bluetooth: the phone keeps using the link for the PC it just paired with")
+    stranger.run(stranger.client.unpair(over))  # leave only the main PCs for the next checks
+    time.sleep(2)
+    pending.close()
 
 
 def update_checks() -> None:
@@ -405,6 +660,68 @@ def netshare_checks(desktop: Desktop, phone: Peer) -> None:
     assert desktop.run(desktop.client.net_share_status(phone))["enabled"] is False
     desktop.run(merge.stop())
     ok("switching sharing off on the phone stops it")
+
+
+def media_uri(name: str) -> str:
+    for _ in range(15):
+        out = shell("content query --uri content://media/external/downloads --projection _id "
+                    f"--where \"_display_name='{name}'\"", check=False)
+        match = re.search(r"_id=(\d+)", out)
+        if match:
+            return f"content://media/external/downloads/{match.group(1)}"
+        time.sleep(1)
+    raise AssertionError(f"{name} is not in MediaStore")
+
+
+def queue_checks(desktop: Desktop, phone: Peer) -> None:
+    """Five files shared at once: three send, two wait "I kø"; Pause alle / Fortsæt alle work."""
+    names = [f"koe{index}.bin" for index in range(1, 6)]
+    sources = {}
+    for name in names:
+        source = WORK / name
+        source.write_bytes(os.urandom(4 * 1024 * 1024))
+        sources[name] = source
+        desktop.run(desktop.client.send_file(phone, source, lambda _p: None), timeout=120)
+    uris = [media_uri(name) for name in names]
+    desktop.events.clear()
+    desktop.server.receive_delay = 8.0  # ~30 s per file: long enough to see the queue and pause it
+    # Share one file at a time like a user: each sheet starts sending, then "Fortsæt i
+    # baggrunden" closes it (a second `am start` would only bring the open sheet back).
+    for uri in uris:
+        shell("am start -W -a android.intent.action.SEND -t application/octet-stream "
+              f"--eu android.intent.extra.STREAM {uri} -n {PKG}/.ShareTargetActivity")
+        tap_text("Fortsæt i baggrunden")
+        time.sleep(0.5)
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    tap_text("^Overførsler$")
+    assert screen_has(r"^I kø · nr\. 1$", 20), "queued files are not shown as waiting"
+    assert screen_has("^Sender$", 5), "running files are not shown as sending"
+    shot("30-queue")
+    ok("five files at once: three send, the rest wait as 'I kø' (no row stuck at 0 %)")
+
+    tap_text("^Pause alle$")
+    if not screen_has("^På pause$", 8) and screen_has("^Pause alle$", 2):
+        tap_text("^Pause alle$")  # a slow emulator can drop a tap; once more
+    assert screen_has("^På pause$", 15), "Pause alle did not pause"
+    assert not screen_has("^Sender$", 3), "a file kept sending after Pause alle"
+    shot("31-paused")
+    ok("Pause alle pauses every send")
+
+    desktop.server.receive_delay = 0.0
+    tap_text("^Fortsæt alle$")
+    if screen_has("^Fortsæt alle$", 5) and not screen_has("^(Sender|I kø)", 1):
+        tap_text("^Fortsæt alle$")
+    received = [desktop.wait_for(FileReceived, timeout=120) for _ in names]
+    by_name = {event.path.name: event.path for event in received}
+    for name, source in sources.items():
+        stem = name.removesuffix(".bin")
+        got = next((path for key, path in by_name.items() if key.startswith(stem)), None)
+        assert got is not None, f"{name} never arrived ({sorted(by_name)})"
+        assert got.read_bytes() == source.read_bytes(), f"{name} changed after pause and resume"
+    assert not screen_has(r"^(I kø|Sender|På pause)", 5), "a row is still open after all arrived"
+    shot("32-resumed-done")
+    ok("Fortsæt alle continues where each file stopped; all five byte-identical on the PC")
+    tap_text("^Del$")  # the next steps start from the Del tab (the app reopens on the last tab)
 
 
 def main() -> None:
@@ -569,6 +886,7 @@ def main() -> None:
     assert received.path.name.startswith("ferie"), received.path
     assert received.path.read_bytes() == payload.read_bytes(), "file changed on the way"
     ok("share sheet file phone -> PC (3 MB, byte-identical)")
+    queue_checks(desktop, phone)
 
     # ---- A second PC: the share sheet now asks where to send ----------------
     laptop = Desktop("Bærbar", 47478)
@@ -691,6 +1009,73 @@ def main() -> None:
         time.sleep(0.5)
     assert got_shot is not None, "new screenshot was not sent to the PC"
     ok("new screenshot sent to the PC automatically")
+
+    # ---- Wi-Fi Direct: the user picks the network name and code ---------------
+    # Needs no Wi-Fi Direct hardware: the choice is stored and used at the next start.
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    time.sleep(2)
+    tap_text("^Del$")
+    time.sleep(1)
+    # The live device list can re-render between the UI dump and the tap, so the tap
+    # sometimes lands on nothing: open the dialog again until its fixed label is up.
+    for _ in range(3):
+        assert scroll_to("^Vælg navn og kode$"), "Wi-Fi Direct 'Vælg navn og kode' missing"
+        tap_text("^Vælg navn og kode$")
+        if screen_has("^DIRECT-h4-$", 5):
+            break
+    else:
+        raise AssertionError("Wi-Fi Direct name dialog did not open")
+
+    def fill(index: int, value: str) -> None:
+        # The dialog's fields: the EditTexts at or below its fixed "DIRECT-h4-" label.
+        nodes = ui_nodes()
+        label = next(n for n in nodes if (n.get("text") or "") == "DIRECT-h4-")
+        top = int(re.findall(r"\d+", label.get("bounds"))[1])
+        boxes = [
+            n for n in nodes
+            if n.get("class") == "android.widget.EditText"
+            and int(re.findall(r"\d+", n.get("bounds"))[3]) > top
+        ]
+        boxes.sort(key=lambda n: int(re.findall(r"\d+", n.get("bounds"))[1]))
+        box = boxes[index]
+        x1, y1, x2, y2 = map(int, re.findall(r"\d+", box.get("bounds")))
+        shell(f"input tap {(x1 + x2) // 2} {(y1 + y2) // 2}")
+        shell("input keyevent KEYCODE_MOVE_END " + " ".join(["KEYCODE_DEL"] * 70))
+        shell(f"input text {value}")
+        time.sleep(0.8)
+
+    fill(0, "Lennart")
+    fill(1, "kort")
+    tap_text("^Gem$")
+    assert screen_has("Koden skal være mindst 8 tegn", 5), "too short code was not refused"
+    fill(1, "hemmelig123")
+    assert not screen_has("Koden skal være mindst 8 tegn", 2), "old error stays while fixing"
+    shot("26-wifi-direct-choose")
+    tap_text("^Gem$")
+    time.sleep(2)
+    stored = prefs()
+    assert '"str_p2p_ssid">DIRECT-h4-Lennart<' in stored, "chosen network name not stored"
+    assert '"str_p2p_pass">hemmelig123<' in stored, "chosen code not stored"
+    assert 'flag_p2p_custom" value="true"' in stored
+    assert scroll_to("^Skift navn og kode$"), "button did not change to 'Skift navn og kode'"
+    ok("Wi-Fi Direct: own network name and code are checked and stored")
+
+    # ---- Wi-Fi Direct made by the PC: the phone shows "Forbind" at the top of Del ----------
+    assert "wifi-direct-pc" in phone.capabilities, phone.capabilities
+    assert scroll_to("^Scan PC'ens Wi-Fi-QR$"), "no way to join the PC's own network on the card"
+    desktop.run(desktop.client.offer_pc_wifi_direct(
+        phone, "DIRECT-h4-AdminPC", "hemmelig", ["192.168.137.1"]))
+    shell(f"am start -W -n {PKG}/.MainActivity")
+    tap_text("^Del$")
+    time.sleep(2)
+    assert scroll_to("^AdminPC har lavet Wi-Fi Direct$"), "offer card missing on the phone"
+    assert screen_has("DIRECT-h4-AdminPC", 3)
+    shot("26c-pc-wifi-offer")
+    tap_text("^Ikke nu$")
+    assert not screen_has("^AdminPC har lavet Wi-Fi Direct$", 3), "offer card did not go away"
+    ok("Wi-Fi Direct made by the PC: the phone gets a 'Forbind' card (and can say 'Ikke nu')")
+
+    bluetooth_checks(desktop, phone)
 
     v12_checks(desktop, phone)
     netshare_checks(desktop, phone)

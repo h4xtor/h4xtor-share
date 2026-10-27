@@ -16,6 +16,7 @@ from h4xtor_share.netmerge import PhoneRoute
 from h4xtor_share.pairing import PairingInvite
 
 CHUNK_SIZE = 1024 * 1024
+BLUETOOTH_PIECE = 128 * 1024  # same as the Android app (H4xtorClient.BLUETOOTH_PIECE)
 MAX_WALLPAPER_BYTES = 20 * 1024 * 1024
 
 
@@ -390,6 +391,17 @@ class PeerClient:
             },
         )
 
+    async def offer_pc_wifi_direct(
+        self, peer: Peer, ssid: str, passphrase: str, addresses: list[str]
+    ) -> None:
+        """Ask a phone to join the Wi-Fi Direct network this PC made (it shows a "Forbind" card)."""
+        self._require(peer, "wifi-direct-pc")
+        await self._authed_post(
+            peer,
+            "/api/v1/wifi-direct/pc-offer",
+            {"ssid": ssid, "passphrase": passphrase, "addresses": addresses[:8]},
+        )
+
     async def unpair(self, peer: Peer) -> None:
         """Forget *peer* locally and, best effort, ask it to forget us too."""
         try:
@@ -466,36 +478,25 @@ class PeerClient:
                     )
                 )
 
-                async def chunks() -> AsyncIterator[bytes]:
-                    sent = offset
-                    with path.open("rb") as source:
-                        source.seek(offset)
-                        while True:
-                            chunk = await asyncio.to_thread(source.read, CHUNK_SIZE)
-                            if not chunk:
-                                break
-                            sent += len(chunk)
-                            progress_callback(
-                                TransferProgress(
-                                    transfer_id=transfer_id,
-                                    file_name=path.name,
-                                    sent=sent,
-                                    total=total,
-                                    direction="send",
-                                )
-                            )
-                            yield chunk
-
-                upload_headers = dict(headers)
-                upload_headers["X-H4xtor-Offset"] = str(offset)
-                async with session.put(
+                result = await self._put_file(
+                    session,
+                    peer,
                     f"{peer.endpoint}/api/v1/files/{transfer_id}",
-                    data=chunks(),
-                    headers=upload_headers,
-                    ssl=ssl_value,
-                ) as response:
-                    await _raise_for_status(response)
-                    result = await response.json()
+                    path,
+                    offset,
+                    total,
+                    headers,
+                    ssl_value,
+                    lambda sent: progress_callback(
+                        TransferProgress(
+                            transfer_id=transfer_id,
+                            file_name=path.name,
+                            sent=sent,
+                            total=total,
+                            direction="send",
+                        )
+                    ),
+                )
                 if not result.get("complete"):
                     raise RuntimeError(
                         "Transfer stopped before the complete file arrived."
@@ -642,37 +643,78 @@ class PeerClient:
                 )
             )
 
-        async def chunks() -> AsyncIterator[bytes]:
-            sent = offset
-            with source.open("rb") as input_stream:
-                input_stream.seek(offset)
-                while True:
-                    chunk = await asyncio.to_thread(input_stream.read, CHUNK_SIZE)
-                    if not chunk:
-                        break
-                    sent += len(chunk)
-                    progress_callback(
-                        TransferProgress(
-                            transfer_id=file_id,
-                            file_name=display,
-                            sent=sent,
-                            total=total,
-                            direction="send",
-                        )
-                    )
-                    yield chunk
-
-        upload_headers = dict(headers)
-        upload_headers["X-H4xtor-Offset"] = str(offset)
-        async with session.put(
+        result = await self._put_file(
+            session,
+            peer,
             f"{peer.endpoint}/api/v1/folders/{folder_id}/{file_id}",
-            data=chunks(),
-            headers=upload_headers,
-            ssl=ssl_value,
-        ) as response:
-            await _raise_for_status(response)
-            result = await response.json()
+            source,
+            offset,
+            total,
+            headers,
+            ssl_value,
+            lambda sent: progress_callback(
+                TransferProgress(
+                    transfer_id=file_id,
+                    file_name=display,
+                    sent=sent,
+                    total=total,
+                    direction="send",
+                )
+            ),
+        )
         if not result.get("complete"):
             raise RuntimeError(
                 "Folder transfer stopped before the complete file arrived."
             )
+
+    async def _put_file(
+        self,
+        session: aiohttp.ClientSession,
+        peer: Peer,
+        url: str,
+        source: Path,
+        offset: int,
+        total: int,
+        headers: dict[str, str],
+        ssl_value: aiohttp.Fingerprint,
+        on_sent: Callable[[int], None],
+    ) -> dict[str, Any]:
+        """PUT *source* from *offset*; over Bluetooth in small pieces, one request each.
+
+        One big request would park ~4 MB in socket buffers at once: progress jumps to the
+        end, then nothing moves for minutes (past the read timeout) while the slow link
+        drains, and health pings queue behind it. Each piece is answered by the receiver.
+        """
+        piece = BLUETOOTH_PIECE if peer.transport == "bluetooth" else max(total, 1)
+        with source.open("rb") as input_stream:
+            input_stream.seek(offset)
+            while True:
+                end = min(total, offset + piece)
+
+                async def chunks(start: int = offset, stop: int = end) -> AsyncIterator[bytes]:
+                    sent = start
+                    while sent < stop:
+                        chunk = await asyncio.to_thread(
+                            input_stream.read, min(CHUNK_SIZE, stop - sent)
+                        )
+                        if not chunk:
+                            raise RuntimeError("The file got shorter during the transfer.")
+                        sent += len(chunk)
+                        on_sent(sent)
+                        yield chunk
+
+                upload_headers = dict(headers)
+                upload_headers["X-H4xtor-Offset"] = str(offset)
+                async with session.put(
+                    url,
+                    data=chunks(),
+                    headers=upload_headers,
+                    ssl=ssl_value,
+                ) as response:
+                    await _raise_for_status(response)
+                    result: dict[str, Any] = await response.json()
+                offset = end
+                if offset >= total or result.get("complete"):
+                    return result
+                if int(result.get("offset", -1)) != offset:
+                    raise RuntimeError("The receiver lost part of the file.")

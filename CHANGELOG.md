@@ -4,7 +4,7 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
-## 1.4.0 – 2026-10-21
+## 1.5.0 – 2026-10-27
 ### Nyt
 - "Wi-Fi + 5G" på PC'en: brug Wi-Fi og telefoners mobildata på én gang, så I får mere fart, når I er flere. Nye forbindelser fordeles på alle links med internet, og hurtige links får flest. Siden viser hver forbindelse med fart, svartid og hvor meget den har båret.
 - "Del mobildata med PC'en" på Android: forbundne PC'er på samme Wi-Fi kan låne telefonens 5G/4G. Trafikken går krypteret til telefonen og kun fra PC'er, du har parret med.
@@ -15,9 +15,72 @@ Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 - Aben hopper nu, mens der sendes eller modtages – både på PC'en og på telefonens forside. Den lander igen, når alt er ovre.
 - Trykker du på aben (med fingeren eller musen), åbner den munden og spidser ører.
 
+## 1.4.0 – 2026-10-26
+### Nyt
+- Nyt design ("Aurora + Orbit"): mørk nattehimmel med blødt, drivende nordlys i turkis, himmelblå og orange – på både PC og telefon.
+- Orbit-kortet: aben sidder i midten som din PC/telefon, og dine enheder kredser rundt om den. Tryk på en enhed for at sende til den. Mens der sendes, flyver små lys ud til modtageren – og aben hopper, når filen er landet.
+- PC: menuen er delt op i Del, Telefon, Forbindelse og Andet, og Wi-Fi Direct og Bluetooth har fået deres egen side ("Wi-Fi Direct & Bluetooth").
+- PC: statusmærker øverst på Send viser LAN, Wi-Fi Direct og Bluetooth med det samme.
+### Forbedret
+- Telefonen: glas-kort og en svævende fanebjælke i bunden; overskrifter i en moderne, kraftig skrift.
+- PC'en starter i mørkt tema (du kan stadig vælge Lyst eller Automatisk under Indstillinger).
+- Aurora-glas: stærkere nordlys med et bølgende lysgardin på telefonen og glødende lys bag orbit-kortet på PC'en. Kort og enheder ligner frostet glas med en lys kant, og en skinnende nordlys-stribe løber langs PC'ens menu og top.
+### Rettet
+- Telefonen: når du skriver, gemmer fanebjælken sig, og skærmen ruller selv op, så hele feltet med Send-knappen står over tastaturet.
+
+## 1.3.9 – 2026-10-26
+### Nyt
+- Wi-Fi Direct fra PC'en: under Indstillinger → Wi-Fi Direct kan PC'en nu selv lave netværket ("Opret netværk her på PC'en"). Telefonen får kortet "PC'en har lavet Wi-Fi Direct" og forbinder med ét tryk – eller scan PC'ens Wi-Fi-QR. PC'en beholder sit internet, og telefonen sin mobildata. Virker på Windows og Linux.
+- Telefonen: "Pause", "Fortsæt" og "Start nu" på hver fil, og "Pause alle", "Fortsæt alle" og "Stop alle" øverst i Overførsler.
+- PC'en: "Stop alle" i Overførsler.
+### Forbedret
+- Tydelig status på hver overførsel på telefonen: Sender, Modtager, I kø · nr. 2, På pause, Færdig, Fejlet eller Stoppet.
+- Kortet "Overfører nu" og notifikationen viser også, hvor mange filer der venter i kø.
+### Rettet
+- Når man sendte mange filer og trykkede "Fortsæt i baggrunden", stod de fleste på 0 %, når appen blev åbnet igen. De ventede faktisk i kø (tre sendes ad gangen) – nu står der "I kø", og de kan startes med det samme.
+- Telefonen: en fil, der blev sat på pause og fortsat, sendes videre fra hvor den slap.
+
+## 1.3.8 – 2026-10-22
+### Rettet
+- En fil sendt fra telefonen til PC'en kunne hænge i appen. Over Bluetooth hoppede bjælken til næsten 100 % og stod så stille i flere minutter – nu sendes filen i små bidder, så bjælken viser, hvor langt den reelt er, og arket lukker selv, når filen er fremme.
+- Telefonen sendte den samme fil igen, når appen blev åbnet på ny (fx efter en opdatering, eller når Android genskabte "Del"-arket). Nu sendes en deling præcis én gang.
+- PC'en skiftede tilbage til Wi-Fi midt i en Bluetooth-overførsel og afbrød den. Nu venter den, til filen er fremme.
+- Hvis afsenderen ikke nåede at få "modtaget"-svaret og prøvede igen, blev filen gemt to gange. Nu genkender både PC og telefon filen og gemmer den kun én gang.
+### Forbedret
+- En overførsel, der går helt i stå (fx hvis Wi-Fi forsvinder), stopper nu efter 45 sekunder med en tydelig besked i stedet for at hænge i op til et kvarter. Tryk "Fortsæt" for at fortsætte, hvor den slap.
+- "Fortsæt" på en afbrudt overførsel bruger nu den vej til PC'en, der virker lige nu (Wi-Fi eller Bluetooth).
+- PC → telefon over Bluetooth: store filer og mapper sendes også i små bidder, så de ikke løber ind i en tidsgrænse.
+
+## 1.3.7 – 2026-10-22
+### Nyt
+- Bluetooth: "Søg via Bluetooth" på PC'en finder telefonen, selvom de aldrig har været på samme Wi-Fi. Telefonen dukker op på listen, og du forbinder med den 6-cifrede kode – direkte over Bluetooth.
+### Forbedret
+- PC'en prøver nu alle parrede telefoner, også når navnet i Bluetooth (fx "Galaxy S24") er et andet end navnet i h4xtor share. Høretelefoner og tastaturer bliver ladt i fred.
+- En telefon, der kun er forbundet via Bluetooth, bliver på listen (offline), når den er uden for rækkevidde, og forbinder selv igen, når den er tilbage – også efter genstart af PC'en.
+- Fejlbeskeder siger nu præcis, hvad der mangler, fx "Slå 'Tillad forbindelse via Bluetooth' til i appen" eller "Bluetooth er slået fra på PC'en".
+### Rettet
+- Bluetooth: telefon og PC fandt ikke hinanden, selvom de var parret i Windows' Bluetooth-menu. Før virkede Bluetooth kun, hvis de først havde været forbundet over Wi-Fi.
+- "Forbind via Bluetooth" i enhedens menu mangler ikke længere for telefoner, der blev parret før version 1.3.6.
+
+## 1.3.6 – 2026-10-21
+### Nyt
+- Bluetooth: PC og telefon kan nu forbinde via Bluetooth, når der hverken er Wi-Fi eller Wi-Fi Direct. Slå "Tillad forbindelse via Bluetooth" til på telefonen (fanen Del), og par telefonen med PC'en i Bluetooth-indstillingerne én gang. PC'en skifter selv til Bluetooth, når Wi-Fi ikke kan nå telefonen, og tilbage igen, når Wi-Fi virker. Alt virker – bare langsommere. Kræver Windows eller Linux på PC'en.
+### Rettet
+- Wi-Fi Direct: fejlteksten i "Vælg navn og kode" forsvinder, så snart du retter.
+
+## 1.3.5 – 2026-10-21
+### Nyt
+- Wi-Fi Direct: vælg selv netværksnavn og kode under "Vælg navn og kode" på telefonen. Navnet bliver "DIRECT-h4-" + det, du skriver (fx "DIRECT-h4-Lennart" – Android kræver den start), og koden skal være 8–63 tegn. "Brug automatisk" giver den korte automatiske kode tilbage.
+
 ## 1.3.4 – 2026-10-21
+### Nyt
+- Højreklik på et billede i Chrome: "Send billede til S24 Ultra" (eller en anden enhed eller alle enheder) sender selve billedet direkte til telefonen – ligesom Join.
 ### Forbedret
 - Wi-Fi Direct har nu et kort netværksnavn (fx "DIRECT-h4-427") og en kort adgangskode på 8 tegn med små bogstaver og tal, uden tegn der ligner hinanden. Det er meget nemmere at taste ind på PC'en. Telefonen laver den nye kode første gang, du starter Wi-Fi Direct efter opdateringen.
+- Billeder fra Google Fotos sendes i fuld størrelse og får et pænt navn som "Billede-20261021-120000.jpg".
+- Chrome-udvidelsen opdaterer sig selv, når PC-appen bliver opdateret (næste gang Chrome starter).
+### Rettet
+- Opdateringsloggen viser hele teksten i stedet for at stoppe midt i en sætning.
 
 ## 1.3.3 – 2026-10-14
 ### Nyt

@@ -31,6 +31,7 @@ from h4xtor_share.models import (
     PeerPaired,
     SmsReceived,
     TransferProgress,
+    WifiDirectJoined,
     WifiDirectOffer,
 )
 
@@ -145,9 +146,15 @@ class ShareServer:
         self.ssl_context = ssl_context
         self.fingerprint = fingerprint
         self.event_callback = event_callback
+        # Seconds to wait per received MB of a file. Always 0 in the app; the end-to-end
+        # tests raise it to keep a send running long enough to pause it.
+        self.receive_delay = 0.0
         self.pending_pairings: dict[str, dict[str, Any]] = {}
         self.pairing_failures: list[float] = []
         self.transfers: dict[str, dict[str, Any]] = {}
+        # Finished file transfers (id -> size): a sender that lost our last answer (slow
+        # Bluetooth, Wi-Fi switch) and tries again gets "complete", not a second copy.
+        self.finished: dict[str, int] = {}
         self.folders: dict[str, dict[str, Any]] = {}
         self.qr_secrets: dict[str, float] = {}
         self.capabilities: tuple[str, ...] = DESKTOP_CAPABILITIES
@@ -165,6 +172,7 @@ class ShareServer:
                 web.post("/api/v1/link", self.link),
                 web.post("/api/v1/speedtest", self.speedtest),
                 web.post("/api/v1/wifi-direct/offer", self.wifi_direct_offer),
+                web.post("/api/v1/wifi-direct/joined", self.wifi_direct_joined),
                 web.post("/api/v1/clipboard", self.clipboard),
                 web.post("/api/v1/notification", self.notification),
                 web.post("/api/v1/sms/incoming", self.sms_incoming),
@@ -579,6 +587,30 @@ class ShareServer:
         )
         return web.json_response({"accepted": True})
 
+    async def wifi_direct_joined(self, request: web.Request) -> web.Response:
+        """A phone joined the network this PC made: remember where it is now."""
+        peer_id, peer_name = self.authenticate(request)
+        payload = await request.json()
+        try:
+            port = int(payload.get("port") or self.config.port)
+        except (TypeError, ValueError) as error:
+            raise web.HTTPBadRequest(text="Invalid port.") from error
+        if not 0 < port < 65536:
+            raise web.HTTPBadRequest(text="Invalid port.")
+        address = remote_address(request)
+        if not address:
+            raise web.HTTPBadRequest(text="Unknown address.")
+        self.event_callback(
+            WifiDirectJoined(
+                peer_id=peer_id,
+                peer_name=peer_name,
+                address=address,
+                port=port,
+                ssid=str(payload.get("ssid") or "")[:32],
+            )
+        )
+        return web.json_response({"accepted": True, "address": address})
+
     async def file_init(self, request: web.Request) -> web.Response:
         peer_id, peer_name = self.authenticate(request)
         payload = await request.json()
@@ -593,6 +625,8 @@ class ShareServer:
         if total_size < 0:
             raise web.HTTPBadRequest(text="Invalid file size.")
 
+        if self.finished.get(transfer_id) == total_size:
+            return web.json_response({"transfer_id": transfer_id, "offset": total_size})
         incoming = self.config.incoming_directory
         incoming.mkdir(parents=True, exist_ok=True)
         part_path = incoming / f".h4xtor-{transfer_id}.part"
@@ -618,12 +652,16 @@ class ShareServer:
         self.authenticate(request)
         transfer_id = request.match_info["transfer_id"]
         transfer = self.transfers.get(transfer_id)
-        if not transfer:
-            raise web.HTTPNotFound(text="Transfer was not initialized.")
         try:
             requested_offset = int(request.headers.get("X-H4xtor-Offset", "-1"))
         except ValueError as error:
             raise web.HTTPBadRequest(text="Invalid transfer offset.") from error
+        if not transfer and self.finished.get(transfer_id) == requested_offset:
+            return web.json_response(
+                {"transfer_id": transfer_id, "offset": requested_offset, "complete": True}
+            )
+        if not transfer:
+            raise web.HTTPNotFound(text="Transfer was not initialized.")
 
         part_path: Path = transfer["part_path"]
         actual_offset = part_path.stat().st_size if part_path.exists() else 0
@@ -641,6 +679,8 @@ class ShareServer:
                 actual_offset += len(chunk)
                 if actual_offset > transfer["size"]:
                     raise web.HTTPBadRequest(text="Received more bytes than declared.")
+                if self.receive_delay:
+                    await asyncio.sleep(self.receive_delay * len(chunk) / CHUNK_SIZE)
                 self.event_callback(
                     TransferProgress(
                         transfer_id=transfer_id,
@@ -668,6 +708,7 @@ class ShareServer:
                 )
             )
             del self.transfers[transfer_id]
+            self.finished[transfer_id] = transfer["size"]
 
         return web.json_response(
             {

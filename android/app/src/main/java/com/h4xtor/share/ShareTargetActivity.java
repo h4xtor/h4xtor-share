@@ -27,10 +27,19 @@ public final class ShareTargetActivity extends Activity {
     private String text;
     private LinearLayout list;
     private View chooseLabel;
+    /** A send was started from this sheet: never start it again when Android rebuilds the sheet. */
+    private boolean started;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Reopened from history, or rebuilt after the app was closed or updated: Android hands us
+        // the original share again. It was handled already (see Overførsler), so do not resend it.
+        if (!ShareLogic.shouldHandleShare(getIntent() == null ? 0 : getIntent().getFlags(),
+                savedInstanceState != null && savedInstanceState.getBoolean("started"))) {
+            finish();
+            return;
+        }
         ui = new Ui(this);
         ui.styleWindow(this);
         readIntent(getIntent());
@@ -39,7 +48,17 @@ public final class ShareTargetActivity extends Activity {
             return;
         }
         setContentView(buildSheet());
-        ShareService.with(this, service -> renderDevices(service));
+        ShareService.with(this, service -> {
+            if (!isFinishing() && !isDestroyed()) { // the service may start long after the sheet closed
+                renderDevices(service);
+            }
+        });
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putBoolean("started", started);
     }
 
     @SuppressWarnings("deprecation")
@@ -377,6 +396,10 @@ public final class ShareTargetActivity extends Activity {
             Toast.makeText(this, "Ingen af dine enheder er online lige nu", Toast.LENGTH_SHORT).show();
             return;
         }
+        if (started) {
+            return;
+        }
+        started = true;
         if (!uris.isEmpty()) {
             holdGrant();
             showProgress(service, "alle enheder", service.sendUrisToAll(uris));
@@ -403,6 +426,10 @@ public final class ShareTargetActivity extends Activity {
     }
 
     private void send(ShareService service, Peer peer) {
+        if (started) {
+            return;
+        }
+        started = true;
         if (!uris.isEmpty()) {
             holdGrant();
             List<String> ids = service.sendUris(peer, uris);
