@@ -10,7 +10,7 @@ Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 - Tryk på aben, og den finder på noget: et stort grin, en streng "Lad være!" med løftet pegefinger eller en kolbøtte. Aldrig det samme to gange i træk.
 ### Forbedret
 - Står telefonen til "ingen animationer", står aben stille og reagerer kun, når du trykker (uden kolbøtte).
-- Knapperne på PC'en har fået bløde, runde hjørner i stedet for skarpe kanter.
+- Knapperne på PC'en er nu bløde, runde "piller" med glatte kanter og en let glas-glans.
 ## 1.5.0 – 2026-10-27
 ### Nyt
 - Nyt udseende i Battle.net-stil på PC'en og telefonen: en mørk launcher med blåt lys, svævende gnister og store, tydelige knapper. PC'en har også et lyst tema.

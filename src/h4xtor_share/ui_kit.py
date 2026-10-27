@@ -223,21 +223,67 @@ def round_rect(
     return canvas.create_polygon(points, smooth=True, splinesteps=24, **kwargs)
 
 
-def soft_rect(
-    canvas: tk.Canvas, x1: float, y1: float, x2: float, y2: float, radius: float, **kwargs: Any
-) -> int:
-    """A rectangle with true quarter-circle corners of ``radius`` (round_rect's spline only
-    rounds about half of its radius)."""
+_GLASS_CACHE: dict[tuple[Any, ...], tk.PhotoImage] = {}
+
+
+def glass_image(
+    master: tk.Misc, width: int, height: int, radius: float, fill: str,
+    bg: str | tuple[str, str, str, str], ring: str | None = None, ring_width: float = 1.0,
+    shine: bool = True,
+) -> tk.PhotoImage:
+    """A rounded pill/panel with smooth (anti-aliased) edges and a glassy light: brighter
+    at the top, a thin bright rim along the top edge. Tk cannot smooth polygon edges, so
+    this paints each pixel by how much of it the shape covers. ``bg`` may be four colours
+    (top-left, top-right, bottom-left, bottom-right) when the widget sits on artwork: the
+    corners then blend into it instead of showing a box. Cached per look and size."""
     import math
 
-    radius = max(0.0, min(radius, (x2 - x1) / 2, (y2 - y1) / 2))
-    points: list[float] = []
-    for cx, cy, start in ((x2 - radius, y1 + radius, -90), (x2 - radius, y2 - radius, 0),
-                          (x1 + radius, y2 - radius, 90), (x1 + radius, y1 + radius, 180)):
-        for step in range(7):
-            a = math.radians(start + step * 15)
-            points += [cx + radius * math.cos(a), cy + radius * math.sin(a)]
-    return canvas.create_polygon(points, **kwargs)
+    key = (master.tk, width, height, radius, fill, bg, ring, ring_width, shine)  # per Tk app
+    image = _GLASS_CACHE.get(key)
+    if image is not None:
+        return image
+    if len(_GLASS_CACHE) > 400:
+        _GLASS_CACHE.clear()
+    def tone(color: str) -> list[float]:  # any Tk colour (a name too) as 0-255 floats
+        return [v / 257 for v in master.winfo_rgb(color)]
+
+    rgb = [tone(fill), tone(ring or fill)]
+    corners = [tone(c) for c in ((bg,) * 4 if isinstance(bg, str) else bg)]
+    radius = max(0.0, min(radius, width / 2, height / 2))
+    half_w, half_h = width / 2, height / 2
+    rows = []
+    for y in range(height):
+        v = (y + 0.5) / height
+        light = 0.20 * (1 - v) ** 2 - 0.05 * v * v if shine else 0.0
+        base = [c + ((255 if light > 0 else 0) - c) * abs(light) for c in rgb[0]]
+        qy = abs(y + 0.5 - half_h) - (half_h - radius)
+        left = [a + (b - a) * v for a, b in zip(corners[0], corners[2], strict=True)]
+        right = [a + (b - a) * v for a, b in zip(corners[1], corners[3], strict=True)]
+        row = []
+        for x in range(width):
+            qx = abs(x + 0.5 - half_w) - (half_w - radius)
+            d = math.hypot(max(qx, 0.0), max(qy, 0.0)) + min(max(qx, qy), 0.0) - radius
+            cover = 0.5 - d
+            u = (x + 0.5) / width
+            back = [a + (b - a) * u for a, b in zip(left, right, strict=True)]
+            if cover <= 0:
+                row.append("#" + "".join(_HEX[int(c)] for c in back))
+                continue
+            color = base
+            if ring and d > -ring_width - 0.5:  # the outline, smoothed on its inner side
+                k = min(1.0, d + ring_width + 0.5)
+                color = [a + (b - a) * k for a, b in zip(base, rgb[1], strict=True)]
+            elif shine and d > -1.6 and v < 0.5:  # the bright rim catching the light
+                k = 0.30 * (1 - v * 2) * min(1.0, d + 1.6)
+                color = [a + (255 - a) * k for a in base]
+            if cover < 1:
+                color = [b + (a - b) * cover for a, b in zip(color, back, strict=True)]
+            row.append("#" + "".join(_HEX[max(0, min(255, int(c)))] for c in color))
+        rows.append("{" + " ".join(row) + "}")
+    image = tk.PhotoImage(master=master, width=width, height=height)
+    image.put(" ".join(rows))
+    _GLASS_CACHE[key] = image
+    return image
 
 
 def set_dark_titlebar(window: tk.Misc, dark: bool) -> None:
@@ -291,6 +337,7 @@ class Button(tk.Canvas):
         self.kind = kind
         self.command = command
         self.enabled = True
+        self.backdrop: tuple[str, str, str, str] | None = None  # artwork colours behind it
         self._hover = False
         self._pressed = False
         self._focused = False
@@ -327,7 +374,8 @@ class Button(tk.Canvas):
         self._draw()
 
     def _natural(self) -> int:
-        return self._font.measure(self._label) + 2 * self._pad
+        # The pill's round ends need room: never less padding than about half its height.
+        return self._font.measure(self._label) + 2 * max(self._pad, int(self._height * 0.42))
 
     def _colors(self) -> tuple[str, str, str]:
         c = self.theme.c
@@ -366,16 +414,15 @@ class Button(tk.Canvas):
         self.delete("all")
         width = max(self.winfo_width(), self._width) if self.winfo_ismapped() else self._width
         fill, outline, foreground = self._colors()
-        radius = self.theme.px(18)  # soft corners, not hard squares
-        soft_rect(self, 1, 1, width - 1, self._height - 1, radius, fill=fill, outline=outline)
-        if self.kind == "primary" and self.enabled and not self._pressed:
-            # Launcher buttons catch the light on their top edge.
-            shine = mix_color("#FFFFFF", fill, 0.72)
-            self.create_line(radius + 1, 2, width - radius - 1, 2, fill=shine)
+        bg: str | tuple[str, str, str, str] = self.backdrop or self.cget("bg")
+        ring: str | None = outline if outline != fill else None
         if self._focused:
             ring = self.theme.c["accent2"] if self.kind == "primary" else self.theme.c["accent"]
-            soft_rect(self, 2, 2, width - 2, self._height - 2, radius, fill="", outline=ring,
-                       width=2)
+        # A soft pill with smooth edges; glassy unless it is a flat ghost on its background.
+        self._image = glass_image(
+            self, width, self._height, self._height / 2, fill, bg, ring,
+            2.0 if self._focused else 1.0, shine=fill != self.cget("bg") and not self._pressed)
+        self.create_image(0, 0, image=self._image, anchor="nw")
         nudge = 1 if self._pressed else 0  # pressed text sinks a pixel
         self.create_text(
             width / 2, self._height / 2 + nudge, text=self._label, fill=foreground,
@@ -1578,9 +1625,12 @@ class HeroBanner(tk.Canvas):
         self.buttons.update_idletasks()  # place the buttons first, to know where each one is
         for widget in self.buttons.winfo_children():
             with contextlib.suppress(tk.TclError):
-                centre = x + widget.winfo_x() + widget.winfo_width() / 2
-                widget.configure(bg=self.color_at(centre, mid))
+                left, top = x + widget.winfo_x(), y + widget.winfo_y()
+                right, bottom = left + widget.winfo_width() - 1, top + widget.winfo_height() - 1
+                widget.configure(bg=self.color_at((left + right) / 2, (top + bottom) / 2))
                 if isinstance(widget, Button):
+                    widget.backdrop = (self.color_at(left, top), self.color_at(right, top),
+                                       self.color_at(left, bottom), self.color_at(right, bottom))
                     widget._draw()
 
     def _spawn_embers(self, width: int, height: int) -> None:
