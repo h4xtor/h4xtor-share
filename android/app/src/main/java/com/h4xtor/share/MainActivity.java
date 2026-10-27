@@ -804,11 +804,13 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             TextView scan = ui.button("SCAN QR-KODE", "primary");
             scan.setOnClickListener(v -> scanQr());
             buttons.addView(scan, ui.weight(1));
-            TextView mine = squareButton("", "Vis min QR-kode", v -> showMyQr());
-            android.graphics.drawable.Drawable qr = getDrawable(R.drawable.ic_qr).mutate();
-            qr.setTint(ui.text);
-            mine.setForeground(qr);  // no text glyph reads as "QR code"; the real icon does
-            mine.setForegroundGravity(Gravity.CENTER);
+            // No text glyph reads as "QR code", so the real icon sits on the button. Not as its
+            // foreground: a centred single-line TextView scrolls, and the foreground with it.
+            FrameLayout mine = new FrameLayout(this);
+            mine.addView(squareButton("", "Vis min QR-kode", v -> showMyQr()));
+            android.widget.ImageView qr = ui.icon(R.drawable.ic_qr, ui.text, 22);
+            qr.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+            mine.addView(qr, new FrameLayout.LayoutParams(ui.dp(22), ui.dp(22), Gravity.CENTER));
             buttons.addView(mine, ui.wrap(8, 0, 0, 0));
         } else {
             TextView send = ui.button("SEND FILER", "primary");
