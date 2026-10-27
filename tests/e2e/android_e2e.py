@@ -87,7 +87,8 @@ def mascot_checks() -> None:
         tap_text("^Del$")
         time.sleep(2)
         assert screen_has("^SEND FILER$", 10), "the hero's big send button is missing"
-        assert screen_has("^SEND TIL$", 2), "the hero does not say who it sends to"
+        # 10 s, not 2: a UI dump taken while the live status rebuilds the page sees nothing.
+        assert screen_has("^SEND TIL$", 10), "the hero does not say who it sends to"
         quick_shot("40-hero")
         tap_text("tryk for at hilse")  # the monkey's description
         for index in range(3):
