@@ -818,7 +818,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
             send.setOnClickListener(v -> pickFiles(target, all));
             buttons.addView(send, ui.weight(1));
             TextView more = squareButton("▾", "Mere: fotos, mappe, udklipsholder, tekst", v -> heroMenu(target, all));
-            more.setBackground(ui.ripple(ui.rounded(Ui.BUTTON_BLUE, 0, 6), 6));
+            more.setBackground(ui.ripple(ui.glass(Ui.BUTTON_BLUE, 0, 24), 24));
             more.setTextColor(ui.onAccent);
             buttons.addView(more, ui.wrap(3, 0, 0, 0));
             if (!all) {

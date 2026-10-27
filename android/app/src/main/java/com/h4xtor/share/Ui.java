@@ -150,6 +150,27 @@ public final class Ui {
         return drawable;
     }
 
+    /** A soft pill with a glassy light: brighter at the top, a little deeper at the bottom. */
+    public GradientDrawable glass(int fill, int stroke, float radiusDp) {
+        if (Color.alpha(fill) < 255) {
+            return rounded(fill, stroke, radiusDp);  // see-through fills stay flat
+        }
+        GradientDrawable drawable = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
+                new int[] {shade(fill, Color.WHITE, 0.18f), fill, shade(fill, Color.BLACK, 0.08f)});
+        drawable.setCornerRadius(dp(radiusDp));
+        if (stroke != 0) {
+            drawable.setStroke(Math.max(1, dp(1)), stroke);
+        }
+        return drawable;
+    }
+
+    private static int shade(int color, int toward, float amount) {
+        return Color.rgb(
+                Math.round(Color.red(color) + (Color.red(toward) - Color.red(color)) * amount),
+                Math.round(Color.green(color) + (Color.green(toward) - Color.green(color)) * amount),
+                Math.round(Color.blue(color) + (Color.blue(toward) - Color.blue(color)) * amount));
+    }
+
     public Drawable ripple(Drawable content, float radiusDp) {
         GradientDrawable mask = new GradientDrawable();
         mask.setColor(Color.WHITE);
@@ -235,7 +256,7 @@ public final class Ui {
                 color = text;
         }
         view.setTextColor(color);
-        view.setBackground(ripple(rounded(fill, stroke, 6), 6));
+        view.setBackground(ripple(glass(fill, stroke, 24), 24));  // a soft glass pill
         pressable(view);
         return view;
     }
