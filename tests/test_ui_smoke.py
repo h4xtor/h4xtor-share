@@ -929,8 +929,12 @@ def test_wifi_5g_page_switches_proxy_and_finds_sharing_phone(tmp_path, monkeypat
         async def status(peer):
             return {"enabled": True, "network": "5G"}
 
+        async def answers(_peer):  # the app's own health check must not mark it offline
+            return 4.0
+
         monkeypatch.setattr(app.netmerge, "probe", healthy)
         monkeypatch.setattr(app.client, "net_share_status", status)
+        monkeypatch.setattr(app.client, "ping", answers)
         app.show_page("netmerge")
         assert app.netmerge_status.cget("text") == "Slået fra"
 
@@ -1337,6 +1341,11 @@ def test_send_page_hero_and_tiles_follow_the_selection(tmp_path, monkeypatch) ->
     from h4xtor_share.models import PeerStatus
 
     app, peers = _paired_app(2, tmp_path, monkeypatch)
+
+    async def answers(_peer):  # the app's own health check must not mark them offline
+        return 4.0
+
+    monkeypatch.setattr(app.client, "ping", answers)
     try:
         for peer in peers:
             app.peer_status[peer.device_id] = PeerStatus(peer.device_id, True, 4.0)
