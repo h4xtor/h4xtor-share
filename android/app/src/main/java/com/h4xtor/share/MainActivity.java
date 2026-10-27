@@ -449,6 +449,14 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         if (action == android.view.MotionEvent.ACTION_DOWN) {
             touching = true;
             touches++;
+            View root = getWindow().getDecorView();
+            if (root.isLayoutRequested() && root.getWidth() > 0) {
+                // A screen update was just rebuilt but not laid out yet (input comes before the
+                // next frame): its new buttons have no size, so this finger would hit nothing.
+                root.measure(View.MeasureSpec.makeMeasureSpec(root.getWidth(), View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(root.getHeight(), View.MeasureSpec.EXACTLY));
+                root.layout(root.getLeft(), root.getTop(), root.getRight(), root.getBottom());
+            }
         }
         boolean handled = super.dispatchTouchEvent(event);
         if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_CANCEL) {
