@@ -336,6 +336,33 @@ def _pump(app, until, seconds: float = 10.0) -> None:
 
 
 @pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_phone_battery_shows_alerts_and_can_be_switched_off(tmp_path, monkeypatch) -> None:
+    from h4xtor_share.models import PeerStatus
+
+    app, peers = _paired_app(1, tmp_path, monkeypatch, ("phone-status",))
+    try:
+        said = []
+        monkeypatch.setattr(app, "_notify", lambda message, tone="neutral": said.append(tone))
+        phone = peers[0]
+        app._update_peer_status(PeerStatus(phone.device_id, True, 12.0))
+        app._update_phone_state(phone.device_id, {"battery": 30, "charging": False})
+        tile = next(n for n in app.device_tiles.nodes if n["id"] == phone.device_id)
+        assert tile["sub"].endswith("30 %")  # on the device tile
+        app._update_phone_state(phone.device_id, {"battery": 9, "charging": False})
+        assert said == ["danger"]  # running low: told once
+        app._update_phone_state(phone.device_id, {"battery": 8, "charging": False})
+        assert said == ["danger"]
+
+        app._set_phone_status(False)  # switched off in Indstillinger
+        tile = next(n for n in app.device_tiles.nodes if n["id"] == phone.device_id)
+        assert "%" not in tile["sub"]
+        app._update_phone_state(phone.device_id, {"battery": 100, "charging": True})
+        assert app.phone_state == {} and said == ["danger"]
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
 def test_chooser_offers_all_devices_only_with_two_or_more(tmp_path, monkeypatch) -> None:
     import tkinter as tk
 
@@ -902,8 +929,12 @@ def test_wifi_5g_page_switches_proxy_and_finds_sharing_phone(tmp_path, monkeypat
         async def status(peer):
             return {"enabled": True, "network": "5G"}
 
+        async def answers(_peer):  # the app's own health check must not mark it offline
+            return 4.0
+
         monkeypatch.setattr(app.netmerge, "probe", healthy)
         monkeypatch.setattr(app.client, "net_share_status", status)
+        monkeypatch.setattr(app.client, "ping", answers)
         app.show_page("netmerge")
         assert app.netmerge_status.cget("text") == "Slået fra"
 
@@ -1310,6 +1341,11 @@ def test_send_page_hero_and_tiles_follow_the_selection(tmp_path, monkeypatch) ->
     from h4xtor_share.models import PeerStatus
 
     app, peers = _paired_app(2, tmp_path, monkeypatch)
+
+    async def answers(_peer):  # the app's own health check must not mark them offline
+        return 4.0
+
+    monkeypatch.setattr(app.client, "ping", answers)
     try:
         for peer in peers:
             app.peer_status[peer.device_id] = PeerStatus(peer.device_id, True, 4.0)

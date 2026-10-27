@@ -21,6 +21,7 @@ import android.os.Looper;
 import android.os.PowerManager;
 import android.os.SystemClock;
 
+import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
@@ -1390,6 +1391,36 @@ public final class ShareService extends Service implements H4xtorServer.Listener
         return new JSONObject().put("ok", true);
     }
 
+    /** Battery, charging and signal, for the PC: {battery 0-100, charging, network, signal 0-4 or -1}. */
+    private JSONObject phoneStatus() throws JSONException {
+        Intent battery = registerReceiver(null, new android.content.IntentFilter(Intent.ACTION_BATTERY_CHANGED));
+        int level = -1;
+        boolean charging = false;
+        if (battery != null) {
+            int scale = battery.getIntExtra(android.os.BatteryManager.EXTRA_SCALE, 100);
+            level = Math.round(100f * battery.getIntExtra(android.os.BatteryManager.EXTRA_LEVEL, -1)
+                    / Math.max(1, scale));
+            int status = battery.getIntExtra(android.os.BatteryManager.EXTRA_STATUS, -1);
+            charging = status == android.os.BatteryManager.BATTERY_STATUS_CHARGING
+                    || status == android.os.BatteryManager.BATTERY_STATUS_FULL;
+        }
+        String network = "Intet netværk";
+        android.net.ConnectivityManager connectivity = getSystemService(android.net.ConnectivityManager.class);
+        android.net.NetworkCapabilities caps = connectivity == null ? null
+                : connectivity.getNetworkCapabilities(connectivity.getActiveNetwork());
+        if (caps != null) {
+            network = caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_WIFI) ? "Wi-Fi"
+                    : caps.hasTransport(android.net.NetworkCapabilities.TRANSPORT_CELLULAR) ? "Mobildata" : "Andet";
+        }
+        int signal = -1;  // mobile bars; unknown without a SIM (or on an emulator)
+        android.telephony.TelephonyManager telephony = getSystemService(android.telephony.TelephonyManager.class);
+        if (telephony != null && telephony.getSignalStrength() != null) {
+            signal = telephony.getSignalStrength().getLevel();
+        }
+        return new JSONObject().put("battery", Math.max(-1, Math.min(100, level)))
+                .put("charging", charging).put("network", network).put("signal", signal);
+    }
+
     private void requireRemote() throws H4xtorServer.HttpError {
         if (!remote.enabled(identity)) {
             throw new H4xtorServer.HttpError(403, "Fjernbetjening er slået fra på telefonen.");
@@ -1407,6 +1438,11 @@ public final class ShareService extends Service implements H4xtorServer.Listener
                 NotificationMirrorService.perform(
                         body.optString("key", ""), body.optString("action", ""), body.optString("text", ""));
                 return ok();
+            case "/api/v1/status":
+                if (!identity.flag("share_status", true)) {
+                    throw new H4xtorServer.HttpError(403, "Batteri og signal er slået fra på telefonen.");
+                }
+                return phoneStatus();
             case "/api/v1/sms/threads":
                 return sms.threads(body.optInt("limit", 50));
             case "/api/v1/sms/messages":

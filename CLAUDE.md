@@ -68,6 +68,22 @@ gradle -p android testDebugUnitTest lintDebug assembleDebug
 The latest release is **v1.5.0**. Without tag-push rights, start a release from Actions → Release → Run workflow (tag input).
 
 
+## Lennart's wish list (build in this order, one release each)
+
+Every new feature gets an on/off switch on both sides (PC: Indstillinger → "Ekstra funktioner";
+phone: the "Telefon på PC'en" card), a test, and the glass look (PC: `glass_image`; phone: `Ui.glass`).
+
+1. Telefon-status på PC'en: battery, charging, signal; alerts when low/full — **v1.6.0**
+2. Telefonens billeder på PC'en: gallery + one-click fetch, automatic photo backup on home Wi-Fi
+3. Fælles udklipsholder-historik: last 50 copies from PC and phone, search, send again
+4. Telefonen som fjernbetjening: touchpad, keyboard, media keys, PowerPoint clicker
+5. Scan papir til PDF: PC asks, the phone's camera shoots, a straight PDF lands on the PC
+6. Tænd/lås PC'en fra telefonen: Wake-on-LAN, lock, sleep, shut down
+7. Del Wi-Fi med gæster: QR code with the Wi-Fi password on PC and phone
+8. Telefonens skærm på PC'en: live mirror with mouse control
+9. Svævende abe på skrivebordet: always-on-top drop target (drag a file → phone; click → clipboard)
+10. Hvem ringer? på PC'en: caller name pops up, reject or quick SMS reply
+
 ## Known limits (be honest about these)
 
 - Android only lets the focused app read the clipboard. Instant phone → PC sync uses the

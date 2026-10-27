@@ -4,6 +4,16 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
+## 1.6.0 – 2026-10-27
+### Nyt
+- Telefonens batteri på PC'en: kortet for din telefon viser, hvor meget strøm den har, og ⚡ når den lader.
+- PC'en siger til, når telefonen er ved at løbe tør for strøm (15 %) og når den er fuldt opladet – én gang, ikke hele tiden.
+- Kan slås til og fra begge steder: på PC'en under Indstillinger → "Ekstra funktioner", på telefonen under "Batteri og signal på PC'en".
+### Forbedret
+- Tænd/sluk-knapperne på PC'en er bløde og glatte ligesom de andre knapper.
+- Send-siden på PC'en er ryddet op: én "Tilføj enhed"-knap samler QR-kode, Wi-Fi-søgning, Bluetooth og IP-adresse, og dine enheder står kun ét sted (som fliser).
+- Kort, fliser og status-mærker har fået bløde, runde hjørner og et let glas-look.
+
 ## 1.5.1 – 2026-10-27
 ### Nyt
 - Aben er nu en hel abe med krop, arme, ben og hale, på både PC'en og telefonen. Den går lidt frem og tilbage, stopper op og peger på dine enheder.
