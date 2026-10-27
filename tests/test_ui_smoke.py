@@ -232,6 +232,35 @@ def test_monkey_opens_mouth_and_ears_on_click() -> None:
         root.destroy()
 
 
+def test_monkey_points_at_new_device_and_nods_when_ready() -> None:
+    import tkinter as tk
+
+    from h4xtor_share.ui_kit import Monkey, Theme
+
+    try:
+        root = tk.Tk()
+    except tk.TclError as error:
+        pytest.skip(f"Tk unavailable: {error}".splitlines()[0])
+    try:
+        monkey = Monkey(root, Theme(root, dark=False), size=100)
+        arm = monkey._arm[0]
+        assert monkey.itemcget(arm, "state") == "hidden"  # no arm at rest
+        monkey.point()
+        assert monkey.itemcget(arm, "state") == "normal"
+        for _ in monkey.POINT:
+            monkey._gesture_frame()
+        assert monkey.itemcget(arm, "state") == "hidden"  # tucked away again
+
+        ground = monkey.bbox("all")[1]
+        monkey.nod()
+        assert monkey.bbox("all")[1] > ground  # head dips
+        for _ in monkey.NOD:
+            monkey._gesture_frame()
+        assert monkey.bbox("all")[1] == ground
+    finally:
+        root.destroy()
+
+
 @pytest.mark.skipif(
     not _can_build_ui(),
     reason="Tk/tkdnd display server unavailable",

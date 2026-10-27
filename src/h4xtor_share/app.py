@@ -693,6 +693,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         self._init_netmerge()
         self.transfers: dict[str, TransferState] = {}
         self.transfer_rows: dict[str, TransferRow] = {}
+        self._started = time.monotonic()
         self.batches: dict[str, Future[Any]] = {}
         self.history = HistoryStore(self.config_store.history_path)
         self._clipboard_observed = ""
@@ -2623,6 +2624,10 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         elif tag == "quit":
             self.quit_app()
 
+    def _mascot_ready(self) -> bool:
+        """Quiet at start-up: remembered devices turning up again are not news."""
+        return time.monotonic() - self._started > 5
+
     def _set_me_status(self) -> None:
         addresses = _sorted_lan_addresses()
         self.me_dot.configure(fg=self.theme.c["success"])
@@ -2788,6 +2793,8 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         if card is None:
             card = DeviceCard(self, self.device_list, peer)
             self.device_cards[peer.device_id] = card
+            if self._mascot_ready():
+                self.monkey.point()  # look, a new device
         else:
             card.update(peer)
         self._reorder_cards()
@@ -2917,6 +2924,12 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         self.peer_status[status.device_id] = status
         if previous is None or previous.online != status.online:
             self.history.record_connection(peer, status.online, status.rtt_ms)
+            if (
+                status.online
+                and self.config_store.is_trusted(status.device_id)
+                and self._mascot_ready()
+            ):
+                self.monkey.nod()  # connected and ready
             card = self.device_cards.get(peer.device_id)
             if card is not None:
                 card.update(peer)

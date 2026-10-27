@@ -78,6 +78,9 @@ public final class MainActivity extends Activity implements ShareService.UiListe
     /** Kept across renders so the hop is not restarted every progress tick. */
     private android.widget.ImageView monkeyView;
     private android.animation.ObjectAnimator monkeyHop;
+    private final java.util.Set<String> seenPeers = new java.util.HashSet<>();
+    private final java.util.Set<String> readyPeers = new java.util.HashSet<>();
+    private boolean knowsPeers;
     private String dismissedClip;
     private boolean renderPending;
 
@@ -490,6 +493,7 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         for (Peer peer : peers) {
             (service.identity().isOutboundTrusted(peer.deviceId) ? paired : lan).add(peer);
         }
+        reactToPeers(peers);
 
         LinearLayout sectionRow = ui.row();
         sectionRow.addView(ui.label("Dine enheder"), ui.weight(1));
@@ -640,6 +644,36 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         return box;
     }
 
+    /**
+     * The mascot reacts to the device list: it points at a device the phone has not seen
+     * before, and nods once a paired one is online and ready. The first list after start is
+     * only remembered, never reacted to — everything on it is "new".
+     */
+    private void reactToPeers(List<Peer> peers) {
+        boolean newDevice = false;
+        boolean nowReady = false;
+        for (Peer peer : peers) {
+            if (seenPeers.add(peer.deviceId) && knowsPeers) {
+                newDevice = true;
+            }
+            boolean ready = service.identity().isOutboundTrusted(peer.deviceId)
+                    && service.isOnline(peer.deviceId);
+            if (ready) {
+                if (readyPeers.add(peer.deviceId) && knowsPeers) {
+                    nowReady = true;
+                }
+            } else {
+                readyPeers.remove(peer.deviceId);
+            }
+        }
+        knowsPeers = true;
+        if (nowReady) {
+            nod();  // the better news of the two
+        } else if (newDevice) {
+            point();
+        }
+    }
+
     /** The mascot, reused across renders, hopping while files are moving. */
     private android.widget.ImageView monkey() {
         if (monkeyView == null) {
@@ -676,11 +710,36 @@ public final class MainActivity extends Activity implements ShareService.UiListe
 
     /** Tapped: the mascot opens its mouth and perks up its ears, once. */
     private void grin() {
+        playMascot(R.drawable.ic_monkey_tap);
+    }
+
+    /** A device the phone had not seen before showed up: point at the list. */
+    private void point() {
+        if (!animationsOff()) {
+            playMascot(R.drawable.ic_monkey_point);
+        }
+    }
+
+    /** A paired device is online and ready: a friendly nod. */
+    private void nod() {
+        if (monkeyView == null || animationsOff()
+                || (monkeyHop != null && monkeyHop.isStarted())) {
+            return;  // never fight the hop for the same property
+        }
+        android.animation.ObjectAnimator.ofFloat(monkeyView, "translationY",
+                0f, ui.dp(9), 0f, ui.dp(9), 0f).setDuration(620).start();
+    }
+
+    private void playMascot(int drawableId) {
+        if (monkeyView == null) {
+            return;
+        }
+        monkeyView.setImageResource(drawableId);
         if (monkeyView.getDrawable() instanceof android.graphics.drawable.AnimatedVectorDrawable) {
-            android.graphics.drawable.AnimatedVectorDrawable grin =
+            android.graphics.drawable.AnimatedVectorDrawable gesture =
                     (android.graphics.drawable.AnimatedVectorDrawable) monkeyView.getDrawable();
-            grin.stop();  // a second tap restarts it instead of being swallowed
-            grin.start();
+            gesture.stop();  // a second tap restarts it instead of being swallowed
+            gesture.start();
         }
     }
 

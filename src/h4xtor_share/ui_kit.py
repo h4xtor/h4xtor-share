@@ -862,6 +862,10 @@ class Monkey(tk.Canvas):
     HOP = (0.0, 0.05, 0.085, 0.1, 0.085, 0.05, 0.0, 0.0, 0.0)
     # One tap: how wide the mouth is open and how much bigger the ears are (0–1).
     GRIN = (0.4, 0.8, 1.0, 1.0, 1.0, 0.75, 0.4, 0.0)
+    # "Look, a new device": the arm comes out, jabs twice and goes back.
+    POINT = (0.3, 0.7, 1.0, 0.7, 1.0, 0.7, 1.0, 0.8, 0.4, 0.0)
+    # "Connected and ready": two dips of the head.
+    NOD = (0.4, 1.0, 0.5, 0.0, 0.4, 1.0, 0.5, 0.0)
 
     def __init__(self, parent: tk.Misc, theme: Theme, size: int = 64) -> None:
         super().__init__(
@@ -878,6 +882,11 @@ class Monkey(tk.Canvas):
         self._mouth = 0
         self._grin_step = len(self.GRIN)
         self._grin_pending: str | None = None
+        self._arm: list[int] = []
+        self._dip = 0.0
+        self._gesture: tuple[str, tuple[float, ...]] = ("nod", self.NOD)
+        self._gesture_step = len(self.NOD)
+        self._gesture_pending: str | None = None
         self._draw(self._scale)
         self.configure(cursor="hand2")
         self.bind("<Button-1>", self._tapped)
@@ -926,9 +935,61 @@ class Monkey(tk.Canvas):
         except tk.TclError:  # the window closed mid-grin
             self._grin_pending = None
 
+    def point(self) -> None:
+        """A new device turned up: the monkey points at the list."""
+        self._start_gesture("point", self.POINT)
+
+    def nod(self) -> None:
+        """A device is connected and ready: a friendly nod."""
+        self._start_gesture("nod", self.NOD)
+
+    def _start_gesture(self, kind: str, frames: tuple[float, ...]) -> None:
+        if self._gesture_pending is not None and self._gesture[0] != kind:
+            self._set_gesture(self._gesture[0], 0.0)  # drop the half-done one cleanly
+        self._gesture = (kind, frames)
+        self._gesture_step = 0
+        if self._gesture_pending is None:
+            self._gesture_frame()
+
+    def _gesture_frame(self) -> None:
+        try:
+            self._gesture_pending = None
+            kind, frames = self._gesture
+            if self._gesture_step >= len(frames):
+                return
+            self._set_gesture(kind, frames[self._gesture_step])
+            self._gesture_step += 1
+            self._gesture_pending = self.after(70, self._gesture_frame)
+        except tk.TclError:  # the window closed mid-gesture
+            self._gesture_pending = None
+
+    def _set_gesture(self, kind: str, factor: float) -> None:
+        if kind == "nod":
+            dip = factor * 0.07 * self._size
+            self.move("all", 0, dip - self._dip)
+            self._dip = dip
+        else:
+            self._set_arm(factor)
+
+    def _set_arm(self, factor: float) -> None:
+        if factor <= 0:
+            for item in self._arm:
+                self.itemconfigure(item, state="hidden")
+            return
+        s, dy = self._scale, self._dip - self._offset
+        hand_x, hand_y = 74 + 14 * factor, 84 + 10 * factor
+        self.coords(self._arm[0], 56 * s, 74 * s + dy, hand_x * s, hand_y * s + dy)
+        self.coords(
+            self._arm[1],
+            (hand_x - 5.5) * s, (hand_y - 5.5) * s + dy,
+            (hand_x + 5.5) * s, (hand_y + 5.5) * s + dy,
+        )
+        for item in self._arm:
+            self.itemconfigure(item, state="normal")
+
     def _set_face(self, factor: float) -> None:
         s = self._scale
-        dy = -self._offset  # the hop moved every shape; these coords are absolute
+        dy = self._dip - self._offset  # hop and nod moved every shape; these coords are absolute
         for item, x, y, r in self._ears:
             # 0.14 sideways: more and the outer ear would be clipped by the widget edge.
             wide, tall = r * (1 + 0.14 * factor), r * (1 + 0.35 * factor)
@@ -947,6 +1008,12 @@ class Monkey(tk.Canvas):
         )
 
     def _draw(self, s: float) -> None:
+        self._arm = [  # first, so it comes out from behind the head; only shown while pointing
+            self.create_line(56 * s, 74 * s, 74 * s, 84 * s, fill=self.BROWN,
+                             width=max(2, 8 * s), capstyle="round", state="hidden"),
+            self._circle(74, 84, 5.5, s, self.BROWN),
+        ]
+        self.itemconfigure(self._arm[1], state="hidden")
         for x in (16, 84):  # ears
             for r, fill in ((14, self.BROWN), (8, self.INNER)):
                 self._ears.append((self._circle(x, 50, r, s, fill), x, 50, r))
