@@ -828,8 +828,9 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         }
         words.addView(buttons, ui.matchWrap());
         row.addView(words, ui.weight(1));
-        // The whole height of the card, so the monkey has room to stroll, hop and flip.
-        LinearLayout.LayoutParams monkeyParams = new LinearLayout.LayoutParams(ui.dp(132),
+        // The whole height of the card, so the monkey has room to stroll, hop and flip; no
+        // wider than 104 dp in all, or SEND FILER gets cut short on a 411 dp phone.
+        LinearLayout.LayoutParams monkeyParams = new LinearLayout.LayoutParams(ui.dp(100),
                 ViewGroup.LayoutParams.MATCH_PARENT);
         monkeyParams.setMargins(ui.dp(4), 0, 0, 0);
         row.addView(monkey(), monkeyParams);
