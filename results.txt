@@ -1,0 +1,60 @@
+QR pairing (phone -> PC) and mutual trust
+phone shows the paired PC
+Del page: Battle.net hero with SEND FILER; taps on the monkey make it react
+clipboard PC -> phone
+3 MB file PC -> phone lands in Downloads/h4xtor-share
+folder with subfolder PC -> phone
+link PC -> phone
+share sheet link phone -> PC (opens in Chrome on the PC)
+'Send til PC' from the text selection menu
+tap 'Copy' in another app -> text on the PC instantly (app in background)
+share sheet file phone -> PC (3 MB, byte-identical)
+five files at once: three send, the rest wait as 'I kø' (no row stuck at 0 %)
+Pause alle pauses every send
+Fortsæt alle continues where each file stopped; all five byte-identical on the PC
+second PC paired
+share sheet with two PCs: pick AdminPC, link arrives there
+remembered PC offline: phone sends to the PC that is online
+folder phone -> PC via the system picker (subfolders intact)
+speed test phone -> PC (upload + ping shown)
+new screenshot sent to the PC automatically
+Wi-Fi Direct: own network name and code are checked and stored
+Wi-Fi Direct made by the PC: the phone gets a 'Forbind' card (and can say 'Ikke nu')
+Bluetooth bridge: PC and phone say hello
+Bluetooth: text PC -> phone
+Bluetooth: link PC -> phone
+Bluetooth: 2 MB file PC -> phone (in pieces), complete
+Bluetooth: a retry after a lost answer does not save the file twice on the phone
+Bluetooth: folder PC -> phone
+Bluetooth: text phone -> PC through the bridge
+Bluetooth: 3 MB file phone -> PC through the bridge, the sheet finishes by itself
+Bluetooth: reopening the app does not send the file again
+Bluetooth: link lost, the phone switches back to Wi-Fi
+Bluetooth: a new PC finds the phone and pairs with a code over Bluetooth
+Bluetooth: the phone keeps using the link for the PC it just paired with
+notification mirroring is off by default
+phone notification shows up on the PC (title, text, app)
+notification dismissed from the PC disappears on the phone
+new SMS is pushed to the PC right away
+PC reads SMS threads and messages
+PC sends an SMS through the phone
+find my phone rings and stops from the PC
+remote volume and read-aloud
+battery and signal on the PC (100 %, Wi-Fi)
+screenshot on demand arrives on the PC as a PNG
+wallpaper set from the PC
+screen sharing to the PC is off by default
+live screen on the PC (470x960 frames)
+a click on the PC taps the phone (the Del tab opened)
+stopping from the PC ends the sharing
+mobile data sharing is off by default and the phone refuses tunnels
+phone shares its mobile data; the PC's probe through it succeeds
+HTTPS (CONNECT) and HTTP web pages load through the phone's 5G
+switching sharing off on the phone stops it
+Bank-tilstand til turns the accessibility service and remote control off
+Bank-tilstand fra turns the features back on
+Åbn on both received and sent files in Overførsler
+unpair from PC removes the pairing on the phone too
+versionName=0.0.1 finds 1.8.0 and shows what is new
+checksum verified and updated to 1.8.0 after Android's confirmation
+'Opdateret – tryk for at åbne' reopens it

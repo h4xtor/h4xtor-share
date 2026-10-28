@@ -1,0 +1,93 @@
+OK QR pairing (phone -> PC) and mutual trust
+OK phone shows the paired PC
+OK Del page: Battle.net hero with SEND FILER; taps on the monkey make it react
+OK clipboard PC -> phone
+OK 3 MB file PC -> phone lands in Downloads/h4xtor-share
+OK folder with subfolder PC -> phone
+OK link PC -> phone
+OK share sheet link phone -> PC (opens in Chrome on the PC)
+OK 'Send til PC' from the text selection menu
+OK tap 'Copy' in another app -> text on the PC instantly (app in background)
+OK share sheet file phone -> PC (3 MB, byte-identical)
+OK five files at once: three send, the rest wait as 'I kø' (no row stuck at 0 %)
+Error handling request from 127.0.0.1
+Traceback (most recent call last):
+  File "/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 577, in _handle_request
+    resp = await request_handler(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/aiohttp/web_app.py", line 563, in _handle
+    return await handler(request)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/h4xtor-share/h4xtor-share/src/h4xtor_share/server.py", line 691, in file_upload
+    async for chunk in request.content.iter_chunked(CHUNK_SIZE):
+  File "/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/aiohttp/streams.py", line 46, in __anext__
+    rv = await self.read_func()
+         ^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/aiohttp/streams.py", line 424, in read
+    raise self._exception
+ConnectionResetError: Connection lost
+Error handling request from 127.0.0.1
+Traceback (most recent call last):
+  File "/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/aiohttp/web_protocol.py", line 577, in _handle_request
+    resp = await request_handler(request)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/aiohttp/web_app.py", line 563, in _handle
+    return await handler(request)
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/runner/work/h4xtor-share/h4xtor-share/src/h4xtor_share/server.py", line 691, in file_upload
+    async for chunk in request.content.iter_chunked(CHUNK_SIZE):
+  File "/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/aiohttp/streams.py", line 46, in __anext__
+    rv = await self.read_func()
+         ^^^^^^^^^^^^^^^^^^^^^^
+  File "/opt/hostedtoolcache/Python/3.12.15/x64/lib/python3.12/site-packages/aiohttp/streams.py", line 424, in read
+    raise self._exception
+ConnectionResetError: Connection lost
+OK Pause alle pauses every send
+OK Fortsæt alle continues where each file stopped; all five byte-identical on the PC
+OK second PC paired
+OK share sheet with two PCs: pick AdminPC, link arrives there
+OK remembered PC offline: phone sends to the PC that is online
+OK folder phone -> PC via the system picker (subfolders intact)
+OK speed test phone -> PC (upload + ping shown)
+OK new screenshot sent to the PC automatically
+OK Wi-Fi Direct: own network name and code are checked and stored
+OK Wi-Fi Direct made by the PC: the phone gets a 'Forbind' card (and can say 'Ikke nu')
+OK Bluetooth bridge: PC and phone say hello
+OK Bluetooth: text PC -> phone
+OK Bluetooth: link PC -> phone
+OK Bluetooth: 2 MB file PC -> phone (in pieces), complete
+OK Bluetooth: a retry after a lost answer does not save the file twice on the phone
+OK Bluetooth: folder PC -> phone
+OK Bluetooth: text phone -> PC through the bridge
+OK Bluetooth: 3 MB file phone -> PC through the bridge, the sheet finishes by itself
+OK Bluetooth: reopening the app does not send the file again
+OK Bluetooth: link lost, the phone switches back to Wi-Fi
+OK Bluetooth: a new PC finds the phone and pairs with a code over Bluetooth
+OK Bluetooth: the phone keeps using the link for the PC it just paired with
+OK notification mirroring is off by default
+OK phone notification shows up on the PC (title, text, app)
+OK notification dismissed from the PC disappears on the phone
+OK new SMS is pushed to the PC right away
+OK PC reads SMS threads and messages
+OK PC sends an SMS through the phone
+OK find my phone rings and stops from the PC
+OK remote volume and read-aloud
+OK battery and signal on the PC (100 %, Wi-Fi)
+OK screenshot on demand arrives on the PC as a PNG
+OK wallpaper set from the PC
+OK screen sharing to the PC is off by default
+OK live screen on the PC (470x960 frames)
+OK a click on the PC taps the phone (the Del tab opened)
+OK stopping from the PC ends the sharing
+OK mobile data sharing is off by default and the phone refuses tunnels
+OK phone shares its mobile data; the PC's probe through it succeeds
+OK HTTPS (CONNECT) and HTTP web pages load through the phone's 5G
+OK switching sharing off on the phone stops it
+OK Bank-tilstand til turns the accessibility service and remote control off
+OK Bank-tilstand fra turns the features back on
+OK Åbn on both received and sent files in Overførsler
+OK unpair from PC removes the pairing on the phone too
+OK versionName=0.0.1 finds 1.8.0 and shows what is new
+OK checksum verified and updated to 1.8.0 after Android's confirmation
+OK 'Opdateret – tryk for at åbne' reopens it
+ALL ANDROID E2E CHECKS PASSED
