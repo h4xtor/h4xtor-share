@@ -14,3 +14,6 @@ release/
 .DS_Store
 Thumbs.db
 android/.gradle/
+
+# locally-installed design/taste skills (not part of the product)
+.claude/skills/

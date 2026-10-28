@@ -1359,13 +1359,13 @@ def test_send_page_hero_and_tiles_follow_the_selection(tmp_path, monkeypatch) ->
         app._tile_pick(peers[1].device_id)  # a click on a tile
         assert app.selected_id == peers[1].device_id
         eyebrow, title, status, _dot, _hint = app.hero._words
-        assert (eyebrow, title) == ("SEND TIL", "BÆRBAR")
+        assert (eyebrow, title) == ("SEND TIL", "Bærbar")
         assert status.startswith("Online")
         assert [n["id"] for n in app.device_tiles.nodes if n["selected"]] == [peers[1].device_id]
         assert app.hero_send._text == "SEND FILER"
 
         app._tile_pick("*")
-        assert app._all_selected() and app.hero._words[1] == "ALLE ENHEDER"
+        assert app._all_selected() and app.hero._words[1] == "Alle enheder"
 
         app.transfers["t"] = TransferState("t", "ferie.mp4", "send", "Bærbar", total=10, sent=4)
         app._update_transfer_badge()
@@ -1383,7 +1383,7 @@ def test_send_page_hero_and_tiles_follow_the_selection(tmp_path, monkeypatch) ->
         app.show_page("transfers")  # the title slides in
         app.update()
         title = app._page_headers["transfers"].find_withtag("page-title")
-        assert title and app._page_headers["transfers"].itemcget(title[0], "text") == "OVERFØRSLER"
+        assert title and app._page_headers["transfers"].itemcget(title[0], "text") == "Overførsler"
         assert len(app.hero._sparks) == 18  # and a ring of sparks
         for _ in range(25):
             app.hero._animate_sparks()
@@ -1398,7 +1398,7 @@ def test_send_page_first_run_offers_to_connect() -> None:
     app = _new_app()
     try:
         app.update()
-        assert app.hero._words[:2] == ("KOM I GANG", "FORBIND DIN TELEFON")
+        assert app.hero._words[:2] == ("KOM I GANG", "Forbind din telefon")
         assert app.hero_send._text == "FORBIND NY ENHED"
         opened = []
         app.show_qr_pairing = lambda: opened.append(True)

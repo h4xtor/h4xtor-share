@@ -4,6 +4,17 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
+## 1.8.0 – 2026-10-28
+### Forbedret
+- Helt nyt, roligere look: væk fra det "rumagtige" design med glød og glas – hen til et rent, fladt udvikler-/IDE-look, som er lettere at læse.
+- Samme h4xtor-farver som før: blå som accent, og grøn kun til "online". Ingen generisk blå-på-hvid.
+- Ny top-linje: navn, version og "hvor er jeg" til venstre, og live-status (● Online, Wi-Fi Direct) til højre.
+- Rene sidehoveder: en lille monospace-overskrift, en klar titel og en undertekst – uden lysshow.
+- Ny bund-linje i monospace med de faste fakta: TLS pinned · UTF-8 · port · version.
+- Aben er med endnu: renere i et lille maskot-kort, og den finder nu oftere på lidt skæg i tomgang.
+- (?)-hjælp ved knapperne på Send-siden: hold musen over for en kort forklaring af, hvad knappen gør.
+- Telefon-appen (Android) har fået samme flade look: flade knapper og kort, monospace-overskrifter og rene titler.
+
 ## 1.7.0 – 2026-10-27
 ### Nyt
 - Telefonens skærm på PC'en: vælg "Vis og styr skærmen…" i telefonens menu på PC'en, så ser du skærmen live i et vindue.

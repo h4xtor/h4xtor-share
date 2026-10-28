@@ -75,8 +75,8 @@ from h4xtor_share.ui_kit import (
     Toast,
     Toggle,
     entry,
+    help_dot,
     mix_color,
-    render_backdrop,
     round_rect,
     set_dark_titlebar,
     tooltip,
@@ -956,22 +956,29 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         self.main = tk.Frame(self, bg=c["bg"])
         self.main.pack(side="left", fill="both", expand=True)
         self._build_sidebar()
+        self._build_topbar()
 
-        self.status_var = tk.StringVar(value="Starter…")
+        self.status_var = tk.StringVar(value="● Starter…")
         status_bar = tk.Frame(self.main, bg=c["chrome"])
         status_bar.pack(side="bottom", fill="x")
         tk.Frame(status_bar, bg=c["border"], height=1).pack(side="top", fill="x")
+        # IDE-style segmented status strip, monospace: live state on the left, the fixed
+        # facts of this instance (TLS, encoding, port, version) on the right.
         self.status_label = tk.Label(
             status_bar, textvariable=self.status_var, bg=c["chrome"], fg=c["muted"],
-            font=self.theme.font(8), anchor="w", padx=px(14), pady=px(4),
+            font=self.theme.font(8, family=self.theme.mono), anchor="w", padx=px(16), pady=px(5),
         )
         self.status_label.pack(side="left", fill="x", expand=True)
         tk.Label(
-            status_bar, text="Ctrl+O filer · Ctrl+N ny enhed · F5 scan", bg=c["chrome"],
-            fg=c["faint"], font=self.theme.font(8), padx=px(14),
+            status_bar,
+            text=f"TLS pinned · UTF-8 · :{self.config_store.port} · v{VERSION}",
+            bg=c["chrome"], fg=c["faint"], font=self.theme.font(8, family=self.theme.mono),
+            padx=px(16),
         ).pack(side="right")
         self.pages: dict[str, tk.Frame] = {}
         self._page_headers: dict[str, tk.Canvas] = {}
+        self._group_of = {k: g for g, items in self.NAV_GROUPS for k, _i, _l in items}
+        self._label_of = {k: lbl for _g, items in self.NAV_GROUPS for k, _i, lbl in items}
         self.page_container = tk.Frame(self.main, bg=c["bg"])
         self.page_container.pack(fill="both", expand=True)
         self.page_container.grid_rowconfigure(0, weight=1)
@@ -1153,6 +1160,42 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             font=self.theme.font(7),
         ).pack(anchor="w", padx=px(18), pady=(0, px(10)))
 
+    def _build_topbar(self) -> None:
+        """A slim IDE-style top bar: brand + version badge + breadcrumb on the left,
+        live status pills on the right."""
+        c, px = self.theme.c, self.theme.px
+        bar = tk.Frame(self.main, bg=c["chrome"])
+        bar.pack(side="top", fill="x")
+        tk.Frame(bar, bg=c["border"], height=1).pack(side="bottom", fill="x")
+        inner = tk.Frame(bar, bg=c["chrome"])
+        inner.pack(fill="x", padx=px(16), pady=px(8))
+        tk.Label(inner, text="h4xtor share", bg=c["chrome"], fg=c["text"],
+                 font=self.theme.font(9, "bold", self.theme.mono)).pack(side="left")
+        tk.Label(inner, text=f"v{VERSION}", bg=c["accent_soft"], fg=c["accent"],
+                 font=self.theme.font(8, "bold", self.theme.mono),
+                 padx=px(6), pady=px(1)).pack(side="left", padx=(px(8), 0))
+        self.top_crumb = tk.Label(inner, text="", bg=c["chrome"], fg=c["faint"],
+                                  font=self.theme.font(9, family=self.theme.mono))
+        self.top_crumb.pack(side="left", padx=(px(12), 0))
+        self.top_online = tk.Label(inner, text="● Starter…", bg=c["chrome"], fg=c["warning"],
+                                   font=self.theme.font(8, "bold", self.theme.mono))
+        self.top_online.pack(side="right")
+        self.top_direct = tk.Label(inner, text="● Wi-Fi Direct", bg=c["chrome"], fg=c["accent"],
+                                   font=self.theme.font(8, "bold", self.theme.mono))
+
+    def _refresh_topbar(self) -> None:
+        if not hasattr(self, "top_online"):
+            return
+        c, px = self.theme.c, self.theme.px
+        online = getattr(self, "_online", False)
+        self.top_online.configure(fg=c["success"] if online else c["warning"],
+                                  text="● Online" if online else "● Starter…")
+        active = getattr(self, "direct_host", None) is not None
+        if active and not self.top_direct.winfo_manager():
+            self.top_direct.pack(side="right", padx=(0, px(12)))
+        elif not active and self.top_direct.winfo_manager():
+            self.top_direct.pack_forget()
+
     def _nav_hover(self, name: str, hover: bool) -> None:
         if name == getattr(self, "active_page", ""):
             return
@@ -1176,6 +1219,10 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         for key, bar in self.nav_bars.items():
             bar.configure(bg=c["accent"] if key == name else bar.master.cget("bg"))
         self.pages[name].tkraise()
+        if hasattr(self, "top_crumb"):
+            self.top_crumb.configure(
+                text=f"{self._group_of.get(name, '')}  /  {self._label_of.get(name, name)}")
+        self._refresh_topbar()
         self._slide_in_title(name)
         if name == "history":
             self._refresh_history()
@@ -1193,8 +1240,8 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         def frame(index: int) -> None:
             with contextlib.suppress(tk.TclError):
                 f = steps[index]
-                for tag, x, color in (("page-title", px(36), c["text"]),
-                                      ("page-sub", px(36), c["muted"])):
+                for tag, x, color in (("page-title", px(40), c["text"]),
+                                      ("page-sub", px(40), c["muted"])):
                     _, y = header.coords(tag)
                     header.coords(tag, x - px(18) * (1 - f), y)
                     header.itemconfigure(tag, fill=mix_color(color, c["bg"], 1 - f))
@@ -1203,32 +1250,27 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
 
         frame(0)
 
-    def _header_art(self) -> tk.PhotoImage:
-        """One shared strip of launcher light for every page header (rendered once)."""
-        if getattr(self, "_header_image", None) is None:
-            width = max(self.winfo_screenwidth(), 1600)
-            self._header_image = render_backdrop(self, width, self.theme.px(92), self.theme.c, 3)
-        return self._header_image
-
     def _page(self, name: str, title: str, subtitle: str) -> tuple[tk.Frame, tk.Frame]:
-        """A page with a Battle.net-style header: the title in big capitals on a strip of
-        blue light. Buttons go into the returned ``actions`` frame (right-hand side)."""
+        """A flat IDE-style page header: a small monospace eyebrow (the menu group), a clean
+        title and a subtitle, on the plain page colour. Buttons go into the returned
+        ``actions`` frame (right-hand side)."""
         c = self.theme.c
         px = self.theme.px
         page = tk.Frame(self.page_container, bg=c["bg"])
         self.pages[name] = page
-        header = tk.Canvas(page, height=px(126), bg=c["bg"], highlightthickness=0, bd=0)
+        header = tk.Canvas(page, height=px(100), bg=c["bg"], highlightthickness=0, bd=0)
         header.pack(fill="x", pady=(0, px(4)))
-        header.create_image(0, 0, image=self._header_art(), anchor="nw")
-        header.create_text(px(36), px(26), text=title.upper(), fill=c["text"], anchor="nw",
-                           font=self.theme.hero_font(22), tags=("page-title",))
-        header.create_text(px(36), px(62), text=subtitle, fill=c["muted"], anchor="nw",
+        header.create_text(px(40), px(22), text=self._group_of.get(name, "H4XTOR SHARE"),
+                           fill=c["accent"], anchor="nw",
+                           font=self.theme.font(8, "bold", self.theme.mono))
+        header.create_text(px(40), px(40), text=title, fill=c["text"], anchor="nw",
+                           font=self.theme.title_font(22), tags=("page-title",))
+        header.create_text(px(40), px(76), text=subtitle, fill=c["muted"], anchor="nw",
                            font=self.theme.font(10), tags=("page-sub",))
         self._page_headers[name] = header
-        # The buttons sit below the light, on the plain page colour (Tk widgets are opaque).
         actions = tk.Frame(header, bg=c["bg"])
-        item = header.create_window(0, px(124), window=actions, anchor="se")
-        header.bind("<Configure>", lambda e: header.coords(item, e.width - px(36), px(124)))
+        item = header.create_window(0, px(96), window=actions, anchor="se")
+        header.bind("<Configure>", lambda e: header.coords(item, e.width - px(36), px(96)))
         return page, actions
 
     # ------------------------------------------------------------- share page
@@ -1330,6 +1372,9 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             icon="＋",
             bg=c["card"],
         ).pack(side="left")
+        help_dot(bar, self.theme, "Vælg en eller flere filer på PC'en og send dem til den "
+                 "valgte enhed. Du kan også trække filer ind på vinduet.",
+                 "Send filer").pack(side="left", padx=(px(4), px(8)))
         Button(
             bar,
             self.theme,
@@ -1340,6 +1385,9 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             icon="▤",
             bg=c["card"],
         ).pack(side="left")
+        help_dot(bar, self.theme, "Send en hel mappe med alt indhold. Strukturen bevares, "
+                 "når den lander på den anden enhed.", "Send mappe").pack(
+                     side="left", padx=(px(4), px(8)))
         Button(
             bar,
             self.theme,
@@ -1350,6 +1398,9 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             icon="⧉",
             bg=c["card"],
         ).pack(side="left")
+        help_dot(bar, self.theme, "Send det du sidst kopierede (tekst, link eller billede) "
+                 "til enheden. Genvej: Ctrl+V.", "Send udklipsholder").pack(
+                     side="left", padx=(px(4), 0))
         self.send_button = Button(
             bar,
             self.theme,
@@ -1362,6 +1413,9 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             bg=c["card"],
         )
         self.send_button.pack(side="right")
+        help_dot(bar, self.theme, "Send beskeden/linket i feltet — eller vælg filer, hvis "
+                 "feltet er tomt. Enter sender også.", "Send").pack(
+                     side="right", padx=(px(6), px(6)))
         self.target_button = Button(
             bar,
             self.theme,
@@ -1372,6 +1426,9 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             bg=c["card"],
         )
         self.target_button.pack(side="right", padx=(0, px(6)))
+        help_dot(bar, self.theme, "Vælg hvilken enhed (eller alle enheder) der skal modtage. "
+                 "Vælger du ingen, spørger vi når du sender.", "Vælg modtager").pack(
+                     side="right", padx=(0, px(4)))
 
         self.composer_hint = tk.Label(
             center,
@@ -1737,6 +1794,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         hero.refresh_buttons()
         hero.actor.set_busy(any(state.status == "active" for state in self.transfers.values()))
         self._refresh_recent()
+        self._refresh_topbar()
 
         # How this PC can be reached: soft glass pills, rebuilt only when something changes.
         addresses = _sorted_lan_addresses()
@@ -3116,7 +3174,9 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         self.me_dot.configure(fg=self.theme.c["success"])
         shown = addresses[0] if addresses else "ingen netværk"
         self.me_status.configure(text=f"Online  ·  {shown}")
-        self.status_var.set("Online")
+        self.status_var.set("● Online")
+        self._online = True
+        self._refresh_topbar()
 
     def _show_error(self, error: BaseException) -> None:
         message = friendly_error(error, self.peers.values())
