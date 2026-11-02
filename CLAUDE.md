@@ -65,7 +65,7 @@ gradle -p android testDebugUnitTest lintDebug assembleDebug
    a `.sha256` per binary and `CHANGELOG.md` (fixed names: the in-app updater looks for them), and uses
    the changelog entry as release notes.
 
-The latest release is **v1.6.0**. Without tag-push rights, start a release from Actions → Release → Run workflow (tag input).
+The latest release is **v1.9.0**. Without tag-push rights, start a release from Actions → Release → Run workflow (tag input).
 
 
 ## Lennart's wish list (build in this order, one release each)
@@ -80,7 +80,7 @@ phone: the "Telefon på PC'en" card), a test, and the glass look (PC: `glass_ima
 5. Scan papir til PDF: PC asks, the phone's camera shoots, a straight PDF lands on the PC
 6. Tænd/lås PC'en fra telefonen: Wake-on-LAN, lock, sleep, shut down
 7. Del Wi-Fi med gæster: QR code with the Wi-Fi password on PC and phone
-8. Telefonens skærm på PC'en: live mirror with mouse control — **v1.7.0** (`ScreenMirror`, `mirror_window.py`; next: AI control via the local API, iPhone view via AirPlay)
+8. Telefonens skærm på PC'en: live mirror with mouse control — **v1.7.0**; the "Styr telefon" page (`MirrorView` in `mirror_window.py`, first under TELEFON) and AI control over MCP (`mcp_phone.py`, `h4xtor-share --mcp` → local API `/v1/phone/*`, flag `ai_control`) — **v1.9.0** (v1.8.0 was the flat IDE redesign). Next: iPhone view via AirPlay
 9. Svævende abe på skrivebordet: always-on-top drop target (drag a file → phone; click → clipboard)
 10. Hvem ringer? på PC'en: caller name pops up, reject or quick SMS reply
 

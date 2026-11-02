@@ -567,6 +567,39 @@ def test_phone_pages_build_empty_and_with_a_phone(tmp_path, monkeypatch) -> None
 
 
 @pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_styr_telefon_page_opens_from_the_menu_and_stops_when_left(tmp_path, monkeypatch) -> None:
+    import time
+
+    from h4xtor_share.mirror_window import open_mirror
+
+    app, peers = _paired_app(1, tmp_path, monkeypatch, ("screen-mirror",))
+    try:
+        keys = [key for key, _icon, _label in app.NAV_GROUPS[1][1]]
+        assert keys[0] == "mirror"  # first under TELEFON
+        starts = _recorder(app, "mirror_start", {"accepted": True, "control": True})
+        _recorder(app, "mirror_frame", {"active": False, "waiting": True})
+        stops = _recorder(app, "mirror_stop")
+        open_mirror(app, peers[0])  # "Vis og styr skærmen…" in the device menu
+        assert app.active_page == "mirror" and app.mirror_view.running
+        assert app.mirror_view.name.cget("text") == peers[0].name
+        deadline = time.time() + 3
+        while not starts and time.time() < deadline:
+            app.update()
+            time.sleep(0.02)
+        assert starts
+        app.mirror_view.ai_toggle.toggle()  # the AI switch here and in Indstillinger agree
+        assert app.config_store.get_flag("ai_control", False) and app.ai_settings_toggle.value
+        app.show_page("share")
+        deadline = time.time() + 3
+        while not stops and time.time() < deadline:
+            app.update()
+            time.sleep(0.02)
+        assert stops and not app.mirror_view.running
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
 def test_notifications_card_reply_dismiss_remove(tmp_path, monkeypatch) -> None:
     from pathlib import Path
 

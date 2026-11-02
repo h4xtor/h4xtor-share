@@ -4,6 +4,16 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
+## 1.9.0 – 2026-11-02
+### Nyt
+- Ny side "Styr telefon" øverst under TELEFON i menuen: telefonens skærm i en flot telefon-ramme til venstre, og til højre en stor Start/Stop-knap, Tilbage/Hjem/Apps, "Skriv på telefonen" og AI-styring.
+- Lad en AI styre telefonen: en AI som Claude kan se skærmen og trykke, swipe og skrive for dig. Slå "Lad en AI styre telefonen" til, tryk "Kopiér AI-opsætning", og indsæt den i AI'ens MCP-indstillinger. Du godkender AI'en første gang.
+### Forbedret
+- Kan PC'en ikke trykke på telefonen, viser siden nu en tydelig gul boks, og telefonen viser beskeden "Tillad styring fra PC'en", der åbner Hjælpefunktioner med ét tryk.
+- "Vis og styr skærmen…" i telefonens menu åbner nu siden "Styr telefon", og spejlingen stopper af sig selv, når du går til en anden side.
+### Rettet
+- Klik på telefonens skærm gjorde ingenting, når telefonens tilgængelighedstjeneste var slået fra – nu får du at vide hvorfor, og hvordan du slår den til.
+
 ## 1.8.0 – 2026-10-28
 ### Forbedret
 - Helt nyt, roligere look: væk fra det "rumagtige" design med glød og glas – hen til et rent, fladt udvikler-/IDE-look, som er lettere at læse.
