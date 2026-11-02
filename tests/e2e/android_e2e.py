@@ -333,6 +333,9 @@ def v12_checks(desktop: Desktop, phone: Peer) -> None:
     assert frame.get("image"), f"no live frame: {frame}"
     assert base64.b64decode(frame["image"])[:8] == b"\x89PNG\r\n\x1a\n", "frame is not a PNG"
     ok(f"live screen on the PC ({frame['width']}x{frame['height']} frames)")
+    # The PC's "Styr telefon" page shows a warning card when this is false (taps would vanish).
+    assert frame.get("control") is True, f"the phone says the PC cannot tap: {frame}"
+    ok("the phone reports that the PC can tap (control: true)")
     # A click on the PC's picture of the "Del" tab opens it on the phone.
     width, height = map(int, re.findall(r"(\d+)x(\d+)", shell("wm size"))[-1])
     tab = next(n for n in reversed(ui_nodes()) if re.search("^Del$", n.get("text") or ""))
@@ -342,9 +345,70 @@ def v12_checks(desktop: Desktop, phone: Peer) -> None:
     assert screen_has("^SEND TIL$", 10), "the PC's click did not reach the phone"
     shot("24-steered-from-pc")
     ok("a click on the PC taps the phone (the Del tab opened)")
+    ai_checks(desktop, phone)
     desktop.run(desktop.client.mirror_stop(phone))
     assert not desktop.run(desktop.client.mirror_frame(phone, 0)).get("active")
     ok("stopping from the PC ends the sharing")
+
+
+def ai_checks(desktop: Desktop, phone: Peer) -> None:
+    """An AI steers the phone the way Claude does: MCP tools -> the PC's local API -> phone."""
+    from h4xtor_share.local_api import LOCAL_API_PORT_OFFSET, LocalApi
+    from h4xtor_share.mcp_phone import PhoneBridge, handle
+
+    async def control(device_id: str, op: str, body: dict) -> dict:  # as the app's _api_phone
+        assert device_id == phone.device_id
+        if op == "start":
+            return await desktop.client.mirror_start(phone, "jpeg")
+        if op == "screen":
+            return await desktop.client.mirror_frame(phone, int(body.get("after") or 0))
+        if op == "stop":
+            await desktop.client.mirror_stop(phone)
+            return {"ok": True}
+        await desktop.client.mirror_input(phone, body["action"])
+        return {"ok": True}
+
+    async def approve(_name: str, _origin: str) -> bool:
+        return True
+
+    async def no_send(*_args) -> None:
+        return None
+
+    devices = [{"id": phone.device_id, "name": phone.name, "platform": "android",
+                "online": True}]
+    api = LocalApi(desktop.config, desktop.config.port + LOCAL_API_PORT_OFFSET,
+                   lambda: devices, no_send, approve, phone=control)
+    desktop.run(api.start())
+    bridge = PhoneBridge(desktop.config)
+
+    def tool(name: str, **arguments) -> dict:
+        answer = handle(bridge, {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
+                                 "params": {"name": name, "arguments": arguments}})
+        assert answer is not None
+        return answer["result"]
+
+    try:
+        refused = tool("phone_screen")
+        assert refused.get("isError") and "slået fra" in refused["content"][0]["text"], refused
+        ok("AI control is off on the PC until switched on")
+        desktop.config.set_flag("ai_control", True)
+        seen = tool("phone_screen")
+        assert not seen.get("isError") and seen["content"][0]["type"] == "image", seen
+        ok(f"an AI sees the phone's screen via MCP ({seen['content'][1]['text']})")
+        tool("phone_button", button="home")
+        deadline, focus = time.time() + 10, ""
+        while time.time() < deadline:
+            focus = shell("dumpsys window | grep -E 'mCurrentFocus'", check=False)
+            if PKG not in focus:
+                break
+            time.sleep(0.5)
+        assert PKG not in focus, f"the AI's Home press did not reach the phone: {focus}"
+        quick_shot("24b-ai-pressed-home")
+        ok("an AI presses Home on the phone via MCP")
+    finally:
+        desktop.config.set_flag("ai_control", False)
+        desktop.run(api.stop())
+        shell(f"am start -W -n {PKG}/.MainActivity")
 
 
 def bluetooth_checks(desktop: Desktop, phone: Peer) -> None:

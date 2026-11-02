@@ -35,7 +35,7 @@ from h4xtor_share.crypto import ensure_certificate, server_ssl_context
 from h4xtor_share.discovery import DiscoveryService, local_ipv4_addresses
 from h4xtor_share.history import HistoryStore, is_link
 from h4xtor_share.local_api import LOCAL_API_PORT_OFFSET, LocalApi
-from h4xtor_share.mirror_window import open_mirror
+from h4xtor_share.mirror_window import MirrorView, open_mirror
 from h4xtor_share.models import (
     DESKTOP_CAPABILITIES,
     ClipboardReceived,
@@ -727,6 +727,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         (
             "TELEFON",
             (
+                ("mirror", "▣", "Styr telefon"),
                 ("notifications", "◈", "Notifikationer"),
                 ("sms", "✉", "SMS"),
                 ("remote", "◎", "Fjernbetjening"),
@@ -805,6 +806,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             self._api_send,
             self._api_approve,
             sender_all=self._api_send_all,
+            phone=self._api_phone,
         )
         self.web_share = WebShare(
             self.config_store,
@@ -989,6 +991,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         self._build_notifications_page()
         self._build_sms_page()
         self._build_remote_page()
+        self._build_mirror_page()
         self._build_history_page()
         self._build_iphone_page()
         self._build_netmerge_page()
@@ -1205,6 +1208,8 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             widget.configure(bg=color)
 
     def show_page(self, name: str) -> None:
+        if name != "mirror" and getattr(self, "active_page", "") == "mirror":
+            self.mirror_view.stop()  # leaving the page ends the screen sharing
         self.active_page = name
         c = self.theme.c
         for key, (row, icon_label, text_label) in self.nav_rows.items():
@@ -1228,6 +1233,8 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             self._refresh_history()
         elif name in {"notifications", "sms", "remote"}:
             self._phone_page_shown(name)
+        elif name == "mirror":
+            self._mirror_open()
 
     def _slide_in_title(self, name: str) -> None:
         """A page's title glides in from the left and fades up, like a launcher tab change."""
@@ -1272,6 +1279,41 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         item = header.create_window(0, px(96), window=actions, anchor="se")
         header.bind("<Configure>", lambda e: header.coords(item, e.width - px(36), px(96)))
         return page, actions
+
+    # ------------------------------------------------------------- mirror page
+    def _build_mirror_page(self) -> None:
+        c, px = self.theme.c, self.theme.px
+        page, _actions = self._page(
+            "mirror", "Styr telefon",
+            "Se telefonens skærm live og styr den med musen – eller lad en AI gøre det.",
+        )
+        self.mirror_peer_id: str | None = None
+        self.mirror_picker = tk.Frame(page, bg=c["bg"])
+        self.mirror_picker.pack(fill="x", padx=px(36), pady=(0, px(10)))
+        self.mirror_view = MirrorView(page, self)
+        self.mirror_view.pack(fill="both", expand=True, padx=(px(36), px(24)), pady=(0, px(16)))
+
+    def _mirror_open(self) -> None:
+        capable = self._capable_peers("screen-mirror")
+        peer = self._pick_current(capable, self.mirror_peer_id)
+        self.mirror_peer_id = peer.device_id if peer else None
+        self._fill_picker(self.mirror_picker, "screen-mirror", self.mirror_peer_id,
+                          self._mirror_pick)
+        status = self.peer_status.get(peer.device_id) if peer else None
+        online = status is not None and status.online
+        meta = f"Android  ·  {'● Online' if online else 'Ikke forbundet'}" if peer else ""
+        self.mirror_view.show(peer, meta, self.config_store.get_flag("screen_mirror", True), online)
+
+    def _mirror_pick(self, peer: Peer) -> None:
+        self.mirror_peer_id = peer.device_id
+        self._mirror_open()
+
+    def _set_ai_control(self, value: bool) -> None:
+        """The AI switch lives on both "Styr telefon" and Indstillinger: keep them in step."""
+        self.config_store.set_flag("ai_control", value)
+        for toggle in (self.mirror_view.ai_toggle, getattr(self, "ai_settings_toggle", None)):
+            if toggle is not None and toggle.value != value:
+                toggle.set(value)
 
     # ------------------------------------------------------------- share page
     def _build_share_page(self) -> None:
@@ -2137,6 +2179,11 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
                     kind="ghost",
                 ).pack(side="right", padx=(0, px(6)))
 
+    def _copy_ai_setup(self) -> None:
+        from h4xtor_share.mcp_phone import setup_json
+
+        self._copy_to_clipboard(setup_json())
+
     def _copy_to_clipboard(self, text: str) -> None:
         self.clipboard_clear()
         self.clipboard_append(text)
@@ -2710,11 +2757,24 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         self._toggle_row(
             extras.body,
             "Telefonens skærm på PC'en",
-            "Se din Android-telefons skærm i et vindue og styr den med musen og tastaturet "
-            "(enhedens menu → \"Vis og styr skærmen\"). Skal også slås til på telefonen.",
+            "Se din Android-telefons skærm og styr den med musen og tastaturet (siden "
+            "\"Styr telefon\" i menuen til venstre). Skal også slås til på telefonen.",
             self.config_store.get_flag("screen_mirror", True),
             lambda value: self.config_store.set_flag("screen_mirror", value),
         )
+
+        self._divider(extras.body)
+        self.ai_settings_toggle = self._toggle_row(
+            extras.body,
+            "Lad en AI styre telefonen",
+            "En AI som Claude kan se telefonens skærm og trykke og skrive for dig. Tryk "
+            "\"Kopiér AI-opsætning\" og indsæt den i AI'ens indstillinger (MCP). Du godkender "
+            "AI'en første gang, og telefonen viser altid, når skærmen deles.",
+            self.config_store.get_flag("ai_control", False),
+            self._set_ai_control,
+        )
+        Button(extras.body, self.theme, "Kopiér AI-opsætning", self._copy_ai_setup,
+               kind="secondary", size="sm").pack(anchor="w", pady=(px(4), 0))
 
         behaviour = section("Opførsel")
         self._toggle_row(
@@ -5417,6 +5477,28 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             for peer, error in outcome
         ]
 
+    async def _api_phone(self, device_id: str, op: str, body: dict[str, Any]) -> dict[str, Any]:
+        """The local API's AI control: the same screen mirror the "Vis og styr skærmen" window
+        uses. The phone asks before sharing and keeps a notification up meanwhile."""
+        peer = self.peers.get(device_id)
+        if peer is None:
+            raise RuntimeError("Enheden er ikke tilgængelig.")
+        if op == "start":
+            self.event_queue.put(("status", f"En AI ser nu {peer.name}s skærm"))
+            return await self.client.mirror_start(peer, "jpeg")
+        if op == "screen":
+            return await self.client.mirror_frame(peer, int(body.get("after") or 0))
+        if op == "stop":
+            await self.client.mirror_stop(peer)
+            self.event_queue.put(("status", f"AI-styring af {peer.name} er stoppet"))
+            return {"ok": True}
+        action = body.get("action")
+        if not isinstance(action, dict):
+            raise ValueError("Mangler en handling.")
+        await self.client.mirror_input(peer, action)
+        self.event_queue.put(("status", f"En AI styrer {peer.name}"))
+        return {"ok": True}
+
     async def _send_download(self, peer: Peer, url: str) -> None:
         """Download a file from the web (e.g. an image) and send it as a real file."""
         import tempfile
@@ -5462,9 +5544,14 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         c = self.theme.c
         px = self.theme.px
         self.show_window()
-        modal = Modal(self, self.theme, "Chrome-udvidelse")
+        tool = "://" not in origin  # no browser origin: an AI or a script on this PC
+        modal = Modal(self, self.theme, "AI eller lokalt værktøj" if tool else "Chrome-udvidelse")
         modal.heading(
             f"{name} vil forbinde til h4xtor share",
+            "Et program på denne PC (fx en AI) vil sende til dine enheder og – hvis du har slået "
+            "AI-styring til – se og styre telefonens skærm. Tillad kun, hvis du selv har sat "
+            "det op."
+            if tool else
             "Udvidelsen kan så sende faner, links, tekst og billeder fra Chrome til dine "
             "enheder. Tillad kun, hvis du selv lige har trykket Forbind i udvidelsen.",
         )
@@ -5478,7 +5565,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             if not decision.done():
                 loop.call_soon_threadsafe(lambda: decision.done() or decision.set_result(value))
             if value:
-                self.toast.show("Chrome-udvidelsen er forbundet", "success")
+                self.toast.show(f"{name} er forbundet", "success")
 
         modal.on_close = lambda: answer(False)
         buttons = tk.Frame(modal.body, bg=c["bg"])
@@ -5655,6 +5742,11 @@ def main(argv: list[str] | None = None) -> None:
     arguments = list(sys.argv[1:] if argv is None else argv)
     if arguments[:1] == ["--apply-update"]:  # the update helper: no window, no services
         raise SystemExit(0 if run_update_helper(arguments[1:]) else 1)
+    if arguments[:1] == ["--mcp"]:  # started by an AI app: tools over stdin/stdout, no window
+        from h4xtor_share.mcp_phone import serve
+
+        serve()
+        return
     minimized = "--minimized" in arguments
     send_paths: list[Path] = []
     if "--send" in arguments:

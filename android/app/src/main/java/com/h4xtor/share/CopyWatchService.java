@@ -94,6 +94,11 @@ public final class CopyWatchService extends AccessibilityService {
      * fra PC'en", off by default). x and y are fractions of the screen (0-1). Returns an error for
      * the PC, or null when done.
      */
+    /** Running and able to tap for a PC (the user switched it on under Hjælpefunktioner). */
+    static boolean running() {
+        return instance != null;
+    }
+
     static String perform(org.json.JSONObject input) {
         CopyWatchService self = instance;
         if (self == null) {
