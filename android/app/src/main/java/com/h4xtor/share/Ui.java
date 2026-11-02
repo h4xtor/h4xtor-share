@@ -23,8 +23,9 @@ import android.widget.TextView;
 
 import java.util.Locale;
 
-/** Tiny design system, Battle.net style: a near-black launcher palette, solid panels with
- *  hairline borders and one launcher blue for the actions that matter. */
+/** Tiny design system, clean IDE style: a near-black developer-tool palette, flat panels
+ *  with hairline borders and one blue accent for the actions that matter (green is kept for
+ *  online status only). The sibling of the PC app's ui_kit. */
 public final class Ui {
     /** The launcher blue (text, icons, indicators): 5.6:1 on the background. */
     public static final int ACCENT_LIGHT = Color.parseColor("#148EFF");
@@ -150,25 +151,10 @@ public final class Ui {
         return drawable;
     }
 
-    /** A soft pill with a glassy light: brighter at the top, a little deeper at the bottom. */
+    /** IDE look: flat rounded fill, no gloss. Kept as a named method so call sites read the
+     *  same as the PC app; it simply delegates to {@link #rounded}. */
     public GradientDrawable glass(int fill, int stroke, float radiusDp) {
-        if (Color.alpha(fill) < 255) {
-            return rounded(fill, stroke, radiusDp);  // see-through fills stay flat
-        }
-        GradientDrawable drawable = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM,
-                new int[] {shade(fill, Color.WHITE, 0.18f), fill, shade(fill, Color.BLACK, 0.08f)});
-        drawable.setCornerRadius(dp(radiusDp));
-        if (stroke != 0) {
-            drawable.setStroke(Math.max(1, dp(1)), stroke);
-        }
-        return drawable;
-    }
-
-    private static int shade(int color, int toward, float amount) {
-        return Color.rgb(
-                Math.round(Color.red(color) + (Color.red(toward) - Color.red(color)) * amount),
-                Math.round(Color.green(color) + (Color.green(toward) - Color.green(color)) * amount),
-                Math.round(Color.blue(color) + (Color.blue(toward) - Color.blue(color)) * amount));
+        return rounded(fill, stroke, radiusDp);
     }
 
     public Drawable ripple(Drawable content, float radiusDp) {
@@ -189,28 +175,26 @@ public final class Ui {
         return view;
     }
 
-    /** Heavy launcher titles. */
+    /** Clean bold titles (IDE look: no heavy black weight, no uppercasing). */
     public TextView title(String value, float sizeSp) {
         TextView view = text(value, sizeSp, text, false);
-        view.setTypeface(Typeface.create("sans-serif-black", Typeface.NORMAL));
-        view.setLetterSpacing(-0.01f);
+        view.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         return view;
     }
 
-    /** Big uppercase hero title, like a game's name on Battle.net. */
+    /** Page/hero title: a clean bold line, mixed case (no condensed caps). */
     public TextView heroTitle(String value, float sizeSp) {
-        TextView view = title(value.toUpperCase(Locale.ROOT), sizeSp);
-        view.setTypeface(Typeface.create("sans-serif-condensed", Typeface.BOLD));
-        view.setLetterSpacing(0.01f);
+        TextView view = title(value, sizeSp);
         view.setSingleLine(true);
         view.setEllipsize(TextUtils.TruncateAt.END);
         return view;
     }
 
-    /** Small uppercase line in the light launcher blue, above a hero title. */
+    /** Small monospace uppercase eyebrow in the blue accent, above a title. */
     public TextView eyebrow(String value) {
-        TextView view = text(value.toUpperCase(Locale.ROOT), 11.5f, SKY, true);
-        view.setLetterSpacing(0.12f);
+        TextView view = text(value.toUpperCase(Locale.ROOT), 11f, accent, true);
+        view.setTypeface(Typeface.MONOSPACE, Typeface.BOLD);
+        view.setLetterSpacing(0.10f);
         return view;
     }
 

@@ -231,11 +231,15 @@ def glass_image(
     bg: str | tuple[str, str, str, str], ring: str | None = None, ring_width: float = 1.0,
     shine: bool = True, light: float = 0.20,
 ) -> tk.PhotoImage:
-    """A rounded pill/panel with smooth (anti-aliased) edges and a glassy light: brighter
-    at the top, a thin bright rim along the top edge. Tk cannot smooth polygon edges, so
-    this paints each pixel by how much of it the shape covers. ``bg`` may be four colours
-    (top-left, top-right, bottom-left, bottom-right) when the widget sits on artwork: the
-    corners then blend into it instead of showing a box. Cached per look and size."""
+    """A flat rounded pill/panel with smooth (anti-aliased) edges and an optional hairline
+    ring. Tk cannot smooth polygon edges, so this paints each pixel by how much of it the
+    shape covers. ``bg`` may be four colours (top-left, top-right, bottom-left, bottom-right)
+    when the widget sits on artwork: the corners then blend into it instead of showing a box.
+    Cached per look and size.
+
+    IDE redesign: no gloss. ``shine``/``light`` are kept for call-site compatibility but
+    ignored — the fill is solid, the only relief is the thin border, so cards and buttons
+    read as crisp flat surfaces like a code editor, not Aurora glass."""
     import math
 
     key = (master.tk, width, height, radius, fill, bg, ring, ring_width, shine, light)  # per app
@@ -254,8 +258,7 @@ def glass_image(
     rows = []
     for y in range(height):
         v = (y + 0.5) / height
-        glow = light * (1 - v) ** 2 - light / 4 * v * v if shine else 0.0
-        base = [c + ((255 if glow > 0 else 0) - c) * abs(glow) for c in rgb[0]]
+        base = list(rgb[0])  # flat fill, no top-to-bottom glow
         qy = abs(y + 0.5 - half_h) - (half_h - radius)
         left = [a + (b - a) * v for a, b in zip(corners[0], corners[2], strict=True)]
         right = [a + (b - a) * v for a, b in zip(corners[1], corners[3], strict=True)]
@@ -273,9 +276,6 @@ def glass_image(
             if ring and d > -ring_width - 0.5:  # the outline, smoothed on its inner side
                 k = min(1.0, d + ring_width + 0.5)
                 color = [a + (b - a) * k for a, b in zip(base, rgb[1], strict=True)]
-            elif shine and d > -1.6 and v < 0.5:  # the bright rim catching the light
-                k = 0.30 * (1 - v * 2) * min(1.0, d + 1.6)
-                color = [a + (255 - a) * k for a in base]
             if cover < 1:
                 color = [b + (a - b) * cover for a, b in zip(color, back, strict=True)]
             return "#" + "".join(_HEX[max(0, min(255, int(c)))] for c in color)
@@ -1191,52 +1191,12 @@ def _rgb(color: str) -> tuple[int, int, int]:
 def render_backdrop(
     master: tk.Misc, width: int, height: int, c: dict[str, str], step: int = 2
 ) -> tk.PhotoImage:
-    """The hero's key art: a deep-blue sky, a big soft glow where the monkey stands, light
-    rays falling from the top right, darker on the left so the words read, melting into
-    the page at the bottom. Rendered at 1/``step`` size (Tk has no blur), then zoomed."""
-    import math
-
-    w, h = max(2, width // step), max(2, height // step)
-    top, bottom = _rgb(c["hero_top"]), _rgb(c["bg"])
-    glows = (  # centre u, centre v, sigma u, sigma v, strength, colour
-        (0.80, 0.55, 0.17, 0.42, 0.62, _rgb(c["glow"])),
-        (0.96, 0.02, 0.10, 0.22, 0.34, _rgb(c["accent2"])),
-        (0.22, -0.10, 0.28, 0.30, 0.28, _rgb("#0B5FC8")),
-    )
-    cols = [[math.exp(-((x / w - g[0]) ** 2) / (2 * g[2] ** 2)) for x in range(w)] for g in glows]
-    rows = [[math.exp(-((y / h - g[1]) ** 2) / (2 * g[3] ** 2)) for y in range(h)] for g in glows]
-    aspect = w / h
-    lines = []
-    for y in range(h):
-        v = y / h
-        t = v * v * (3 - 2 * v)
-        base = [top[i] + (bottom[i] - top[i]) * t for i in range(3)]
-        fade = max(0.0, (v - 0.72) / 0.28)
-        fade = fade * fade * (3 - 2 * fade)
-        row = []
-        for x in range(w):
-            u = x / w
-            r, g, b = base
-            # Quieter on the left, under the words: towards the page colour (dark or light).
-            shade = (1 - u) ** 2 * 0.45
-            r, g, b = r + (bottom[0] - r) * shade, g + (bottom[1] - g) * shade, b + (
-                bottom[2] - b) * shade
-            for index, glow in enumerate(glows):
-                k = glow[4] * cols[index][x] * rows[index][y]
-                gr, gg, gb = glow[5]
-                r, g, b = r + (gr - r) * k, g + (gg - g) * k, b + (gb - b) * k
-            ray = 0.0
-            for offset in (0.30, 0.48, 0.62):  # three soft diagonal beams
-                d = (u - 0.95) * aspect * 0.55 + (v + 0.2) * 0.9 - offset * aspect * 0.55
-                ray += math.exp(-(d * d) / 0.0018) * 0.07 * max(0.0, 1 - v * 1.1)
-            r, g, b = r + (255 - r) * ray, g + (255 - g) * ray, b + (255 - b) * ray
-            r, g, b = r + (bottom[0] - r) * fade, g + (bottom[1] - g) * fade, b + (
-                bottom[2] - b) * fade
-            row.append("#" + _HEX[int(r)] + _HEX[int(g)] + _HEX[int(b)])
-        lines.append("{" + " ".join(row) + "}")
-    small = tk.PhotoImage(master=master, width=w, height=h)
-    small.put(" ".join(lines))
-    return small.zoom(step) if step > 1 else small
+    """IDE redesign: a flat page background — no sky, glow, rays or embers. Kept so the
+    header/hero code can keep compositing a background image and reading ``color_at``; it
+    now simply returns the page colour, so titles sit on clean flat chrome like an editor."""
+    image = tk.PhotoImage(master=master, width=max(2, width), height=max(2, height))
+    image.put(c["bg"], to=(0, 0, max(2, width), max(2, height)))
+    return image
 
 
 class MonkeyPose:
@@ -1472,8 +1432,11 @@ class MonkeyActor:
         if abs(gap) < 0.02:
             self._rest = self._rng.randint(40, 110)
             self._target = self._rng.uniform(-1, 1)
-            if self._rng.random() < 0.3:
+            roll = self._rng.random()
+            if roll < 0.3:
                 self.point()  # stops and shows you the devices
+            elif roll < 0.45:  # now and then a little spontaneous mischief, so it feels alive
+                self._react(self._rng.choice(self.REACTIONS))
             return False
         self._x += max(-0.014, min(0.014, gap))
         self.pose.facing = 1 if gap > 0 else -1
@@ -1553,7 +1516,7 @@ class HeroBanner(tk.Canvas):
         self._after: str | None = None
         self._embers: list[list[float]] = []
         self._words = ("", "", "", theme.c["faint"], "")
-        self.buttons = tk.Frame(self, bg=theme.c["hero_top"])
+        self.buttons = tk.Frame(self, bg=theme.c["bg"])
         self._buttons_item = self.create_window(0, 0, window=self.buttons, anchor="nw")
         self.bind("<Configure>", self._configured, add="+")
         self.bind("<Map>", lambda _e: self._start(), add="+")
@@ -1589,22 +1552,26 @@ class HeroBanner(tk.Canvas):
         if width < 40 or height < 40:
             return
         self._size = (width, height)
-        step = 2 if width <= 1600 else 3
-        self._image = render_backdrop(self, width, height, self.theme.c, step)
+        c, px = self.theme.c, self.theme.px
+        self._image = render_backdrop(self, width, height, c, 1)  # flat page colour
         self.delete("backdrop")
         self.create_image(0, 0, image=self._image, anchor="nw", tags=("backdrop",))
         self.tag_lower("backdrop")
-        size = min(height * 0.6, width * 0.15)
-        self.actor.place(width * 0.80, height * 0.93, size, roam=width * 0.07)
-        self._spawn_embers(width, height)
+        # IDE look: no key art. A small flat mascot card on the right holds the monkey.
+        card = min(height - px(20), px(156))
+        cx2 = width - px(28)
+        cx1, cy1, cy2 = cx2 - card, (height - card) / 2, (height + card) / 2
+        round_rect(self, cx1, cy1, cx2, cy2, px(14), fill=c["card"], outline=c["border"],
+                   width=1, tags=("backdrop",))
+        self.actor.place((cx1 + cx2) / 2, cy2 - px(18), card * 0.60, roam=card * 0.10)
         self._layout_words()
 
     def set_words(
         self, eyebrow: str, title: str, status: str = "", dot: str | None = None, hint: str = ""
     ) -> None:
-        """Eyebrow (small, blue), title (big, uppercase), a status line with a coloured
-        dot, and a hint under the buttons."""
-        words = (eyebrow, title.upper(), status, dot or self.theme.c["faint"], hint)
+        """Monospace eyebrow (small, accent), a clean bold title, a status line with a
+        coloured dot, and a hint under the buttons. IDE look: no uppercasing, no key art."""
+        words = (eyebrow, title, status, dot or self.theme.c["faint"], hint)
         if words != self._words:
             self._words = words
             self._layout_words()
@@ -1616,17 +1583,17 @@ class HeroBanner(tk.Canvas):
             return
         self.delete("words")
         eyebrow, title, status, dot, hint = self._words
-        x = px(48)
-        title_size = 34 if len(title) <= 14 else 28 if len(title) <= 20 else 22
-        fonts = (self.theme.font(9, "bold"), self.theme.hero_font(title_size),
-                 self.theme.font(10))
-        y = height * 0.15
-        self.create_text(x, y, text=eyebrow, fill=c["accent2"], font=fonts[0], anchor="nw",
+        x = px(40)
+        title_size = 26 if len(title) <= 16 else 22 if len(title) <= 24 else 18
+        fonts = (self.theme.font(8, "bold", self.theme.mono),
+                 self.theme.title_font(title_size), self.theme.font(10))
+        y = height * 0.16
+        self.create_text(x, y, text=eyebrow.upper(), fill=c["accent"], font=fonts[0], anchor="nw",
                          tags=("words",))
-        y += fonts[0].metrics("linespace") + px(2)
-        self.create_text(x - px(2), y, text=title, fill=c["text"], font=fonts[1], anchor="nw",
-                         width=int(width * 0.58), tags=("words",))
-        y += fonts[1].metrics("linespace") * (1 if fonts[1].measure(title) < width * 0.58
+        y += fonts[0].metrics("linespace") + px(4)
+        self.create_text(x, y, text=title, fill=c["text"], font=fonts[1], anchor="nw",
+                         width=int(width * 0.56), tags=("words",))
+        y += fonts[1].metrics("linespace") * (1 if fonts[1].measure(title) < width * 0.56
                                                else 2) + px(2)
         if status:
             r = px(4)
@@ -1908,8 +1875,10 @@ class DeviceTiles(tk.Frame):
             round_rect(tile, 1, 1, w - 1, h - 1, px(16), fill="", outline=c["accent2"], width=2)
 
 
-def tooltip(widget: tk.Misc, theme: Theme, text: str) -> None:
-    """Hover (or keyboard focus) for half a second shows *text* in a small label below."""
+def tooltip(widget: tk.Misc, theme: Theme, text: str, title: str = "") -> None:
+    """Hover (or keyboard focus) for half a second shows a small card below the widget.
+    With ``title`` the card gets a bold heading over the (wrapped) body text — used by the
+    ``?`` help markers for a fuller explanation."""
     state: dict[str, Any] = {"after": None, "tip": None}
 
     def show() -> None:
@@ -1918,9 +1887,16 @@ def tooltip(widget: tk.Misc, theme: Theme, text: str) -> None:
             tip = tk.Toplevel(widget)
             tip.wm_overrideredirect(True)
             c = theme.c
-            tk.Label(tip, text=text, bg=c["card"], fg=c["text"], font=theme.font(9),
-                     padx=theme.px(8), pady=theme.px(4), highlightthickness=1,
-                     highlightbackground=c["border_strong"]).pack()
+            box = tk.Frame(tip, bg=c["card"], padx=theme.px(10), pady=theme.px(7),
+                           highlightthickness=1, highlightbackground=c["border_strong"])
+            box.pack()
+            if title:
+                tk.Label(box, text=title, bg=c["card"], fg=c["text"], anchor="w", justify="left",
+                         font=theme.font(9, "bold")).pack(fill="x")
+            tk.Label(box, text=text, bg=c["card"], fg=c["muted"] if title else c["text"],
+                     font=theme.font(9), justify="left", anchor="w",
+                     wraplength=theme.px(260) if title else theme.px(420),
+                     pady=theme.px(2) if title else 0).pack(fill="x")
             x = widget.winfo_rootx() + widget.winfo_width() // 2 - tip.winfo_reqwidth() // 2
             y = widget.winfo_rooty() + widget.winfo_height() + theme.px(6)
             tip.wm_geometry(f"+{max(0, x)}+{y}")
@@ -1944,3 +1920,17 @@ def tooltip(widget: tk.Misc, theme: Theme, text: str) -> None:
         widget.bind(name, schedule, add="+")
     for name in ("<Leave>", "<FocusOut>", "<ButtonPress>", "<Destroy>"):
         widget.bind(name, hide, add="+")
+
+
+def help_dot(parent: tk.Misc, theme: Theme, body: str, title: str = "Hjælp") -> tk.Canvas:
+    """A small circular ``?`` marker. Hover or keyboard focus shows a title+body tooltip
+    explaining what the button next to it does. Pack it right after that button."""
+    c = theme.c
+    d = theme.px(16)
+    dot = tk.Canvas(parent, width=d, height=d, bg=parent.cget("bg"), highlightthickness=0,
+                    bd=0, cursor="question_arrow", takefocus=1)
+    dot.create_oval(1, 1, d - 1, d - 1, fill=c["neutral_soft"], outline=c["border_strong"])
+    dot.create_text(d / 2, d / 2 - theme.px(0.5), text="?", fill=c["muted"],
+                    font=theme.font(8, "bold"))
+    tooltip(dot, theme, body, title)
+    return dot
