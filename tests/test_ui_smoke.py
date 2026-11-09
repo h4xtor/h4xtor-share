@@ -1651,3 +1651,78 @@ def test_every_button_and_menu_entry_runs(tmp_path, monkeypatch) -> None:
         app.close()
     assert not problems, "\n".join(problems)
     assert pressed > 40 and len(menu_entries) > 10, (pressed, menu_entries)
+
+
+@pytest.mark.skipif(
+    not _can_build_ui(),
+    reason="Tk/tkdnd display server unavailable",
+)
+def test_received_pictures_preview_and_viewer(tmp_path) -> None:
+    from PIL import Image
+
+    from h4xtor_share.image_viewer import ImageViewer
+    from h4xtor_share.models import FileReceived, Peer
+
+    app = _new_app()
+    try:
+        peer = Peer("77" * 16, "Pixel", "192.168.0.81", 47474, "ee" * 32, "android")
+        app.peers[peer.device_id] = peer
+        first = tmp_path / "17942253497792871497730941796659.jpg"
+        Image.new("RGB", (800, 600), (40, 160, 90)).save(first, "JPEG")
+        second = tmp_path / "skærm.png"
+        Image.new("RGBA", (300, 500), (200, 60, 60, 255)).save(second, "PNG")
+        broken = tmp_path / "broken.jpg"
+        broken.write_bytes(b"not a picture")
+        notes = tmp_path / "notes.txt"
+        notes.write_text("hej")
+        for name, path in (("a", first), ("b", second), ("c", broken), ("d", notes)):
+            app._handle_core_event(FileReceived(peer.device_id, "Pixel", path, 10, name * 32))
+        app.show_page("transfers")
+        app.update()
+
+        rows = app.transfer_rows
+        assert rows["a" * 32].thumbnail is not None  # the photo shows itself
+        assert rows["b" * 32].thumbnail is not None
+        assert rows["c" * 32].thumbnail is None  # broken: keeps the arrow, no crash
+        assert not rows["d" * 32].is_picture
+        labels = [getattr(b, "_text", "") for b in rows["a" * 32].buttons.winfo_children()]
+        assert "Vis" in labels
+        labels = [getattr(b, "_text", "") for b in rows["d" * 32].buttons.winfo_children()]
+        assert "Vis" not in labels
+
+        # Newest first, only pictures still on disk.
+        assert app.received_images() == [str(broken), str(second), str(first)]
+
+        app.view_image(str(first))
+        app.update()
+        viewer = app.image_viewer
+        assert isinstance(viewer, ImageViewer)
+        assert viewer.winfo_ismapped()
+        assert viewer.current == str(first)
+        assert viewer._image is not None
+        assert "800 × 600" in viewer.meta.cget("text")
+        viewer.next()  # wraps around to the newest
+        assert viewer.current == str(broken)
+        app.update()
+        viewer.previous()
+        assert viewer.current == str(first)
+        app.event_generate("<Escape>")
+        app.update()
+        assert app.image_viewer is None
+
+        # Leaving the page closes the viewer as well.
+        app.view_image(str(second))
+        app.update()
+        app.show_page("share")
+        assert app.image_viewer is None
+
+        # The switch in Indstillinger turns the previews off.
+        app._set_image_preview(False)
+        app.update()
+        assert app.transfer_rows["a" * 32].thumbnail is None
+        assert not app.transfer_rows["a" * 32].is_picture
+        app._set_image_preview(True)
+        app.update()
+        assert app.transfer_rows["a" * 32].thumbnail is not None
+    finally:
+        app.close()

@@ -15,6 +15,10 @@ desktop app, an Android app and a Chrome extension. Everything is local; nothing
   (`task`, `from`, `to` in %, `since`/`eta` ISO times it glides between, `updated`, `note`,
   `steps` = [{label, state: done|run|todo}]) at the start of a wait and at every check-in.
 - GitHub (`h4xtor/h4xtor-share`, branch `main`) is the source of truth. You may commit, push and tag.
+- Others work in the repo too: never commit straight to `main`. Work on a branch with a readable
+  Danish topic name, `feature/<emne>` or `fix/<emne>` (e.g. `feature/billedviser`), so Lennart can find
+  it and add more work to the same branch later. If the session hands you an auto-generated branch
+  name, ask Lennart once whether to use a readable one instead.
 
 ## Working folder
 
