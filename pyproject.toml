@@ -16,7 +16,7 @@ dependencies = [
     "aiohttp>=3.10,<4",
     "cryptography>=43,<47",
     "ifaddr>=0.2,<1",
-    "pillow>=10.4,<13; sys_platform == 'win32'",
+    "pillow>=10.4,<13",
     "platformdirs>=4.3,<5",
     "pystray>=0.19,<1; sys_platform == 'win32'",
     "segno>=1.6,<2",

@@ -34,6 +34,7 @@ from h4xtor_share.config import DEFAULT_PORT, Config
 from h4xtor_share.crypto import ensure_certificate, server_ssl_context
 from h4xtor_share.discovery import DiscoveryService, local_ipv4_addresses
 from h4xtor_share.history import HistoryStore, is_link
+from h4xtor_share.image_viewer import ImageViewer, is_image, load_photo
 from h4xtor_share.local_api import LOCAL_API_PORT_OFFSET, LocalApi
 from h4xtor_share.mirror_window import MirrorView, open_mirror
 from h4xtor_share.models import (
@@ -571,6 +572,9 @@ class TransferRow:
             font=theme.font(13, "bold"),
         )
         self.icon.grid(row=0, column=0, rowspan=3, sticky="w", padx=(0, theme.px(14)))
+        # A received picture shows itself here instead of the arrow (see _show_thumbnail).
+        self.thumbnail: Any = None
+        self._thumb_path = ""
         self.name = tk.Label(
             body,
             text=state.name,
@@ -595,14 +599,46 @@ class TransferRow:
         self.shown = False
         self.refresh()
 
+    @property
+    def is_picture(self) -> bool:
+        state = self.state
+        return (
+            state.status == "done"
+            and bool(state.path)
+            and is_image(state.path)
+            and self.app.config_store.get_flag("image_preview", True)
+        )
+
     def _open(self) -> None:
-        if self.state.status == "done" and self.state.path:
+        if self.is_picture:
+            self.app.view_image(self.state.path)
+        elif self.state.status == "done" and self.state.path:
             self.app.open_path_safely(self.state.path)
+
+    def _show_thumbnail(self) -> None:
+        """Swap the arrow for a small preview of a received picture (once per file)."""
+        if not self.is_picture or self._thumb_path == self.state.path:
+            return
+        self._thumb_path = self.state.path
+        theme = self.app.theme
+        size = theme.px(56)
+        picture = load_photo(self.icon, self.state.path, size, size, cover=True)
+        if picture is None:
+            return  # not decodable here: the arrow stays
+        self.thumbnail = picture
+        self.icon.delete("all")
+        self.icon.configure(width=size, height=size, cursor="hand2")
+        self.icon.create_image(size / 2, size / 2, image=picture)
+        self.icon.create_rectangle(0, 0, size - 1, size - 1, outline=theme.c["border"])
+        self.icon.bind("<Button-1>", lambda _e: self._open())
+        tooltip(self.icon, theme, "Vis billedet")
 
     def _open_menu(self, event: tk.Event) -> None:
         state = self.state
         app = self.app
         menu = tk.Menu(app, tearoff=0)
+        if self.is_picture:
+            menu.add_command(label="Vis billedet", command=lambda: app.view_image(state.path))
         if state.status == "done" and state.path:
             menu.add_command(label="Åbn", command=lambda: app.open_path_safely(state.path))
             menu.add_command(
@@ -657,8 +693,10 @@ class TransferRow:
             color = c["danger"]
         self.bar.set(fraction, color, live=state.status == "active")
         self.detail.configure(text="  ·  ".join(parts))
+        self._show_thumbnail()
 
         wanted = state.status + (":path" if state.path else "")
+        wanted += ":pic" if self.is_picture else ""
         if wanted == self._button_state:
             return
         self._button_state = wanted
@@ -695,6 +733,15 @@ class TransferRow:
                 size="sm",
                 kind="ghost",
             ).pack(side="left")
+        if self.is_picture:
+            Button(
+                self.buttons,
+                theme,
+                "Vis",
+                lambda: self.app.view_image(state.path),
+                size="sm",
+                kind="primary",
+            ).pack(side="left", padx=(0, theme.px(6)))
         if state.status == "done" and state.path:
             Button(
                 self.buttons,
@@ -1208,6 +1255,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             widget.configure(bg=color)
 
     def show_page(self, name: str) -> None:
+        self.close_image_viewer()
         if name != "mirror" and getattr(self, "active_page", "") == "mirror":
             self.mirror_view.stop()  # leaving the page ends the screen sharing
         self.active_page = name
@@ -2756,6 +2804,16 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         self._divider(extras.body)
         self._toggle_row(
             extras.body,
+            "Vis modtagne billeder",
+            "Modtagne billeder vises som små billeder på siden \"Overførsler\", og \"Vis\" "
+            "åbner dem i appens egen billedviser, hvor du kan bladre med piletasterne.",
+            self.config_store.get_flag("image_preview", True),
+            self._set_image_preview,
+        )
+
+        self._divider(extras.body)
+        self._toggle_row(
+            extras.body,
             "Telefonens skærm på PC'en",
             "Se din Android-telefons skærm og styr den med musen og tastaturet (siden "
             "\"Styr telefon\" i menuen til venstre). Skal også slås til på telefonen.",
@@ -2979,6 +3037,16 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             return integration.is_autostart_enabled()
         except Exception:  # noqa: BLE001
             return False
+
+    def _set_image_preview(self, value: bool) -> None:
+        self.config_store.set_flag("image_preview", value)
+        self.close_image_viewer()
+        # Rebuild the rows so pictures get (or lose) their preview and "Vis" button.
+        for key in list(self.transfer_rows):
+            self.transfer_rows.pop(key).card.destroy()
+        for state in list(self.transfers.values()):
+            self._render_transfer(state)
+        self._layout_transfers()
 
     def _set_phone_status(self, value: bool) -> None:
         self.config_store.set_flag("phone_status", value)
@@ -5339,6 +5407,46 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
                 open_path(path)
         except Exception as error:  # noqa: BLE001
             self._show_error(error)
+
+    def received_images(self) -> list[str]:
+        """Pictures this PC received that are still on disk, newest first."""
+        seen: set[str] = set()
+        paths: list[str] = []
+        for row in reversed(list(self.transfer_rows.values())):
+            path = row.state.path
+            if row.is_picture and path not in seen and Path(path).is_file():
+                seen.add(path)
+                paths.append(path)
+        return paths
+
+    def view_image(self, path: str) -> None:
+        """Show a received picture in the built-in viewer, over the page area."""
+        if not Path(path).is_file():
+            self._show_error(FileNotFoundError(f"Billedet findes ikke længere: {path}"))
+            return
+        self.close_image_viewer()
+        paths = self.received_images()
+        if path not in paths:
+            paths.insert(0, path)
+        self.image_viewer = ImageViewer(
+            self.page_container,
+            self.theme,
+            paths,
+            paths.index(path),
+            on_open=self.open_path_safely,
+            on_reveal=self.reveal_path_safely,
+            on_close=self._image_viewer_closed,
+        )
+        self.image_viewer.place(relx=0, rely=0, relwidth=1, relheight=1)
+        self.image_viewer.lift()
+
+    def close_image_viewer(self) -> None:
+        viewer = getattr(self, "image_viewer", None)
+        if viewer is not None:
+            viewer.close()
+
+    def _image_viewer_closed(self) -> None:
+        self.image_viewer = None
 
     def reveal_path_safely(self, path: str) -> None:
         try:
