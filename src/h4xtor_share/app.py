@@ -1288,6 +1288,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             cap = key_cap(box, self.theme, key)
             cap.pack(side="right", padx=(0, px(5)))
             parts.append(cap)
+        self.search_box = box
         for part in parts:
             part.bind("<Button-1>", lambda _e: self.open_palette())
             part.bind("<Enter>", lambda _e: box.configure(

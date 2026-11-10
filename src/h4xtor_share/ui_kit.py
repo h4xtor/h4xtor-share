@@ -2387,6 +2387,10 @@ class CommandPalette:
         self.index = 0
         self._list: tk.Frame | None = None
         self._images: list[tk.PhotoImage] = []
+        # The click that opens the palette (on the search box) also reaches the window-wide
+        # watcher below, after the box's own handler. So the watcher only starts to count
+        # clicks a moment after opening: that first click is not "a click elsewhere".
+        self._armed = False
         self.query.trace_add("write", lambda *_a: self._filter())
         root.bind_all("<Button-1>", self._clicked_elsewhere, add="+")
 
@@ -2441,15 +2445,22 @@ class CommandPalette:
         frame.lift()
         self._filter()
         self.entry.focus_set()
+        self._armed = False
+        frame.after(1, lambda: self._arm(frame))
+
+    def _arm(self, frame: tk.Frame) -> None:
+        if self.frame is frame:
+            self._armed = True
 
     def close(self) -> None:
+        self._armed = False
         frame, self.frame, self.entry, self._list = self.frame, None, None, None
         if frame is not None:
             with contextlib.suppress(tk.TclError):
                 frame.destroy()
 
     def _clicked_elsewhere(self, event: tk.Event) -> None:
-        if self.frame is None:
+        if self.frame is None or not self._armed:
             return
         widget = event.widget
         while widget is not None and not isinstance(widget, str):
@@ -2556,6 +2567,9 @@ class PopupMenu(tk.Menu):
         self._focus_before: tk.Misc | None = None
         self._slide_after: str | None = None
         self._anchor: tk.Misc | None = None
+        # False for the instant of the press that opened the menu (a right-click reaches
+        # the window-wide watcher right after it opened the menu): see _pressed_elsewhere.
+        self._armed = False
 
     @property
     def is_open(self) -> bool:
@@ -2673,8 +2687,14 @@ class PopupMenu(tk.Menu):
         panel.place(x=left, y=start, width=width)
         panel.lift()
         panel.focus_set()
+        self._armed = False
+        panel.after(1, lambda: self._arm(panel))
         if theme.motion:
             self._slide(left, start, upper, 0)
+
+    def _arm(self, panel: tk.Frame) -> None:
+        if self.panel is panel:
+            self._armed = True
 
     def _slide(self, left: int, start: int, end: int, step: int) -> None:
         """Three short frames: the panel settles down into place."""
@@ -2697,7 +2717,7 @@ class PopupMenu(tk.Menu):
     @staticmethod
     def _pressed_elsewhere(event: tk.Event) -> None:
         menu = PopupMenu._open
-        if menu is None or menu.panel is None:
+        if menu is None or menu.panel is None or not menu._armed:
             return
         widget = event.widget
         while widget is not None and not isinstance(widget, str):

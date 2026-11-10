@@ -1764,6 +1764,8 @@ def test_popup_menu_is_drawn_in_the_window_and_works_from_mouse_and_keyboard(
         assert "Send filer…" in labels and "Send til alle enheder" in labels
         assert shown.entrycget(0, "accelerator") == "Ctrl+O"
         # A second click on the same button closes its menu instead of opening it again.
+        app.after(20)
+        app.update()
         press = tk.Event()
         press.widget = app.hero_more
         PopupMenu._pressed_elsewhere(press)
@@ -1773,6 +1775,81 @@ def test_popup_menu_is_drawn_in_the_window_and_works_from_mouse_and_keyboard(
         app._hero_menu()  # the next click opens it as usual
         assert PopupMenu._open is not None
         PopupMenu._open.close()
+        assert PopupMenu._open is None
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_the_click_that_opens_a_menu_or_the_palette_does_not_close_it_again(
+        tmp_path, monkeypatch) -> None:
+    """Real mouse events: the press that opens a menu (or the Ctrl+K box) also reaches the
+    window-wide "clicked elsewhere" watcher, which must not take it for a click outside."""
+    from h4xtor_share.models import TransferProgress
+    from h4xtor_share.ui_kit import PopupMenu
+
+    app, peers = _paired_app(1, tmp_path, monkeypatch)
+    try:
+        app.geometry("1100x720")
+        app.update()
+
+        def settle() -> None:
+            for _ in range(6):
+                app.update()
+                app.after(25)
+            app.update()
+
+        # The search box in the top bar opens the palette with the mouse too.
+        app.search_box.event_generate("<Button-1>", x=6, y=6)
+        settle()
+        assert app.palette.is_open
+        app.sidebar.event_generate("<Button-1>", x=4, y=300)  # a click elsewhere closes it
+        settle()
+        assert not app.palette.is_open
+
+        # Right-click on a finished transfer: its menu opens and stays open.
+        app._update_transfer(TransferProgress(
+            "c" * 32, "rapport.pdf", 64, 64, "send", peer_name=peers[0].name))
+        app.show_page("transfers")
+        settle()
+        row = app.transfer_rows["c" * 32]
+        row.name.event_generate("<Button-3>", x=5, y=5)
+        settle()
+        menu = PopupMenu._open
+        assert menu is not None and menu.is_open
+        labels = [menu.entrycget(index, "label") for index in menu.commands()]
+        assert "Fjern fra listen" in labels
+        app.sidebar.event_generate("<Button-1>", x=4, y=300)
+        settle()
+        assert PopupMenu._open is None and not menu.is_open
+        row.name.event_generate("<Button-3>", x=5, y=5)  # ... every time, not only the first
+        settle()
+        assert PopupMenu._open is not None and PopupMenu._open.is_open
+        row.detail.event_generate("<Button-3>", x=5, y=5)  # a right-click elsewhere on the
+        settle()                                           # row moves the menu there
+        assert PopupMenu._open is not None and PopupMenu._open.is_open
+        PopupMenu._open.close()
+
+        # The device's menu opens from the gear button with an ordinary click (press and
+        # release), and a second click on the gear closes it again.
+        app.show_page("share")
+        app.select_peer(peers[0].device_id)
+        settle()
+
+        def click(widget) -> None:
+            widget.event_generate("<ButtonPress-1>", x=5, y=5)
+            widget.event_generate("<ButtonRelease-1>", x=5, y=5)
+            settle()
+
+        click(app.hero_gear)
+        menu = PopupMenu._open
+        assert menu is not None and menu.is_open
+        assert "Send mappe…" in [menu.entrycget(index, "label") for index in menu.commands()]
+        click(app.hero_gear)
+        assert PopupMenu._open is None
+        click(app.hero_more)  # the ▾ next to SEND FILER, the same way
+        assert PopupMenu._open is not None
+        click(app.hero_more)
         assert PopupMenu._open is None
     finally:
         app.close()
