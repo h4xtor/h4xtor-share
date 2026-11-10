@@ -12,7 +12,7 @@ from typing import Any
 
 from h4xtor_share import sysproxy
 from h4xtor_share.netmerge import NETMERGE_PORT_OFFSET, Link, NetMerge
-from h4xtor_share.ui_kit import Card, ScrollFrame
+from h4xtor_share.ui_kit import PAGE_INSET, Card, ScrollFrame
 
 PHONE_POLL_MS = 15_000
 TICK_MS = 1_500
@@ -66,7 +66,7 @@ class NetMergePageMixin:
             "Brug Wi-Fi og telefoners mobildata på én gang – mere fart, når I er flere.",
         )
         scroll = ScrollFrame(page, self.theme)
-        scroll.pack(fill="both", expand=True, padx=(px(36), px(24)), pady=(0, px(16)))
+        scroll.pack(fill="both", expand=True, padx=px(PAGE_INSET), pady=(0, px(16)))
         inner = scroll.inner
 
         hero = Card(inner, self.theme)

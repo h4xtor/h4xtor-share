@@ -18,7 +18,7 @@ import java.util.Random;
  * light. Stands still when the user has turned animations off in Android.
  */
 public final class LauncherBackdrop extends View {
-    private static final int BASE = Color.parseColor("#111318");
+    private static final int BASE = Color.parseColor("#0B0C0E");
     private final Paint glow = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint beam = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint ember = new Paint(Paint.ANTI_ALIAS_FLAG);

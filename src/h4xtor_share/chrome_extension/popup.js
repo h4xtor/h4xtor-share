@@ -1,7 +1,7 @@
 import { ALL, chosenDevice, connect, devices, getToken, send, sendAll, summarize } from "./api.js";
 
 const $ = (id) => document.getElementById(id);
-const COLORS = { android: "#3DDC84", windows: "#2F7BEA", linux: "#E8A33D", darwin: "#8E8E93", macos: "#8E8E93", all: "#D97757" };
+const COLORS = { android: "#34D399", windows: "#5B9BFF", linux: "#FBBF24", darwin: "#A0A6B2", macos: "#A0A6B2", all: "#22D3EE" };
 let list = [];
 let current = null;
 
@@ -35,7 +35,7 @@ function renderDevices() {
     row.className = "device" + (current && current.id === device.id ? " active" : "");
     const avatar = document.createElement("span");
     avatar.className = "avatar";
-    avatar.style.background = COLORS[(device.platform || "").toLowerCase()] || "#A3A19A";
+    avatar.style.background = COLORS[(device.platform || "").toLowerCase()] || "#A0A6B2";
     avatar.textContent = device.all ? "★" : (device.platform || "?").slice(0, 1).toUpperCase();
     const texts = document.createElement("span");
     const name = document.createElement("div");

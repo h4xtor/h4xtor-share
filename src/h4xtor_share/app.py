@@ -60,13 +60,19 @@ from h4xtor_share.server import ShareServer
 from h4xtor_share.tray import TrayIcon
 from h4xtor_share.udp import UdpDiscovery
 from h4xtor_share.ui_kit import (
+    PAGE_INSET,
+    PAGE_MAX,
     Avatar,
     Button,
     Card,
+    CommandPalette,
     DeviceTiles,
     HeroBanner,
     Modal,
     Monkey,
+    NavBadge,
+    NavRow,
+    PopupMenu,
     ProgressBar,
     QrCanvas,
     ScrollFrame,
@@ -75,7 +81,10 @@ from h4xtor_share.ui_kit import (
     Toast,
     Toggle,
     entry,
-    help_dot,
+    glass_image,
+    icon_badge,
+    icon_image,
+    key_cap,
     mix_color,
     round_rect,
     set_dark_titlebar,
@@ -501,7 +510,7 @@ class DeviceCard:
 
     def open_menu(self, anchor: tk.Misc | None = None) -> None:
         app = self.app
-        menu = tk.Menu(app, tearoff=0)
+        menu = PopupMenu(app, app.theme)
         if app.config_store.is_trusted(self.peer.device_id):
             menu.add_command(label="Send filer…", command=lambda: app.send_files(self.peer))
             menu.add_command(label="Send mappe…", command=lambda: app.send_folder(self.peer))
@@ -528,18 +537,13 @@ class DeviceCard:
                     command=lambda: app.connect_bluetooth(self.peer, manual=True),
                 )
             menu.add_separator()
-            menu.add_command(label="Fjern enhed…", command=lambda: app.confirm_remove(self.peer))
+            menu.add_command(label="Fjern enhed…", foreground=app.theme.c["danger"],
+                             command=lambda: app.confirm_remove(self.peer))
         else:
             menu.add_command(label="Forbind…", command=lambda: app.pair_with_code(self.peer))
             menu.add_separator()
             menu.add_command(label="Fjern fra listen", command=lambda: app.remove_device(self.peer))
-        under = anchor or self.menu_button
-        x = under.winfo_rootx()
-        y = under.winfo_rooty() + under.winfo_height()
-        try:
-            menu.tk_popup(x, y)
-        finally:
-            menu.grab_release()
+        menu.popup_below(anchor or self.menu_button)
 
     def destroy(self) -> None:
         if self.card is not None:
@@ -602,7 +606,7 @@ class TransferRow:
     def _open_menu(self, event: tk.Event) -> None:
         state = self.state
         app = self.app
-        menu = tk.Menu(app, tearoff=0)
+        menu = PopupMenu(app, app.theme)
         if state.status == "done" and state.path:
             menu.add_command(label="Åbn", command=lambda: app.open_path_safely(state.path))
             menu.add_command(
@@ -618,14 +622,12 @@ class TransferRow:
             )
             if app.can_delete_transfer(state):
                 menu.add_command(
-                    label="Slet fra PC'en…", command=lambda: app.confirm_delete_transfer(state)
+                    label="Slet fra PC'en…", foreground=app.theme.c["danger"],
+                    command=lambda: app.confirm_delete_transfer(state),
                 )
         if menu.index("end") is None:
             return
-        try:
-            menu.tk_popup(event.x_root, event.y_root)
-        finally:
-            menu.grab_release()
+        menu.tk_popup(event.x_root, event.y_root)
 
     def refresh(self) -> None:
         state = self.state
@@ -744,6 +746,16 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         ("ANDET", (("history", "◷", "Historik"), ("settings", "⚙", "Indstillinger"))),
     )
     NAV_ITEMS = tuple(item for _group, items in NAV_GROUPS for item in items)
+    # The drawn icon of each page (the symbols above stay as a plain-text fallback).
+    NAV_ICONS = {
+        "share": "send", "transfers": "transfers", "clipboard": "clipboard",
+        "mirror": "phone", "notifications": "bell", "sms": "message", "remote": "remote",
+        "connections": "wifi", "iphone": "globe", "netmerge": "merge",
+        "history": "history", "settings": "settings",
+    }
+    SIDEBAR_WIDE = 232
+    SIDEBAR_SLIM = 60
+    COMPACT_BELOW = 1000  # window width (logical px) under which the menu goes slim
 
     def __init__(
         self,
@@ -760,6 +772,8 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         self.config_store = Config()
         dark = self._wants_dark()
         self.theme = Theme(self, dark)
+        if self.config_store.get_flag("reduce_motion", False):
+            self.theme.motion = False
         self.COLORS = self.theme.c
         self.event_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
         self.runtime = AsyncRuntime(self.event_queue)
@@ -852,7 +866,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
 
         self.title(APP_TITLE)
         self.geometry(f"{self.theme.px(1120)}x{self.theme.px(740)}")
-        self.minsize(self.theme.px(940), self.theme.px(620))
+        self.minsize(self.theme.px(800), self.theme.px(660))
         self.configure(background=self.theme.c["bg"])
         self.protocol("WM_DELETE_WINDOW", self.close_window)
         self._configure_style()
@@ -932,12 +946,38 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         style.layout("Treeview", [("Treeview.treearea", {"sticky": "nswe"})])
         style.configure(
             "Vertical.TScrollbar",
-            background=c["border"],
-            troughcolor=c["bg"],
-            bordercolor=c["bg"],
+            background=c["border_strong"],
+            troughcolor=c["card"],
+            bordercolor=c["card"],
+            lightcolor=c["border_strong"],
+            darkcolor=c["border_strong"],
             arrowcolor=c["muted"],
+            arrowsize=self.theme.px(11),
+            gripcount=0,
             relief="flat",
         )
+        style.map("Vertical.TScrollbar", background=[("active", c["faint"])])
+        # The few native widgets (menus, classic scrollbars) take the theme too.
+        for option, value in {
+            "*Menu.background": c["card"],
+            "*Menu.foreground": c["text"],
+            "*Menu.activeBackground": c["nav_active"],
+            "*Menu.activeForeground": c["text"],
+            "*Menu.disabledForeground": c["faint"],
+            "*Menu.selectColor": c["accent"],
+            "*Menu.relief": "flat",
+            "*Menu.borderWidth": "1",
+            "*Menu.activeBorderWidth": "0",
+            "*Menu.font": self.theme.font(10).name,
+            "*Scrollbar.background": c["border_strong"],
+            "*Scrollbar.activeBackground": c["faint"],
+            "*Scrollbar.troughColor": c["card"],
+            "*Scrollbar.relief": "flat",
+            "*Scrollbar.borderWidth": "0",
+            "*Scrollbar.elementBorderWidth": "0",
+            "*Scrollbar.highlightThickness": "0",
+        }.items():
+            self.option_add(option, value)
         style.configure(
             "TCombobox",
             fieldbackground=c["entry"],
@@ -951,12 +991,16 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
     def _build_ui(self) -> None:
         c = self.theme.c
         px = self.theme.px
-        self.sidebar = tk.Frame(self, bg=c["sidebar"], width=px(236))
+        self._sidebar_compact = False
+        self.sidebar = tk.Frame(self, bg=c["sidebar"], width=px(self.SIDEBAR_WIDE))
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
         tk.Frame(self, bg=c["border"], width=1).pack(side="left", fill="y")
         self.main = tk.Frame(self, bg=c["bg"])
         self.main.pack(side="left", fill="both", expand=True)
+        self._group_of = {k: g for g, items in self.NAV_GROUPS for k, _i, _l in items}
+        self._label_of = {k: lbl for _g, items in self.NAV_GROUPS for k, _i, lbl in items}
+        self.palette = CommandPalette(self, self.theme)
         self._build_sidebar()
         self._build_topbar()
 
@@ -964,8 +1008,8 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         status_bar = tk.Frame(self.main, bg=c["chrome"])
         status_bar.pack(side="bottom", fill="x")
         tk.Frame(status_bar, bg=c["border"], height=1).pack(side="top", fill="x")
-        # IDE-style segmented status strip, monospace: live state on the left, the fixed
-        # facts of this instance (TLS, encoding, port, version) on the right.
+        # A quiet monospace status strip: live state on the left, the fixed facts of this
+        # instance (TLS, port, version) on the right.
         self.status_label = tk.Label(
             status_bar, textvariable=self.status_var, bg=c["chrome"], fg=c["muted"],
             font=self.theme.font(8, family=self.theme.mono), anchor="w", padx=px(16), pady=px(5),
@@ -973,14 +1017,12 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         self.status_label.pack(side="left", fill="x", expand=True)
         tk.Label(
             status_bar,
-            text=f"TLS pinned · UTF-8 · :{self.config_store.port} · v{VERSION}",
+            text=f"TLS pinned  ·  :{self.config_store.port}  ·  v{VERSION}",
             bg=c["chrome"], fg=c["faint"], font=self.theme.font(8, family=self.theme.mono),
             padx=px(16),
         ).pack(side="right")
         self.pages: dict[str, tk.Frame] = {}
         self._page_headers: dict[str, tk.Canvas] = {}
-        self._group_of = {k: g for g, items in self.NAV_GROUPS for k, _i, _l in items}
-        self._label_of = {k: lbl for _g, items in self.NAV_GROUPS for k, _i, lbl in items}
         self.page_container = tk.Frame(self.main, bg=c["bg"])
         self.page_container.pack(fill="both", expand=True)
         self.page_container.grid_rowconfigure(0, weight=1)
@@ -1002,22 +1044,67 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             frame.grid(row=0, column=0, sticky="nsew")
         self.show_page("share")
 
-        # Keyboard shortcuts (shown in the status line and in the menus).
+        # Keyboard shortcuts (shown in the menus and in the command palette).
         shortcuts = {
             "o": lambda: self.send_files(),
             "n": self.show_qr_pairing,
             "v": self._paste_shortcut,
+            "k": self.open_palette,
         }
         for key, action in shortcuts.items():
             for sequence in (f"<Control-{key}>", f"<Control-{key.upper()}>"):
                 self.bind_all(sequence, lambda event, run=action: self._shortcut(event, run),
                               add="+")
         self.bind_all("<F5>", lambda event: self._shortcut(event, self.scan_lan), add="+")
+        # Ctrl+K is the command palette here, not Tk's old "delete to end of line".
+        for widget_class in ("Entry", "Text"):
+            with contextlib.suppress(tk.TclError):
+                self.unbind_class(widget_class, "<Control-k>")
+        self.bind("<Configure>", self._window_resized, add="+")
 
         self.drop_target_register(DND_FILES)
         self.dnd_bind("<<DropEnter>>", lambda _e: self._drop_highlight(True))
         self.dnd_bind("<<DropLeave>>", lambda _e: self._drop_highlight(False))
         self.dnd_bind("<<Drop>>", self._files_dropped)
+
+    def _window_resized(self, event: tk.Event) -> None:
+        """A narrow window gets the slim icon menu, so the page keeps its room."""
+        if event.widget is self:
+            self._set_sidebar_compact(event.width < self.theme.px(self.COMPACT_BELOW))
+
+    # ---------------------------------------------------------- command palette
+    def palette_items(self) -> list[tuple[str, str, str, Callable[[], None]]]:
+        """Everything Ctrl+K can find: each page, and the actions used most."""
+        items: list[tuple[str, str, str, Callable[[], None]]] = [
+            ("Send filer…", "Handling", "Ctrl+O", lambda: self.send_files()),
+            ("Send mappe…", "Handling", "", lambda: self.send_folder()),
+            ("Send udklipsholder", "Handling", "Ctrl+V", lambda: self.send_clipboard()),
+            ("Skriv tekst eller link", "Handling", "", self._focus_composer),
+            ("Forbind ny enhed (QR-kode)", "Enheder", "Ctrl+N", self.show_qr_pairing),
+            ("Søg efter enheder på Wi-Fi", "Enheder", "F5", self.scan_lan),
+            ("Tilføj enhed via IP-adresse…", "Enheder", "", self.add_manual_peer),
+        ]
+        if bluetooth.supported():
+            items.append(("Søg via Bluetooth", "Enheder", "",
+                          lambda: self.scan_bluetooth(manual=True)))
+        for key, _icon, label in self.NAV_ITEMS:
+            group = self._group_of[key].capitalize()
+            items.append((label, f"Gå til  ·  {group}", "",
+                          lambda name=key: self.show_page(name)))
+        other = "light" if self.theme.dark else "dark"
+        items += [
+            ("Åbn mappen med modtagne filer", "Filer", "", self.open_incoming_folder),
+            ("Ryd færdige overførsler", "Overførsler", "", self.clear_finished_transfers),
+            ("Stop alle overførsler", "Overførsler", "", self.stop_all_transfers),
+            ("Skift til lyst tema" if self.theme.dark else "Skift til mørkt tema",
+             "Udseende", "", lambda: self._set_theme(other)),
+            ("Søg efter opdatering", "h4xtor share", "", self.check_for_updates_now),
+            ("Se hvad der er nyt", "h4xtor share", "", self.show_changelog),
+        ]
+        return items
+
+    def open_palette(self) -> None:
+        self.palette.toggle(self.palette_items())
 
     def _shortcut(self, event: tk.Event, action: Callable[[], None]) -> None:
         """Run a shortcut from the main window only, never from inside a dialog."""
@@ -1036,155 +1123,178 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
     def _build_sidebar(self) -> None:
         c = self.theme.c
         px = self.theme.px
-        brand = tk.Frame(self.sidebar, bg=c["sidebar"])
-        brand.pack(fill="x", padx=px(16), pady=(px(18), px(16)))
-        Monkey(brand, self.theme, size=px(30), bg=c["sidebar"]).pack(side="left")
-        tk.Label(
-            brand,
-            text="h4xtor",
-            bg=c["sidebar"],
-            fg=c["text"],
-            font=self.theme.title_font(15),
-        ).pack(side="left", padx=(px(8), 0))
-        tk.Label(
-            brand,
-            text="share",
-            bg=c["sidebar"],
-            fg=c["accent"],
-            font=self.theme.title_font(15),
-        ).pack(side="left", padx=(px(4), 0))
+        side = c["sidebar"]
+        brand = tk.Frame(self.sidebar, bg=side)
+        brand.pack(fill="x", padx=px(14), pady=(px(14), px(12)))
+        Monkey(brand, self.theme, size=px(28), bg=side).pack(side="left")
+        self._brand_words = [
+            tk.Label(brand, text="h4xtor", bg=side, fg=c["text"],
+                     font=self.theme.title_font(13)),
+            tk.Label(brand, text="share", bg=side, fg=c["accent"],
+                     font=self.theme.title_font(13)),
+        ]
+        self._brand_words[0].pack(side="left", padx=(px(8), 0))
+        self._brand_words[1].pack(side="left", padx=(px(4), 0))
 
-        # The launcher's big blue button sits at the top of the menu.
+        # The one primary action of the whole app sits at the top of the menu.
+        self._connect_slot = tk.Frame(self.sidebar, bg=side)
+        self._connect_slot.pack(fill="x", padx=px(10), pady=(0, px(6)))
         self.connect_button = Button(
-            self.sidebar, self.theme, "Forbind ny enhed", self.show_qr_pairing,
-            kind="primary", size="lg", icon="+", width=212, bg=c["sidebar"],
+            self._connect_slot, self.theme, "Forbind ny enhed", self.show_qr_pairing,
+            kind="primary", size="md", icon="+", width=self.SIDEBAR_WIDE - 20, bg=side,
         )
-        self.connect_button.pack(padx=px(12), pady=(0, px(8)))
+        self.connect_button.pack()
         tooltip(self.connect_button, self.theme, "Vis QR-koden til telefonen (Ctrl+N)")
+        self.connect_compact = Button(
+            self._connect_slot, self.theme, "", self.show_qr_pairing,
+            kind="primary", size="md", icon="+", width=self.SIDEBAR_SLIM - 20, bg=side,
+        )
+        tooltip(self.connect_compact, self.theme, "Forbind ny enhed (Ctrl+N)")
 
-        self.nav_rows: dict[str, tuple[tk.Frame, tk.Label, tk.Label]] = {}
-        self.nav_badges: dict[str, tk.Label] = {}
-        self.nav_bars: dict[str, tk.Frame] = {}
-        group_of = {key: group for group, items in self.NAV_GROUPS for key, _i, _l in items}
-        last_group = ""
-        for key, icon, label in self.NAV_ITEMS:
-            if group_of[key] != last_group:
-                last_group = group_of[key]
-                tk.Label(
-                    self.sidebar,
-                    text=last_group,
-                    bg=c["sidebar"],
-                    fg=c["faint"],
-                    font=self.theme.font(8, "bold"),
-                    anchor="w",
-                ).pack(fill="x", padx=px(22), pady=(px(12), px(3)))
-            row = tk.Frame(self.sidebar, bg=c["sidebar"], cursor="hand2")
-            row.pack(fill="x", padx=(0, px(10)), pady=px(1))
-            # Battle.net marks the open page with a bright bar on the menu's edge.
-            self.nav_bars[key] = tk.Frame(row, bg=c["sidebar"], width=px(3))
-            self.nav_bars[key].pack(side="left", fill="y", padx=(0, px(7)))
-            icon_label = tk.Label(
-                row,
-                text=icon,
-                width=2,
-                bg=c["sidebar"],
-                fg=c["muted"],
-                font=self.theme.font(12, family=self.theme.symbol),
-            )
-            icon_label.pack(side="left", padx=(px(9), px(8)), pady=px(7))
-            text_label = tk.Label(
-                row,
-                text=label,
-                bg=c["sidebar"],
-                fg=c["text"],
-                font=self.theme.font(10),
-                anchor="w",
-            )
-            text_label.pack(side="left", fill="x", expand=True)
-            badge = tk.Label(
-                row, text="", bg=c["sidebar"], fg=c["accent"], font=self.theme.font(9, "bold")
-            )
-            badge.pack(side="right", padx=px(10))
-            for widget in (row, icon_label, text_label, badge):
-                widget.bind("<Button-1>", lambda _e, name=key: self.show_page(name))
-                widget.bind("<Enter>", lambda _e, name=key: self._nav_hover(name, True))
-                widget.bind("<Leave>", lambda _e, name=key: self._nav_hover(name, False))
-            self.nav_rows[key] = (row, icon_label, text_label)
-            self.nav_badges[key] = badge
-            if key == "transfers":
-                self.transfer_badge = badge
-
-        spacer = tk.Frame(self.sidebar, bg=c["sidebar"])
-        spacer.pack(fill="both", expand=True)
-
-        tk.Frame(self.sidebar, bg=c["border"], height=1).pack(fill="x", padx=px(14))
-        me = tk.Frame(self.sidebar, bg=c["sidebar"])
-        me.pack(fill="x", padx=px(14), pady=px(14))
+        # This device, pinned to the bottom edge: it stays in view in a short window too.
+        me = tk.Frame(self.sidebar, bg=side)
+        me.pack(side="bottom", fill="x", padx=px(14), pady=px(12))
+        tk.Frame(self.sidebar, bg=c["border"], height=1).pack(side="bottom", fill="x")
         initial = (self.config_store.device_name[:1] or "P").upper()
-        badge_canvas = tk.Canvas(
-            me, width=px(32), height=px(32), bg=c["sidebar"], highlightthickness=0
-        )
-        badge_canvas.create_oval(1, 1, px(32) - 1, px(32) - 1, fill=c["text"], outline=c["text"])
-        badge_canvas.create_text(
-            px(16), px(16), text=initial, fill=c["sidebar"], font=self.theme.font(11, "bold")
-        )
+        size = px(30)
+        badge_canvas = tk.Canvas(me, width=size, height=size, bg=side, highlightthickness=0)
+        badge_canvas.image = glass_image(  # type: ignore[attr-defined]
+            badge_canvas, size, size, px(9), c["nav_active"], side, c["border_strong"])
+        badge_canvas.create_image(0, 0, image=badge_canvas.image, anchor="nw")  # type: ignore[attr-defined]
+        badge_canvas.create_text(size / 2, size / 2, text=initial, fill=c["text"],
+                                 font=self.theme.font(10, "bold"))
         badge_canvas.pack(side="left")
-        texts = tk.Frame(me, bg=c["sidebar"])
+        texts = self._me_texts = tk.Frame(me, bg=side)
         texts.pack(side="left", padx=(px(10), 0), fill="x", expand=True)
         self.me_name = tk.Label(
             texts,
             text=self.config_store.device_name,
-            bg=c["sidebar"],
+            bg=side,
             fg=c["text"],
             font=self.theme.font(10, "bold"),
             anchor="w",
         )
         self.me_name.pack(fill="x")
-        status_row = tk.Frame(texts, bg=c["sidebar"])
+        status_row = tk.Frame(texts, bg=side)
         status_row.pack(fill="x")
         self.me_dot = tk.Label(
-            status_row, text="●", bg=c["sidebar"], fg=c["warning"], font=self.theme.font(7)
+            status_row, text="●", bg=side, fg=c["warning"], font=self.theme.font(7)
         )
         self.me_dot.pack(side="left")
         self.me_status = tk.Label(
             status_row,
             text="Starter…",
-            bg=c["sidebar"],
+            bg=side,
             fg=c["muted"],
             font=self.theme.font(8),
             anchor="w",
         )
         self.me_status.pack(side="left", padx=(px(4), 0))
-        tk.Label(
-            self.sidebar,
-            text=f"version {VERSION}",
-            bg=c["sidebar"],
-            fg=c["faint"],
-            font=self.theme.font(7),
-        ).pack(anchor="w", padx=px(18), pady=(0, px(10)))
+
+        self.nav_rows: dict[str, NavRow] = {}
+        self.nav_badges: dict[str, NavBadge] = {}
+        self._nav_heads: list[tuple[tk.Frame, tk.Label, tk.Frame]] = []
+        last_group = ""
+        for key, _glyph, label in self.NAV_ITEMS:
+            if self._group_of[key] != last_group:
+                last_group = self._group_of[key]
+                head = tk.Frame(self.sidebar, bg=side, height=px(26))
+                head.pack(fill="x", padx=px(10), pady=(px(4), 0))
+                head.pack_propagate(False)
+                title = tk.Label(head, text=last_group, bg=side, fg=c["faint"],
+                                 font=self.theme.font(8, "bold"), anchor="w")
+                title.pack(side="bottom", fill="x", padx=px(11), pady=(0, px(4)))
+                rule = tk.Frame(head, bg=c["border"], height=1)  # shown in the slim menu
+                self._nav_heads.append((head, title, rule))
+            row = NavRow(self.sidebar, self.theme, self.NAV_ICONS.get(key, "file"), label,
+                         lambda name=key: self.show_page(name))
+            row.pack(fill="x", padx=px(10), pady=px(1))
+            tooltip(row, self.theme, label, when=lambda: self._sidebar_compact)
+            self.nav_rows[key] = row
+            self.nav_badges[key] = NavBadge(row)
+        self.transfer_badge = self.nav_badges["transfers"]
+
+    def _set_sidebar_compact(self, compact: bool) -> None:
+        """Wide menu with names, or the slim one with icons only (names as tooltips)."""
+        if compact == self._sidebar_compact:
+            return
+        self._sidebar_compact = compact
+        px = self.theme.px
+        self.sidebar.configure(width=px(self.SIDEBAR_SLIM if compact else self.SIDEBAR_WIDE))
+        for index, label in enumerate(self._brand_words):
+            if compact:
+                label.pack_forget()
+            else:
+                label.pack(side="left", padx=(px(8 if index == 0 else 4), 0))
+        self.connect_button.pack_forget()
+        self.connect_compact.pack_forget()
+        (self.connect_compact if compact else self.connect_button).pack()
+        for index, (head, title, rule) in enumerate(self._nav_heads):
+            head.configure(height=px(13 if compact else 26))
+            if compact:
+                title.pack_forget()
+                if index:
+                    rule.place(relx=0.5, rely=0.5, anchor="center", relwidth=0.6)
+            else:
+                rule.place_forget()
+                title.pack(side="bottom", fill="x", padx=px(11), pady=(0, px(4)))
+        for row in self.nav_rows.values():
+            row.set_compact(compact)
+        if compact:
+            self._me_texts.pack_forget()
+        else:
+            self._me_texts.pack(side="left", padx=(px(10), 0), fill="x", expand=True)
 
     def _build_topbar(self) -> None:
-        """A slim IDE-style top bar: brand + version badge + breadcrumb on the left,
-        live status pills on the right."""
+        """A slim top bar: where you are on the left; the search-and-run box (Ctrl+K) and
+        the live status on the right."""
         c, px = self.theme.c, self.theme.px
-        bar = tk.Frame(self.main, bg=c["chrome"])
+        chrome = c["chrome"]
+        bar = tk.Frame(self.main, bg=chrome)
         bar.pack(side="top", fill="x")
         tk.Frame(bar, bg=c["border"], height=1).pack(side="bottom", fill="x")
-        inner = tk.Frame(bar, bg=c["chrome"])
-        inner.pack(fill="x", padx=px(16), pady=px(8))
-        tk.Label(inner, text="h4xtor share", bg=c["chrome"], fg=c["text"],
-                 font=self.theme.font(9, "bold", self.theme.mono)).pack(side="left")
-        tk.Label(inner, text=f"v{VERSION}", bg=c["accent_soft"], fg=c["accent"],
-                 font=self.theme.font(8, "bold", self.theme.mono),
-                 padx=px(6), pady=px(1)).pack(side="left", padx=(px(8), 0))
-        self.top_crumb = tk.Label(inner, text="", bg=c["chrome"], fg=c["faint"],
-                                  font=self.theme.font(9, family=self.theme.mono))
-        self.top_crumb.pack(side="left", padx=(px(12), 0))
-        self.top_online = tk.Label(inner, text="● Starter…", bg=c["chrome"], fg=c["warning"],
+        inner = tk.Frame(bar, bg=chrome)
+        inner.pack(fill="x", padx=(px(PAGE_INSET), px(16)), pady=px(8))
+        self.top_group = tk.Label(inner, text="", bg=chrome, fg=c["faint"],
+                                  font=self.theme.font(9))
+        self.top_group.pack(side="left")
+        self._crumb_arrow = icon_image(inner, "chevron-right", px(12), c["faint"], chrome)
+        tk.Label(inner, image=self._crumb_arrow, bg=chrome).pack(side="left", padx=px(4))
+        self.top_crumb = tk.Label(inner, text="", bg=chrome, fg=c["text"],
+                                  font=self.theme.font(9, "bold"))
+        self.top_crumb.pack(side="left")
+
+        self.top_online = tk.Label(inner, text="● Starter…", bg=chrome, fg=c["warning"],
                                    font=self.theme.font(8, "bold", self.theme.mono))
         self.top_online.pack(side="right")
-        self.top_direct = tk.Label(inner, text="● Wi-Fi Direct", bg=c["chrome"], fg=c["accent"],
+        self.top_direct = tk.Label(inner, text="● Wi-Fi Direct", bg=chrome, fg=c["accent"],
                                    font=self.theme.font(8, "bold", self.theme.mono))
+
+        # The search box is a button in disguise: a click (or Ctrl+K) opens the palette.
+        field = c["entry"]
+        box = self.top_search = tk.Frame(inner, bg=field, cursor="hand2", highlightthickness=1,
+                                         highlightbackground=c["border"])
+        box.pack(side="right", padx=(0, px(14)))
+        self._search_icon = icon_image(box, "search", px(14), c["faint"], field)
+        parts: list[tk.Misc] = [
+            box,
+            tk.Label(box, image=self._search_icon, bg=field),
+            tk.Label(box, text="Søg eller kør en kommando", bg=field, fg=c["faint"],
+                     font=self.theme.font(9)),
+        ]
+        parts[1].pack(side="left", padx=(px(9), px(7)), pady=px(4))
+        parts[2].pack(side="left", padx=(0, px(22)))
+        for key in ("K", "Ctrl"):
+            cap = key_cap(box, self.theme, key)
+            cap.pack(side="right", padx=(0, px(5)))
+            parts.append(cap)
+        self.search_box = box
+        for part in parts:
+            part.bind("<Button-1>", lambda _e: self.open_palette())
+            part.bind("<Enter>", lambda _e: box.configure(
+                highlightbackground=c["border_strong"]), add="+")
+            part.bind("<Leave>", lambda _e: box.configure(
+                highlightbackground=c["border"]), add="+")
 
     def _refresh_topbar(self) -> None:
         if not hasattr(self, "top_online"):
@@ -1195,38 +1305,20 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
                                   text="● Online" if online else "● Starter…")
         active = getattr(self, "direct_host", None) is not None
         if active and not self.top_direct.winfo_manager():
-            self.top_direct.pack(side="right", padx=(0, px(12)))
+            self.top_direct.pack(side="right", padx=(0, px(12)), after=self.top_online)
         elif not active and self.top_direct.winfo_manager():
             self.top_direct.pack_forget()
-
-    def _nav_hover(self, name: str, hover: bool) -> None:
-        if name == getattr(self, "active_page", ""):
-            return
-        c = self.theme.c
-        color = c["nav_active"] if hover else c["sidebar"]
-        for widget in (*self.nav_rows[name], self.nav_bars[name], self.nav_badges[name]):
-            widget.configure(bg=color)
 
     def show_page(self, name: str) -> None:
         if name != "mirror" and getattr(self, "active_page", "") == "mirror":
             self.mirror_view.stop()  # leaving the page ends the screen sharing
         self.active_page = name
-        c = self.theme.c
-        for key, (row, icon_label, text_label) in self.nav_rows.items():
-            active = key == name
-            bg = c["nav_active"] if active else c["sidebar"]
-            row.configure(bg=bg)
-            icon_label.configure(bg=bg, fg=c["accent"] if active else c["muted"])
-            text_label.configure(bg=bg, font=self.theme.font(10, "bold" if active else "normal"))
-        for child in self.nav_rows.values():
-            for widget in child[0].winfo_children():
-                widget.configure(bg=child[0].cget("bg"))
-        for key, bar in self.nav_bars.items():
-            bar.configure(bg=c["accent"] if key == name else bar.master.cget("bg"))
+        for key, row in self.nav_rows.items():
+            row.set_active(key == name)
         self.pages[name].tkraise()
         if hasattr(self, "top_crumb"):
-            self.top_crumb.configure(
-                text=f"{self._group_of.get(name, '')}  /  {self._label_of.get(name, name)}")
+            self.top_group.configure(text=self._group_of.get(name, "").capitalize())
+            self.top_crumb.configure(text=self._label_of.get(name, name))
         self._refresh_topbar()
         self._slide_in_title(name)
         if name == "history":
@@ -1237,9 +1329,9 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             self._mirror_open()
 
     def _slide_in_title(self, name: str) -> None:
-        """A page's title glides in from the left and fades up, like a launcher tab change."""
+        """A page's title glides in from the left and fades up when the page opens."""
         header = self._page_headers.get(name)
-        if header is None:
+        if header is None or not self.theme.motion:
             return
         c, px = self.theme.c, self.theme.px
         steps = (0.0, 0.35, 0.62, 0.82, 0.94, 1.0)
@@ -1247,10 +1339,10 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         def frame(index: int) -> None:
             with contextlib.suppress(tk.TclError):
                 f = steps[index]
-                for tag, x, color in (("page-title", px(40), c["text"]),
-                                      ("page-sub", px(40), c["muted"])):
+                for tag, x, color in (("page-title", px(PAGE_INSET), c["text"]),
+                                      ("page-sub", px(PAGE_INSET), c["muted"])):
                     _, y = header.coords(tag)
-                    header.coords(tag, x - px(18) * (1 - f), y)
+                    header.coords(tag, x - px(12) * (1 - f), y)
                     header.itemconfigure(tag, fill=mix_color(color, c["bg"], 1 - f))
                 if index + 1 < len(steps):
                     header.after(16, lambda: frame(index + 1))
@@ -1258,26 +1350,38 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         frame(0)
 
     def _page(self, name: str, title: str, subtitle: str) -> tuple[tk.Frame, tk.Frame]:
-        """A flat IDE-style page header: a small monospace eyebrow (the menu group), a clean
-        title and a subtitle, on the plain page colour. Buttons go into the returned
-        ``actions`` frame (right-hand side)."""
+        """A page: a clean title with a one-line explanation under it, on the plain page
+        colour. Buttons go into the returned ``actions`` frame, level with the title. The
+        page never grows wider than ``PAGE_MAX``: on a big screen it sits centred."""
         c = self.theme.c
         px = self.theme.px
-        page = tk.Frame(self.page_container, bg=c["bg"])
-        self.pages[name] = page
-        header = tk.Canvas(page, height=px(100), bg=c["bg"], highlightthickness=0, bd=0)
-        header.pack(fill="x", pady=(0, px(4)))
-        header.create_text(px(40), px(22), text=self._group_of.get(name, "H4XTOR SHARE"),
-                           fill=c["accent"], anchor="nw",
-                           font=self.theme.font(8, "bold", self.theme.mono))
-        header.create_text(px(40), px(40), text=title, fill=c["text"], anchor="nw",
-                           font=self.theme.title_font(22), tags=("page-title",))
-        header.create_text(px(40), px(76), text=subtitle, fill=c["muted"], anchor="nw",
-                           font=self.theme.font(10), tags=("page-sub",))
+        outer = tk.Frame(self.page_container, bg=c["bg"])
+        self.pages[name] = outer
+        page = tk.Frame(outer, bg=c["bg"])
+
+        def fit(_event: tk.Event | None = None) -> None:
+            width = outer.winfo_width()
+            use = min(width, px(PAGE_MAX))
+            page.place(x=(width - use) // 2, y=0, width=use, relwidth=0, relheight=1)
+
+        outer.bind("<Configure>", fit, add="+")
+        page.place(x=0, y=0, relwidth=1, relheight=1)
+        header = tk.Canvas(page, height=px(92), bg=c["bg"], highlightthickness=0, bd=0)
+        header.pack(fill="x")
+        inset = px(PAGE_INSET)
+        header.create_text(inset, px(26), text=title, fill=c["text"], anchor="nw",
+                           font=self.theme.title_font(19), tags=("page-title",))
+        sub = header.create_text(inset, px(60), text=subtitle, fill=c["muted"], anchor="nw",
+                                 font=self.theme.font(10), tags=("page-sub",))
         self._page_headers[name] = header
         actions = tk.Frame(header, bg=c["bg"])
-        item = header.create_window(0, px(96), window=actions, anchor="se")
-        header.bind("<Configure>", lambda e: header.coords(item, e.width - px(36), px(96)))
+        item = header.create_window(0, px(24), window=actions, anchor="ne")
+
+        def laid_out(event: tk.Event) -> None:
+            header.coords(item, event.width - inset, px(24))
+            header.itemconfigure(sub, width=max(px(200), event.width - 2 * inset))
+
+        header.bind("<Configure>", laid_out)
         return page, actions
 
     # ------------------------------------------------------------- mirror page
@@ -1289,9 +1393,9 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         )
         self.mirror_peer_id: str | None = None
         self.mirror_picker = tk.Frame(page, bg=c["bg"])
-        self.mirror_picker.pack(fill="x", padx=px(36), pady=(0, px(10)))
+        self.mirror_picker.pack(fill="x", padx=px(PAGE_INSET), pady=(0, px(10)))
         self.mirror_view = MirrorView(page, self)
-        self.mirror_view.pack(fill="both", expand=True, padx=(px(36), px(24)), pady=(0, px(16)))
+        self.mirror_view.pack(fill="both", expand=True, padx=px(PAGE_INSET), pady=(0, px(16)))
 
     def _mirror_open(self) -> None:
         capable = self._capable_peers("screen-mirror")
@@ -1326,41 +1430,42 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         scroll.pack(fill="both", expand=True)
         outer = scroll.inner
 
-        # Battle.net's game page: key art with the monkey, the target's name in big
-        # letters and one big blue button. The words and buttons follow the selection.
-        self.hero = HeroBanner(outer, self.theme, height=300)
-        self.hero.pack(fill="x")
-        self.hero_send = Button(self.hero.buttons, self.theme, "SEND FILER",
-                                lambda: self.send_files(), kind="primary", size="xl", width=210)
-        self.hero_send.pack(side="left")
-        self.hero_more = Button(self.hero.buttons, self.theme, "▾", self._hero_menu,
-                                kind="primary", size="xl", width=46)
-        self.hero_more.pack(side="left", padx=(px(2), 0))
-        tooltip(self.hero_more, self.theme, "Mappe, udklipsholder, tekst …")
-        self.hero_gear = Button(self.hero.buttons, self.theme, "⚙", self._hero_device_menu,
-                                kind="secondary", size="xl", width=50)
-        self.hero_gear.pack(side="left", padx=(px(10), 0))
-        tooltip(self.hero_gear, self.theme, "Enhedens menu")
-        self.hero_scan = Button(self.hero.buttons, self.theme, "Scan netværk", self.scan_lan,
-                                kind="secondary", size="xl")
-
+        # One column for the whole page, centred on a big screen like every other page.
         center = tk.Frame(outer, bg=c["bg"])
-        center.pack(fill="x", padx=px(48), pady=(px(6), px(30)))
+        center.pack(fill="x", padx=px(PAGE_INSET), pady=(0, px(30)))
 
         def recenter(event: tk.Event) -> None:
-            pad = max(px(48), (event.width - px(1100)) // 2)
+            pad = max(px(PAGE_INSET), (event.width - px(PAGE_MAX)) // 2 + px(PAGE_INSET))
             center.pack_configure(padx=pad)
 
         scroll.canvas.bind("<Configure>", recenter, add="+")
+
+        # The header: who you are sending to in large type, the main action right under it
+        # and the monkey in a small card. The words and buttons follow the selection.
+        self.hero = HeroBanner(center, self.theme, height=206)
+        self.hero.pack(fill="x")
+        self.hero_send = Button(self.hero.buttons, self.theme, "SEND FILER",
+                                lambda: self.send_files(), kind="primary", size="xl", width=196)
+        self.hero_send.pack(side="left")
+        self.hero_more = Button(self.hero.buttons, self.theme, "▾", self._hero_menu,
+                                kind="primary", size="xl", width=44)
+        self.hero_more.pack(side="left", padx=(px(2), 0))
+        tooltip(self.hero_more, self.theme, "Mappe, udklipsholder, tekst …")
+        self.hero_gear = Button(self.hero.buttons, self.theme, "⚙", self._hero_device_menu,
+                                kind="secondary", size="xl", width=44)
+        self.hero_gear.pack(side="left", padx=(px(8), 0))
+        tooltip(self.hero_gear, self.theme, "Enhedens menu")
+        self.hero_scan = Button(self.hero.buttons, self.theme, "Scan netværk", self.scan_lan,
+                                kind="secondary", size="xl")
 
         self.banner = tk.Frame(center, bg=c["bg"])
         self.banner.pack(fill="x")
 
         # The devices as launcher game icons, with the ways to find more on the right.
         head = tk.Frame(center, bg=c["bg"])
-        head.pack(fill="x", pady=(px(14), px(10)))
+        head.pack(fill="x", pady=(px(8), px(10)))
         self.tiles_title = tk.Label(head, text="DINE ENHEDER", bg=c["bg"], fg=c["muted"],
-                                    font=self.theme.font(9, "bold"), anchor="w")
+                                    font=self.theme.font(8, "bold"), anchor="w")
         self.tiles_title.pack(side="left")
         # One way in to every way of finding a device, instead of a row of small buttons.
         self.add_device_button = Button(head, self.theme, "Tilføj enhed ▾",
@@ -1371,7 +1476,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
                                         on_add=self.show_qr_pairing)
         self.device_tiles.pack(fill="x")
         self.route_chips = tk.Frame(center, bg=c["bg"])
-        self.route_chips.pack(anchor="w", pady=(px(10), px(18)))
+        self.route_chips.pack(anchor="w", pady=(px(2), px(18)))
         self._chips_key: tuple[Any, ...] | None = None
         self._sends_landed = 0
 
@@ -1404,45 +1509,22 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
 
         bar = tk.Frame(body, bg=c["card"])
         bar.pack(fill="x", pady=(px(8), 0))
-        Button(
-            bar,
-            self.theme,
-            "Filer",
-            lambda: self.send_files(),
-            kind="ghost",
-            size="sm",
-            icon="＋",
-            bg=c["card"],
-        ).pack(side="left")
-        help_dot(bar, self.theme, "Vælg en eller flere filer på PC'en og send dem til den "
-                 "valgte enhed. Du kan også trække filer ind på vinduet.",
-                 "Send filer").pack(side="left", padx=(px(4), px(8)))
-        Button(
-            bar,
-            self.theme,
-            "Mappe",
-            lambda: self.send_folder(),
-            kind="ghost",
-            size="sm",
-            icon="▤",
-            bg=c["card"],
-        ).pack(side="left")
-        help_dot(bar, self.theme, "Send en hel mappe med alt indhold. Strukturen bevares, "
-                 "når den lander på den anden enhed.", "Send mappe").pack(
-                     side="left", padx=(px(4), px(8)))
-        Button(
-            bar,
-            self.theme,
-            "Udklipsholder",
-            lambda: self.send_clipboard(),
-            kind="ghost",
-            size="sm",
-            icon="⧉",
-            bg=c["card"],
-        ).pack(side="left")
-        help_dot(bar, self.theme, "Send det du sidst kopierede (tekst, link eller billede) "
-                 "til enheden. Genvej: Ctrl+V.", "Send udklipsholder").pack(
-                     side="left", padx=(px(4), 0))
+        # Each button explains itself on hover or keyboard focus (no row of "?" markers).
+        for label, glyph, command, title, help_text in (
+            ("Filer", "＋", lambda: self.send_files(), "Send filer  ·  Ctrl+O",
+             "Vælg en eller flere filer på PC'en og send dem til den valgte enhed. "
+             "Du kan også trække filer ind på vinduet."),
+            ("Mappe", "▤", lambda: self.send_folder(), "Send mappe",
+             "Send en hel mappe med alt indhold. Strukturen bevares, når den lander "
+             "på den anden enhed."),
+            ("Udklipsholder", "⧉", lambda: self.send_clipboard(),
+             "Send udklipsholder  ·  Ctrl+V",
+             "Send det du sidst kopierede (tekst, link eller billede) til enheden."),
+        ):
+            button = Button(bar, self.theme, label, command, kind="ghost", size="sm",
+                            icon=glyph, bg=c["card"])
+            button.pack(side="left", padx=(0, px(4)))
+            tooltip(button, self.theme, help_text, title)
         self.send_button = Button(
             bar,
             self.theme,
@@ -1455,9 +1537,8 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             bg=c["card"],
         )
         self.send_button.pack(side="right")
-        help_dot(bar, self.theme, "Send beskeden/linket i feltet — eller vælg filer, hvis "
-                 "feltet er tomt. Enter sender også.", "Send").pack(
-                     side="right", padx=(px(6), px(6)))
+        tooltip(self.send_button, self.theme, "Send beskeden eller linket i feltet – eller "
+                "vælg filer, hvis feltet er tomt.", "Send  ·  Enter")
         self.target_button = Button(
             bar,
             self.theme,
@@ -1467,10 +1548,9 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             size="sm",
             bg=c["card"],
         )
-        self.target_button.pack(side="right", padx=(0, px(6)))
-        help_dot(bar, self.theme, "Vælg hvilken enhed (eller alle enheder) der skal modtage. "
-                 "Vælger du ingen, spørger vi når du sender.", "Vælg modtager").pack(
-                     side="right", padx=(0, px(4)))
+        self.target_button.pack(side="right", padx=(0, px(8)))
+        tooltip(self.target_button, self.theme, "Vælg hvilken enhed (eller alle enheder) der "
+                "skal modtage. Vælger du ingen, spørger vi, når du sender.", "Vælg modtager")
 
         self.composer_hint = tk.Label(
             center,
@@ -1587,7 +1667,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         if not trusted:
             self.show_qr_pairing()
             return
-        menu = tk.Menu(self, tearoff=0)
+        menu = PopupMenu(self, self.theme)
         if len(trusted) >= 2:
             menu.add_command(
                 label=f"{'✓ ' if self._all_selected() else '   '}Alle enheder",
@@ -1603,13 +1683,9 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
                 command=lambda value=peer.device_id: self.select_peer(value),
             )
         menu.add_separator()
-        menu.add_command(label="Forbind ny enhed…", command=self.show_qr_pairing)
-        x = self.target_button.winfo_rootx()
-        y = self.target_button.winfo_rooty() + self.target_button.winfo_height()
-        try:
-            menu.tk_popup(x, y)
-        finally:
-            menu.grab_release()
+        menu.add_command(label="Forbind ny enhed…", accelerator="Ctrl+N",
+                         command=self.show_qr_pairing)
+        menu.popup_below(self.target_button)
 
     def _draw_drop_zone(self) -> None:
         """Refresh the composer: target chip, drop highlight and hint line."""
@@ -1699,43 +1775,34 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         """The ▾ next to SEND FILER: everything else you can send, Battle.net-style."""
         everyone = self._all_selected()
         target = self._drop_target_peer()
-        menu = tk.Menu(self, tearoff=0)
-        menu.add_command(label="Send filer…   Ctrl+O",
+        menu = PopupMenu(self, self.theme)
+        menu.add_command(label="Send filer…", accelerator="Ctrl+O",
                          command=lambda: self.send_files(target, to_all=everyone))
         menu.add_command(label="Send mappe…", command=lambda: self.send_folder(target,
                                                                               to_all=everyone))
-        menu.add_command(label="Send udklipsholder", command=lambda: self.send_clipboard(
-            target, to_all=everyone))
+        menu.add_command(label="Send udklipsholder", accelerator="Ctrl+V",
+                         command=lambda: self.send_clipboard(target, to_all=everyone))
         menu.add_command(label="Skriv tekst eller link…", command=self._focus_composer)
         if len(self._trusted_peers()) >= 2:
             menu.add_separator()
             menu.add_command(label=("✓ " if everyone else "") + "Send til alle enheder",
                              command=self.select_all_devices)
         menu.add_separator()
-        menu.add_command(label="Forbind ny enhed…   Ctrl+N", command=self.show_qr_pairing)
-        x = self.hero_more.winfo_rootx()
-        y = self.hero_more.winfo_rooty() + self.hero_more.winfo_height()
-        try:
-            menu.tk_popup(x, y)
-        finally:
-            menu.grab_release()
+        menu.add_command(label="Forbind ny enhed…", accelerator="Ctrl+N",
+                         command=self.show_qr_pairing)
+        menu.popup_below(self.hero_more)
 
     def _add_device_menu(self, anchor: tk.Misc) -> None:
         """Every way to add a device, in one menu under "Tilføj enhed"."""
-        menu = tk.Menu(self, tearoff=0)
-        menu.add_command(label="Scan QR-kode med telefonen…   Ctrl+N",
+        menu = PopupMenu(self, self.theme)
+        menu.add_command(label="Scan QR-kode med telefonen…", accelerator="Ctrl+N",
                          command=self.show_qr_pairing)
         menu.add_command(label="Søg på dit Wi-Fi", command=self.scan_lan)
         if bluetooth.supported():
             menu.add_command(label="Søg via Bluetooth",
                              command=lambda: self.scan_bluetooth(manual=True))
         menu.add_command(label="Tilføj via IP-adresse…", command=self.add_manual_peer)
-        x = anchor.winfo_rootx()
-        y = anchor.winfo_rooty() + anchor.winfo_height()
-        try:
-            menu.tk_popup(x, y)
-        finally:
-            menu.grab_release()
+        menu.popup_below(anchor)
 
     def _hero_device_menu(self) -> None:
         target = self._drop_target_peer()
@@ -1801,7 +1868,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
                 "Ctrl+O vælger filer")
         first_run = not trusted
         px = self.theme.px
-        for button, gap in ((self.hero_more, px(2)), (self.hero_gear, px(10))):
+        for button, gap in ((self.hero_more, px(2)), (self.hero_gear, px(8))):
             if first_run:
                 button.pack_forget()
             elif not button.winfo_manager():
@@ -1898,11 +1965,11 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         kind = str(entry.get("kind", "file"))
         text = str(entry.get("text", ""))
         path = str(entry.get("path", ""))
-        glyph = {"folder": "▦", "link": "⇗", "clipboard": "¶"}.get(kind, "▤")
-        tk.Label(body, text=glyph, width=2, bg=c["accent_soft"],
-                 fg=c["success"] if received else c["accent"],
-                 font=self.theme.font(13, "bold")).grid(row=0, column=0, rowspan=2,
-                                                       sticky="ns", padx=(0, px(10)))
+        glyph = {"folder": "folder", "link": "link", "clipboard": "clipboard"}.get(kind, "file")
+        card.badge = icon_badge(  # type: ignore[attr-defined]
+            body, self.theme, glyph, 34, c["success"] if received else c["accent"], c["card"])
+        tk.Label(body, image=card.badge, bg=c["card"]).grid(  # type: ignore[attr-defined]
+            row=0, column=0, rowspan=2, padx=(0, px(11)))
         title = text.splitlines()[0] if text else "?"
         if len(title) > 42:
             title = title[:41] + "…"
@@ -1953,7 +2020,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         )
         c = self.theme.c
         toolbar = tk.Frame(page, bg=c["bg"])
-        toolbar.pack(fill="x", padx=(px(36), px(36)), pady=(0, px(12)))
+        toolbar.pack(fill="x", padx=px(PAGE_INSET), pady=(0, px(12)))
         self.transfer_filter = "all"
         self.transfer_chips: dict[str, Button] = {}
         for key, label in TRANSFER_FILTERS:
@@ -1972,7 +2039,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         )
         self.transfer_summary.pack(side="right")
         self.transfer_scroll = ScrollFrame(page, self.theme)
-        self.transfer_scroll.pack(fill="both", expand=True, padx=(px(36), px(24)), pady=(0, px(16)))
+        self.transfer_scroll.pack(fill="both", expand=True, padx=px(PAGE_INSET), pady=(0, px(16)))
         self.transfer_empty = tk.Label(
             self.transfer_scroll.inner,
             text=EMPTY_TRANSFERS["all"],
@@ -1981,6 +2048,9 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             font=self.theme.font(10),
             anchor="w",
         )
+        self._transfer_empty_icon = icon_badge(self.transfer_empty, self.theme, "transfers",
+                                               36, self.theme.c["faint"], gap=12)
+        self.transfer_empty.configure(image=self._transfer_empty_icon, compound="left")
         self.transfer_empty.pack(fill="x", pady=px(8))
 
     # ---------------------------------------------------------- clipboard page
@@ -1991,7 +2061,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             "clipboard", "Udklipsholder", "Kopiér på én enhed – sæt ind på en anden."
         )
         scroll = ScrollFrame(page, self.theme)
-        scroll.pack(fill="both", expand=True, padx=(px(36), px(24)), pady=(0, px(16)))
+        scroll.pack(fill="both", expand=True, padx=px(PAGE_INSET), pady=(0, px(16)))
         inner = scroll.inner
 
         settings = Card(inner, self.theme)
@@ -2201,7 +2271,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         )
 
         segments = tk.Frame(page, bg=c["bg"])
-        segments.pack(fill="x", padx=px(36), pady=(0, px(12)))
+        segments.pack(fill="x", padx=px(PAGE_INSET), pady=(0, px(12)))
         self.history_mode = "received"
         self.history_segments: dict[str, Button] = {}
         for key, label in (("received", "Modtaget"), ("sent", "Sendt"), ("devices", "Enheder")):
@@ -2217,7 +2287,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             self.history_segments[key] = button
 
         card = Card(page, self.theme, padding=8)
-        card.pack(fill="both", expand=True, padx=px(36), pady=(0, px(24)))
+        card.pack(fill="both", expand=True, padx=px(PAGE_INSET), pady=(0, px(24)))
         card.body.configure(height=px(400))
         card.body.pack_propagate(False)
         self.history_tree = ttk.Treeview(card.body, show="headings", selectmode="browse")
@@ -2281,6 +2351,8 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             if self.history_mode == "sent"
             else self.show_qr_pairing
         )
+        self._history_empty_icon = icon_badge(frame, self.theme, "history", 44, c["faint"])
+        tk.Label(frame, image=self._history_empty_icon, bg=c["card"]).pack(pady=(0, px(12)))
         tk.Label(
             frame, text=title, bg=c["card"], fg=c["text"], font=self.theme.font(12, "bold")
         ).pack()
@@ -2358,14 +2430,15 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             "iphone", "iPhone", "Del med iPhone – direkte i Safari, uden at installere noget."
         )
         scroll = ScrollFrame(page, self.theme)
-        scroll.pack(fill="both", expand=True, padx=(px(36), px(24)), pady=(0, px(16)))
+        scroll.pack(fill="both", expand=True, padx=px(PAGE_INSET), pady=(0, px(16)))
         inner = scroll.inner
 
         connect = Card(inner, self.theme)
         connect.pack(fill="x", pady=(0, px(14)))
         layout = tk.Frame(connect.body, bg=c["card"])
         layout.pack(fill="x")
-        qr_card = Card(layout, self.theme, padding=10, fill="#FFFFFF", outline=c["border"])
+        qr_card = self.web_qr_card = Card(layout, self.theme, padding=10, fill="#FFFFFF",
+                                          outline=c["border"])
         qr_card.configure(width=px(200) + 2 * px(10))
         qr_card.pack(side="left", anchor="n")
         self.web_qr = QrCanvas(qr_card.body, self.theme, size=200)
@@ -2472,6 +2545,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         addresses = _sorted_lan_addresses() or ["127.0.0.1"]
         url = self.web_share.url(addresses[0])
         if enabled:
+            self.web_qr_card.set_colors(fill="#FFFFFF")  # a QR code needs its white frame
             self.web_qr.show(qr_matrix(url))
             others = [self.web_share.url(address) for address in addresses[1:3]]
             self.web_link.configure(
@@ -2479,12 +2553,19 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             )
         else:
             self.web_qr.delete("all")
+            self.web_qr_card.set_colors(fill=self.theme.c["neutral_soft"])
+            self.web_qr.configure(bg=self.theme.c["neutral_soft"])
+            middle = (self.web_qr.winfo_reqwidth() / 2, self.web_qr.winfo_reqheight() / 2)
+            self._web_off_icon = icon_image(self.web_qr, "qr", self.theme.px(36),
+                                            self.theme.c["faint"], self.theme.c["neutral_soft"])
+            self.web_qr.create_image(middle[0], middle[1] - self.theme.px(14),
+                                     image=self._web_off_icon)
             self.web_qr.create_text(
-                self.web_qr.winfo_reqwidth() / 2,
-                self.web_qr.winfo_reqheight() / 2,
+                middle[0],
+                middle[1] + self.theme.px(26),
                 text="Slået fra",
-                fill="#73726C",
-                font=self.theme.font(11, "bold"),
+                fill=self.theme.c["muted"],
+                font=self.theme.font(10, "bold"),
             )
             self.web_link.configure(text="Slå adgangen til for at vise QR-koden.")
         for child in self.web_outbox.winfo_children():
@@ -2673,7 +2754,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         px = self.theme.px
         page, _actions = self._page("settings", "Indstillinger", "Gør h4xtor share til din egen.")
         scroll = ScrollFrame(page, self.theme)
-        scroll.pack(fill="both", expand=True, padx=(px(36), px(24)), pady=(0, px(16)))
+        scroll.pack(fill="both", expand=True, padx=px(PAGE_INSET), pady=(0, px(16)))
         inner = scroll.inner
 
         def section(title: str) -> Card:
@@ -2801,6 +2882,14 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             "Når du lukker vinduet, kører h4xtor share videre ved uret.",
             self.config_store.get_flag("close_to_tray", True),
             lambda value: self.config_store.set_flag("close_to_tray", value),
+        )
+        self._divider(behaviour.body)
+        self.motion_toggle = self._toggle_row(
+            behaviour.body,
+            "Færre animationer",
+            "Knapper, kontakter og sider skifter med det samme i stedet for at glide.",
+            not self.theme.motion,
+            self._set_reduce_motion,
         )
         self._divider(behaviour.body)
         theme_row = tk.Frame(behaviour.body, bg=c["card"])
@@ -3025,6 +3114,11 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             self._show_error(error)
             return
         self.toast.show("“Send til” er klar i Stifinder" if value else "“Send til” fjernet")
+
+    def _set_reduce_motion(self, value: bool) -> None:
+        """Works at once: every animated widget asks the theme before it moves."""
+        self.config_store.set_flag("reduce_motion", value)
+        self.theme.motion = not value
 
     def _set_theme(self, value: str) -> None:
         self.config_store.theme = value
@@ -4071,7 +4165,7 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
             "Aben vælger selv den hurtigste vej. Her laver du en direkte forbindelse uden router.",
         )
         scroll = ScrollFrame(page, self.theme)
-        scroll.pack(fill="both", expand=True, padx=(px(36), px(24)), pady=(0, px(16)))
+        scroll.pack(fill="both", expand=True, padx=px(PAGE_INSET), pady=(0, px(16)))
         inner = scroll.inner
 
         def section(title: str) -> Card:

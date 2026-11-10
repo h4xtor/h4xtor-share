@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="h4_background">#FAF9F5</color>
-    <color name="h4_accent">#C6613F</color>
+    <!-- The app always uses the dark "Graphite" look (see Ui.java): the window behind it
+         matches from the first frame, so there is no light flash at start. -->
+    <color name="h4_background">#0B0C0E</color>
+    <color name="h4_accent">#2563EB</color>
 </resources>

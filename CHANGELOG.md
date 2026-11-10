@@ -4,6 +4,24 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
+## 1.10.0 – 2026-11-10
+### Nyt
+- Søg og kør med Ctrl+K: tryk Ctrl+K (eller klik i søgefeltet øverst), skriv et par bogstaver, og hop til en side eller start en handling – helt uden mus.
+- Menuen folder sig selv sammen til en smal række ikoner, når vinduet er lille, så indholdet får pladsen.
+- Mindre bevægelse: slå animationer fra under Indstillinger, eller lad appen følge Windows' egen indstilling.
+### Forbedret
+- Helt nyt udseende, "Graphite": næsten sorte grafit-flader med tynde linjer, én elektrisk blå til det vigtigste og en afdæmpet cyan til fokus og aktivitet. Alt er tegnet om, så hver side hænger sammen med de andre.
+- Lyst og mørkt tema ser nu ens ud ned i mindste detalje, og du kan skifte direkte fra Ctrl+K.
+- Egne ikoner i hele appen: ens tynde streger alle steder, i stedet for tegn, der så forskellige ud fra PC til PC.
+- Menuerne (pilen ved SEND FILER, "Tilføj enhed", "Vælg modtager", enhedens menu og højreklik på en overførsel) er tegnet i appens eget look med genvejstaster, flueben og piletaster.
+- Send-siden er ryddet op: de fem (?)-mærker er væk. Hold i stedet musen over en knap for at se, hvad den gør.
+- Knapper, kontakter og felter viser tydeligt, når musen er over dem, når de trykkes, og når de har fokus fra tastaturet. Tab når alle knapper.
+- Tomme sider forklarer sig selv med et ikon og en kort tekst (Overførsler, Notifikationer, SMS, Historik).
+- Beskeder nederst til højre har farve efter indhold: grøn for "sendt", rød for fejl.
+- Telefon-appen (Android), iPhone-siden i Safari og Chrome-udvidelsen har fået de samme farver og former.
+### Rettet
+- iPhone-siden: en fil, du sender, lå klemt helt op mod teksten over den – nu har den luft omkring sig.
+
 ## 1.9.0 – 2026-11-02
 ### Nyt
 - Ny side "Styr telefon" øverst under TELEFON i menuen: telefonens skærm i en flot telefon-ramme til venstre, og til højre en stor Start/Stop-knap, Tilbage/Hjem/Apps, "Skriv på telefonen" og AI-styring.

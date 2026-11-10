@@ -20,9 +20,9 @@ import java.util.Random;
  * read, embers rising through it, and a ring of sparks when a send lands ({@link #burst}).
  */
 public final class HeroArt extends View {
-    private static final int TOP = Color.parseColor("#0A1D3A");
-    private static final int BOTTOM = Color.parseColor("#151922");
-    private static final int EDGE = Color.parseColor("#272B34");
+    private static final int TOP = Color.parseColor("#0E1730");
+    private static final int BOTTOM = Color.parseColor("#121317");
+    private static final int EDGE = Color.parseColor("#262A32");
     private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint stroke = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint dot = new Paint(Paint.ANTI_ALIAS_FLAG);

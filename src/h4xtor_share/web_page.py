@@ -9,21 +9,24 @@ PAGE = r"""<!doctype html>
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="h4xtor share">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#262624">
+<meta name="theme-color" content="#0B0C0E">
 <link rel="apple-touch-icon" href="/icon.png">
 <link rel="icon" href="/icon.png">
 <title>h4xtor share</title>
 <style>
+/* "Graphite": the same tokens as the desktop app (ui_kit.py LIGHT / DARK). */
 :root {
-  --bg: #FAF9F5; --card: #FFFFFF; --border: #E8E6DC; --text: #141413; --muted: #73726C;
-  --accent: #C6613F; --accent-soft: #F5E6DF; --success: #2E8B57; --success-soft: #E3F1E8;
-  --danger: #C2412D; --track: #ECEAE2;
+  --bg: #F6F7F9; --card: #FFFFFF; --border: #E2E5EA; --border-strong: #C5CAD3;
+  --text: #0D1015; --muted: #4A5261; --accent: #1D5BD8; --accent-text: #1D5BD8;
+  --accent-soft: #E0EAFC; --focus: #0891B2; --success: #0F7A4A; --success-soft: #DDF3E7;
+  --danger: #B42318; --track: #DCE0E6; --field: #FFFFFF;
 }
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #262624; --card: #30302E; --border: #3E3E3A; --text: #F5F4EE; --muted: #A6A39A;
-    --accent: #D97757; --accent-soft: #45322A; --success: #5BC38E; --success-soft: #24392D;
-    --danger: #EF6B55; --track: #3E3E3A;
+    --bg: #0B0C0E; --card: #121317; --border: #1F2228; --border-strong: #2E323B;
+    --text: #EDEEF1; --muted: #A0A6B2; --accent: #2563EB; --accent-text: #4C8DFF;
+    --accent-soft: #111D36; --focus: #22D3EE; --success: #34D399; --success-soft: #0E2A20;
+    --danger: #F87171; --track: #23262D; --field: #0E0F12;
   }
 }
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -34,54 +37,67 @@ body {
   max-width: 560px; margin: 0 auto;
 }
 header { display: flex; align-items: center; gap: 10px; margin: 6px 0 18px; }
-header h1 { font: 600 26px Georgia, "Iowan Old Style", serif; margin: 0; flex: 1; }
-.status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px; }
+header h1 { font: 700 24px/1.1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  letter-spacing: -0.02em; margin: 0; flex: 1; }
+.status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 6px;
+  border: 1px solid var(--border); background: var(--card); border-radius: 999px;
+  padding: 5px 10px; }
 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
 .dot.on { background: var(--success); } .dot.off { background: var(--danger); }
-.card { background: var(--card); border: 1px solid var(--border); border-radius: 18px;
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 14px;
   padding: 16px; margin-bottom: 14px; }
-h2 { font-size: 13px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
+h2 { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted);
   margin: 22px 4px 8px; font-weight: 600; }
 .big { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%;
-  min-height: 64px; border: 0; border-radius: 16px; background: var(--accent); color: #fff;
-  font-weight: 600; font-size: 18px; font-family: inherit; cursor: pointer; }
-.big span { font-size: 24px; }
-button.soft, button.ghost { border: 0; border-radius: 12px; min-height: 44px; padding: 0 16px;
+  min-height: 60px; border: 0; border-radius: 12px; background: var(--accent); color: #fff;
+  font-weight: 600; font-size: 18px; font-family: inherit; cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .14); transition: transform .12s ease; }
+.big:active { transform: scale(.985); }
+.big span { font-size: 22px; }
+button.soft, button.ghost { border: 0; border-radius: 10px; min-height: 44px; padding: 0 16px;
   font-weight: 600; font-size: 15px; font-family: inherit; cursor: pointer; }
-button.soft { background: var(--accent-soft); color: var(--accent); }
-button.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
-textarea { width: 100%; min-height: 96px; border-radius: 12px; border: 1px solid var(--border);
-  background: var(--bg); color: var(--text); padding: 12px; font-size: 16px;
-  font-family: inherit; resize: vertical; }
+button.soft { background: var(--accent-soft); color: var(--accent-text); }
+button.ghost { background: transparent; color: var(--text);
+  border: 1px solid var(--border-strong); }
+button:focus-visible, textarea:focus-visible, a:focus-visible {
+  outline: 2px solid var(--focus); outline-offset: 2px; }
+textarea { width: 100%; min-height: 96px; border-radius: 10px;
+  border: 1px solid var(--border-strong); background: var(--field); color: var(--text);
+  padding: 12px; font-size: 16px; font-family: inherit; resize: vertical; }
+textarea:focus { border-color: var(--accent-text); outline: 0; }
 .row { display: flex; gap: 8px; align-items: center; margin-top: 10px; }
 .row .grow { flex: 1; }
 .hint { color: var(--muted); font-size: 13px; margin: 8px 2px 0; }
 .item { display: flex; gap: 12px; align-items: center; padding: 10px 0;
   border-top: 1px solid var(--border); }
 .item:first-child { border-top: 0; padding-top: 0; }
+#uploads { margin-top: 12px; }
+.card.item { padding: 12px 14px; border-top: 1px solid var(--border); margin-bottom: 10px; }
 .thumb { width: 48px; height: 48px; border-radius: 10px; flex: none; display: grid;
   place-items: center; font-size: 22px; background: var(--success-soft); color: var(--success);
   overflow: hidden; }
-.thumb.up { background: var(--accent-soft); color: var(--accent); }
+.thumb.up { background: var(--accent-soft); color: var(--accent-text); }
 .thumb img { width: 100%; height: 100%; object-fit: cover; }
 .meta { flex: 1; min-width: 0; }
 .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sub { color: var(--muted); font-size: 13px; }
 .bar { height: 6px; border-radius: 3px; background: var(--track); margin-top: 6px;
   overflow: hidden; }
-.bar i { display: block; height: 100%; width: 0; background: var(--accent);
+.bar i { display: block; height: 100%; width: 0; background: var(--accent-text);
   transition: width .2s; }
 .bar.done i { background: var(--success); } .bar.fail i { background: var(--danger); }
 .actions { display: flex; gap: 6px; flex: none; }
 .actions a, .actions button { text-decoration: none; display: inline-flex; align-items: center;
   min-height: 40px; padding: 0 12px; border-radius: 10px; font-size: 14px; font-weight: 600;
-  background: var(--accent-soft); color: var(--accent); border: 0; font-family: inherit; }
+  background: var(--accent-soft); color: var(--accent-text); border: 0; font-family: inherit; }
 .empty { color: var(--muted); font-size: 14px; }
-.clip { white-space: pre-wrap; word-break: break-word; background: var(--bg);
-  border-radius: 12px; padding: 12px; margin-top: 10px; max-height: 240px; overflow: auto; }
+.clip { white-space: pre-wrap; word-break: break-word; background: var(--field);
+  border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-top: 10px;
+  max-height: 240px; overflow: auto; }
 .toast { position: fixed; left: 16px; right: 16px; bottom: max(16px, env(safe-area-inset-bottom));
-  max-width: 528px; margin: 0 auto; background: var(--text); color: var(--bg);
-  border-radius: 14px; padding: 14px 16px; font-weight: 600; opacity: 0;
+  max-width: 528px; margin: 0 auto; background: var(--card); color: var(--text);
+  border: 1px solid var(--border-strong); border-left: 3px solid var(--accent-text);
+  border-radius: 12px; padding: 14px 16px; font-weight: 600; opacity: 0;
   transform: translateY(10px); transition: .2s; pointer-events: none; }
 .toast.show { opacity: 1; transform: none; }
 .lock { text-align: center; padding: 48px 12px; }

@@ -9,100 +9,129 @@ from __future__ import annotations
 
 import contextlib
 import platform
+import time
 import tkinter as tk
 import tkinter.font as tkfont
 from collections.abc import Callable
 from typing import Any
 
-# "Battle.net" palettes: a near-black blue-grey launcher, dark panels with hairline borders,
-# one bright launcher-blue for the actions that matter, and a warm orange for Bluetooth and
-# the monkey. Text colours keep at least 4.5:1 against the panels they sit on.
+# The "Graphite" identity: near-black graphite surfaces separated by hairlines, one electric
+# blue for the action that matters and a restrained cyan for focus and live activity.
+# Every colour is a semantic token (the light palette mirrors the dark one key for key), and
+# text colours keep at least 4.5:1 against the surfaces they sit on.
 LIGHT = {
-    "bg": "#F2F4F8",
-    "sidebar": "#E6EAF1",
-    "chrome": "#DDE2EA",
+    "bg": "#F6F7F9",
+    "sidebar": "#EEF0F3",
+    "chrome": "#EEF0F3",
     "card": "#FFFFFF",
-    "card_hover": "#F5F8FC",
-    "border": "#D5DBE5",
-    "border_strong": "#BAC3D1",
-    "text": "#11151C",
-    "muted": "#4E5766",
-    "faint": "#5F6877",
-    "accent": "#0A6ED1",
-    "accent_hover": "#085BB0",
-    "accent_press": "#064A90",
-    "button": "#0A6ED1",
-    "button_hover": "#085BB0",
-    "accent_soft": "#DCEBFB",
+    "card_hover": "#F3F5F8",
+    "border": "#E2E5EA",
+    "border_strong": "#C5CAD3",
+    "text": "#0D1015",
+    "muted": "#4A5261",
+    "faint": "#5E6675",
+    "accent": "#1D5BD8",
+    "accent_hover": "#174BB5",
+    "accent_press": "#123C92",
+    "button": "#1D5BD8",
+    "button_hover": "#174BB5",
+    "accent_soft": "#E0EAFC",
     "accent_text": "#FFFFFF",
-    "accent2": "#0A86D1",
-    "accent3": "#C25E00",
-    "success": "#13784A",
-    "success_soft": "#DCF2E6",
+    "accent2": "#0891B2",
+    "accent3": "#B45309",
+    "success": "#0F7A4A",
+    "success_soft": "#DDF3E7",
     "warning": "#8A5A10",
     "warning_soft": "#FBEFD9",
     "danger": "#B42318",
     "danger_soft": "#FBE4E1",
-    "neutral_soft": "#E7EBF1",
-    "nav_active": "#DCEBFB",
-    "track": "#DDE2EA",
+    "neutral_soft": "#ECEEF2",
+    "nav_active": "#DFE3EA",
+    "nav_hover": "#E7EAEF",
+    "track": "#DCE0E6",
     "entry": "#FFFFFF",
-    "shadow": "#DDE2EA",
-    "hero_top": "#CFE2F8",
-    "glow": "#3D9BFF",
+    "shadow": "#DDE1E7",
+    "hero_top": "#D8E4FA",
+    "glow": "#3B82F6",
 }
 
 DARK = {
-    "bg": "#111318",
-    "sidebar": "#0B0D11",
-    "chrome": "#08090C",
-    "card": "#1A1D24",
-    "card_hover": "#22262F",
-    "border": "#272B34",
-    "border_strong": "#363B46",
-    "text": "#F3F5F9",
-    "muted": "#AAB1BE",
-    "faint": "#8A92A0",
-    "accent": "#148EFF",
-    "accent_hover": "#3BA2FF",
-    "accent_press": "#0A62B8",
-    "button": "#0B74DC",
-    "button_hover": "#1683F0",
-    "accent_soft": "#0D2340",
+    "bg": "#0B0C0E",
+    "sidebar": "#08090A",
+    "chrome": "#08090A",
+    "card": "#121317",
+    "card_hover": "#181A1F",
+    "border": "#1F2228",
+    "border_strong": "#2E323B",
+    "text": "#EDEEF1",
+    "muted": "#A0A6B2",
+    "faint": "#7D8492",
+    "accent": "#4C8DFF",
+    "accent_hover": "#6FA5FF",
+    "accent_press": "#1848B8",
+    "button": "#2563EB",
+    "button_hover": "#2E6BF0",
+    "accent_soft": "#111D36",
     "accent_text": "#FFFFFF",
-    "accent2": "#45B6FF",
+    "accent2": "#22D3EE",
     "accent3": "#FF9F1A",
-    "success": "#3CCB7F",
-    "success_soft": "#12301F",
-    "warning": "#F2B33D",
-    "warning_soft": "#352A12",
-    "danger": "#FF6B6B",
-    "danger_soft": "#3A1C1F",
-    "neutral_soft": "#22262F",
-    "nav_active": "#17202D",
-    "track": "#272B34",
-    "entry": "#0F1115",
-    "shadow": "#050608",
-    "hero_top": "#0A1D3A",
-    "glow": "#148EFF",
+    "success": "#34D399",
+    "success_soft": "#0E2A20",
+    "warning": "#FBBF24",
+    "warning_soft": "#2E2410",
+    "danger": "#F87171",
+    "danger_soft": "#33191B",
+    "neutral_soft": "#181A1F",
+    "nav_active": "#17191E",
+    "nav_hover": "#101216",
+    "track": "#23262D",
+    "entry": "#0E0F12",
+    "shadow": "#050506",
+    "hero_top": "#0E1730",
+    "glow": "#2563EB",
 }
+
+# One spacing scale and one radius scale for the whole app (logical px, scaled by Theme.px).
+SPACE = (4, 8, 12, 16, 24, 32, 40)
+RADIUS = {"sm": 6, "md": 8, "lg": 12}
+PAGE_INSET = 40  # every page's content starts this far from the page edge
+PAGE_MAX = 1120  # ... and never grows wider than this, however big the window
 
 # Avatar colours: bright enough to read a dark letter on (see Avatar).
 PLATFORM_STYLE = {
-    "android": ("#3CCB7F", "A"),
-    "windows": ("#3BA2FF", "W"),
-    "linux": ("#F2B33D", "L"),
-    "darwin": ("#AAB1BE", "M"),
-    "macos": ("#AAB1BE", "M"),
-    "all": ("#45B6FF", "★"),
+    "android": ("#34D399", "A"),
+    "windows": ("#5B9BFF", "W"),
+    "linux": ("#FBBF24", "L"),
+    "darwin": ("#A0A6B2", "M"),
+    "macos": ("#A0A6B2", "M"),
+    "all": ("#22D3EE", "★"),
 }
-AVATAR_LETTER = "#0B0D11"
+AVATAR_LETTER = "#08090A"
+# The drawn icon each platform gets on its device tile.
+PLATFORM_ICON = {"android": "phone", "windows": "monitor", "linux": "monitor",
+                 "darwin": "monitor", "macos": "monitor", "all": "grid"}
+
+
+def prefers_reduced_motion() -> bool:
+    """True when the system asks apps to hold back on animation (Windows: "Animation
+    effects" switched off). Other systems have no setting Tk can read, so: False."""
+    if platform.system() != "Windows":
+        return False
+    with contextlib.suppress(Exception):
+        import ctypes
+
+        enabled = ctypes.c_int(1)
+        if ctypes.windll.user32.SystemParametersInfoW(0x1042, 0, ctypes.byref(enabled), 0):
+            return not enabled.value
+    return False
 
 
 class Theme:
     def __init__(self, root: tk.Misc, dark: bool) -> None:
         self.dark = dark
         self.c = dict(DARK if dark else LIGHT)
+        # Short hover/slide animations; off when the system or the user asks for less motion.
+        self.motion = not prefers_reduced_motion()
         try:
             self.scale = max(1.0, float(root.winfo_fpixels("1i")) / 96.0)
         except tk.TclError:
@@ -231,15 +260,16 @@ def glass_image(
     bg: str | tuple[str, str, str, str], ring: str | None = None, ring_width: float = 1.0,
     shine: bool = True, light: float = 0.20,
 ) -> tk.PhotoImage:
-    """A flat rounded pill/panel with smooth (anti-aliased) edges and an optional hairline
-    ring. Tk cannot smooth polygon edges, so this paints each pixel by how much of it the
-    shape covers. ``bg`` may be four colours (top-left, top-right, bottom-left, bottom-right)
-    when the widget sits on artwork: the corners then blend into it instead of showing a box.
-    Cached per look and size.
+    """A flat rounded rectangle with smooth (anti-aliased) edges and an optional hairline
+    ring: the surface of every button, card, chip and switch. Tk cannot smooth polygon
+    edges, so this paints each edge pixel by how much of it the shape covers. ``bg`` may be
+    four colours (top-left, top-right, bottom-left, bottom-right) when the widget sits on
+    artwork: the corners then blend into it instead of showing a box. Cached per look and
+    size.
 
-    IDE redesign: no gloss. ``shine``/``light`` are kept for call-site compatibility but
-    ignored — the fill is solid, the only relief is the thin border, so cards and buttons
-    read as crisp flat surfaces like a code editor, not Aurora glass."""
+    Only the corners and edges are worked out pixel by pixel: the inside is one fill and
+    the straight edges repeat, so even a card that fills the window costs next to nothing.
+    ``shine``/``light`` are kept for call-site compatibility and ignored (flat surfaces)."""
     import math
 
     key = (master.tk, width, height, radius, fill, bg, ring, ring_width, shine, light)  # per app
@@ -248,48 +278,198 @@ def glass_image(
         return image
     if len(_GLASS_CACHE) > 400:
         _GLASS_CACHE.clear()
+
     def tone(color: str) -> list[float]:  # any Tk colour (a name too) as 0-255 floats
         return [v / 257 for v in master.winfo_rgb(color)]
 
-    rgb = [tone(fill), tone(ring or fill)]
+    base, edge_tone = tone(fill), tone(ring or fill)
+    uniform = isinstance(bg, str) or len(set(bg)) == 1
     corners = [tone(c) for c in ((bg,) * 4 if isinstance(bg, str) else bg)]
     radius = max(0.0, min(radius, width / 2, height / 2))
     half_w, half_h = width / 2, height / 2
-    rows = []
-    for y in range(height):
-        v = (y + 0.5) / height
-        base = list(rgb[0])  # flat fill, no top-to-bottom glow
+
+    def shade(x: int, y: int) -> str:
+        qx = abs(x + 0.5 - half_w) - (half_w - radius)
         qy = abs(y + 0.5 - half_h) - (half_h - radius)
-        left = [a + (b - a) * v for a, b in zip(corners[0], corners[2], strict=True)]
-        right = [a + (b - a) * v for a, b in zip(corners[1], corners[3], strict=True)]
-
-        def pixel(x: int, qy: float = qy, v: float = v, base: list[float] = base,
-                  left: list[float] = left, right: list[float] = right) -> str:
-            qx = abs(x + 0.5 - half_w) - (half_w - radius)
-            d = math.hypot(max(qx, 0.0), max(qy, 0.0)) + min(max(qx, qy), 0.0) - radius
-            cover = 0.5 - d
-            u = (x + 0.5) / width
-            back = [a + (b - a) * u for a, b in zip(left, right, strict=True)]
+        d = math.hypot(max(qx, 0.0), max(qy, 0.0)) + min(max(qx, qy), 0.0) - radius
+        cover = 0.5 - d
+        color = base
+        if ring and d > -ring_width - 0.5:  # the outline, smoothed on its inner side
+            k = min(1.0, d + ring_width + 0.5)
+            color = [a + (b - a) * k for a, b in zip(base, edge_tone, strict=True)]
+        if cover < 1:  # on the edge, or outside: blend into what is behind
+            if uniform:
+                back = corners[0]
+            else:
+                u, v = (x + 0.5) / width, (y + 0.5) / height
+                left = [a + (b - a) * v for a, b in zip(corners[0], corners[2], strict=True)]
+                right = [a + (b - a) * v for a, b in zip(corners[1], corners[3], strict=True)]
+                back = [a + (b - a) * u for a, b in zip(left, right, strict=True)]
             if cover <= 0:
-                return "#" + "".join(_HEX[int(c)] for c in back)
-            color = base
-            if ring and d > -ring_width - 0.5:  # the outline, smoothed on its inner side
-                k = min(1.0, d + ring_width + 0.5)
-                color = [a + (b - a) * k for a, b in zip(base, rgb[1], strict=True)]
-            if cover < 1:
-                color = [b + (a - b) * cover for a, b in zip(color, back, strict=True)]
-            return "#" + "".join(_HEX[max(0, min(255, int(c)))] for c in color)
+                return "#" + "".join(_HEX[max(0, min(255, int(c)))] for c in back)
+            color = [b + (a - b) * cover for a, b in zip(color, back, strict=True)]
+        return "#" + "".join(_HEX[max(0, min(255, int(c)))] for c in color)
 
-        # Only the round ends need working out pixel by pixel: in between, every pixel of a
-        # row is the same (fully covered, same distance to the top and bottom edges).
-        edge = min(width // 2, int(radius) + 3)
-        middle = [pixel(width // 2)] * (width - 2 * edge)
-        row = [pixel(x) for x in range(edge)] + middle + [
-            pixel(x) for x in range(width - edge, width)]
-        rows.append("{" + " ".join(row) + "}")
+    def block(xs: Any, ys: Any) -> str:
+        return " ".join("{" + " ".join(shade(x, y) for x in xs) + "}" for y in ys)
+
+    # The round ends need working out; between them every pixel of a row is the same, and
+    # between the top and bottom bands every row is the same.
+    edge = min(width // 2, int(radius) + 3)
+    band = min(height // 2, int(radius) + 3)
     image = tk.PhotoImage(master=master, width=width, height=height)
-    image.put(" ".join(rows))
+    if not uniform or width <= 2 * edge or height <= 2 * band:
+        rows = []
+        for y in range(height):
+            middle = [shade(width // 2, y)] * (width - 2 * edge)
+            row = [shade(x, y) for x in range(edge)] + middle + [
+                shade(x, y) for x in range(width - edge, width)]
+            rows.append("{" + " ".join(row) + "}")
+        image.put(" ".join(rows))
+    else:
+        mid_x, mid_y = width // 2, height // 2
+        image.put(shade(mid_x, mid_y), to=(0, 0, width, height))
+        for top in (0, height - band):
+            ys = range(top, top + band)
+            image.put(block(range(edge), ys), to=(0, top))
+            image.put(block(range(width - edge, width), ys), to=(width - edge, top))
+            image.put(block((mid_x,), ys), to=(edge, top, width - edge, top + band))
+        image.put(block(range(edge), (mid_y,)), to=(0, band, edge, height - band))
+        image.put(block(range(width - edge, width), (mid_y,)),
+                  to=(width - edge, band, width, height - band))
     _GLASS_CACHE[key] = image
+    return image
+
+
+# ---------------------------------------------------------------------------- icons
+# One icon family for the whole app: thin rounded strokes on a 24-unit grid. Unicode symbols
+# (⇄ ◈ ▯ …) look different on every system — and some are missing altogether — so the icons
+# are drawn here and smoothed pixel by pixel, like the buttons.
+# Shapes: ("l", x1, y1, x2, y2, …) a polyline · ("c", cx, cy, r) a ring · ("d", cx, cy, r) a
+# filled dot · ("a", cx, cy, r, from°, to°) an arc, clockwise with 0° pointing right ·
+# ("r", x1, y1, x2, y2, radius) a rounded box · ("e", cx, cy, r) rubs a dot back out.
+ICONS: dict[str, tuple[tuple[Any, ...], ...]] = {
+    "send": (("l", 21, 3, 10.5, 13.5), ("l", 21, 3, 14.5, 21, 10.5, 13.5, 3, 9.5, 21, 3)),
+    "transfers": (("l", 8, 20, 8, 4), ("l", 4, 8, 8, 4, 12, 8),
+                  ("l", 16, 4, 16, 20), ("l", 12, 16, 16, 20, 20, 16)),
+    "clipboard": (("r", 5, 4.5, 19, 21, 2.5), ("e", 12, 4.5, 3.6), ("r", 9, 2.5, 15, 6.5, 1.5)),
+    "phone": (("r", 6.5, 2.5, 17.5, 21.5, 2.8), ("l", 11, 18, 13, 18)),
+    "bell": (("a", 12, 10.5, 6, 180, 360), ("l", 6, 10.5, 6, 14, 4, 17, 20, 17, 18, 14, 18, 10.5),
+             ("a", 12, 19.3, 2, 15, 165)),
+    "message": (("r", 3, 4, 21, 17, 2.8), ("e", 10, 17, 2.4), ("l", 7.5, 17, 7.5, 21, 12.5, 17)),
+    "remote": (("c", 12, 12, 7.5), ("d", 12, 12, 1.8), ("l", 12, 2, 12, 5), ("l", 12, 19, 12, 22),
+               ("l", 2, 12, 5, 12), ("l", 19, 12, 22, 12)),
+    "wifi": (("a", 12, 19, 13.5, 229, 311), ("a", 12, 19, 9, 229, 311),
+             ("a", 12, 19, 4.6, 229, 311), ("d", 12, 19, 1.4)),
+    "globe": (("c", 12, 12, 9), ("l", 3, 12, 21, 12), ("a", 20, 12, 12.04, 131.6, 228.4),
+              ("a", 4, 12, 12.04, 311.6, 408.4)),
+    "merge": (("l", 3.5, 6, 8.5, 6, 13.5, 12, 20, 12), ("l", 3.5, 18, 8.5, 18, 13.5, 12),
+              ("l", 17, 9, 20, 12, 17, 15)),
+    "history": (("c", 12, 12, 9), ("l", 12, 7, 12, 12, 15.5, 14)),
+    "settings": (("l", 4, 7.5, 20, 7.5), ("l", 4, 16.5, 20, 16.5), ("e", 9, 7.5, 3.4),
+                 ("c", 9, 7.5, 2.4), ("e", 15, 16.5, 3.4), ("c", 15, 16.5, 2.4)),
+    "plus": (("l", 12, 5, 12, 19), ("l", 5, 12, 19, 12)),
+    "search": (("c", 11, 11, 6.5), ("l", 16, 16, 20.5, 20.5)),
+    "chevron-down": (("l", 7, 10, 12, 15, 17, 10),),
+    "chevron-right": (("l", 10, 7, 15, 12, 10, 17),),
+    "arrow-up": (("l", 12, 19, 12, 5), ("l", 6, 11, 12, 5, 18, 11)),
+    "arrow-down": (("l", 12, 5, 12, 19), ("l", 6, 13, 12, 19, 18, 13)),
+    "file": (("l", 14, 3, 6.5, 3, 6.5, 21, 18.5, 21, 18.5, 7.5, 14, 3),
+             ("l", 14, 3, 14, 7.5, 18.5, 7.5)),
+    "folder": (("l", 3, 6, 9, 6, 11, 8.5, 21, 8.5, 21, 19, 3, 19, 3, 6),),
+    "link": (("l", 9.5, 14.5, 14.5, 9.5),
+             ("l", 11, 7, 13, 5, 16, 4.2, 19, 5, 19.8, 8, 19, 11, 17, 13),
+             ("l", 13, 17, 11, 19, 8, 19.8, 5, 19, 4.2, 16, 5, 13, 7, 11)),
+    "copy": (("l", 15.5, 9, 15.5, 5, 4.5, 5, 4.5, 16, 9, 16), ("r", 9, 9, 20, 20, 2)),
+    "qr": (("r", 4, 4, 10, 10, 1.2), ("r", 14, 4, 20, 10, 1.2), ("r", 4, 14, 10, 20, 1.2),
+           ("d", 15, 15, 1.1), ("d", 19, 19, 1.1), ("d", 19, 15, 1.1), ("d", 15, 19, 1.1)),
+    "bluetooth": (("l", 7, 7.5, 17, 16.5, 12, 21, 12, 3, 17, 7.5, 7, 16.5),),
+    "bolt": (("l", 13, 2.5, 5, 13.5, 11.5, 13.5, 10.5, 21.5, 19, 10.5, 12.5, 10.5, 13, 2.5),),
+    "more": (("d", 6, 12, 1.5), ("d", 12, 12, 1.5), ("d", 18, 12, 1.5)),
+    "x": (("l", 6, 6, 18, 18), ("l", 18, 6, 6, 18)),
+    "check": (("l", 5, 12.5, 10, 17.5, 19, 7),),
+    "monitor": (("r", 3, 4, 21, 16, 2), ("l", 8.5, 20, 15.5, 20), ("l", 12, 16, 12, 20)),
+    "grid": (("r", 4, 4, 10.5, 10.5, 1.5), ("r", 13.5, 4, 20, 10.5, 1.5),
+             ("r", 4, 13.5, 10.5, 20, 1.5), ("r", 13.5, 13.5, 20, 20, 1.5)),
+    "download": (("l", 12, 4, 12, 15), ("l", 7, 10.5, 12, 15.5, 17, 10.5),
+                 ("l", 4, 17, 4, 20, 20, 20, 20, 17)),
+    "play": (("l", 8, 5, 19, 12, 8, 19, 8, 5),),
+    "command": (("l", 9, 6, 9, 18), ("l", 15, 6, 15, 18), ("l", 6, 9, 18, 9), ("l", 6, 15, 18, 15),
+                ("c", 6.5, 6.5, 2.5), ("c", 17.5, 6.5, 2.5), ("c", 6.5, 17.5, 2.5),
+                ("c", 17.5, 17.5, 2.5)),
+}
+# Symbols the pages already pass as a button's icon, and the drawn icon each becomes.
+GLYPH_ICONS = {"+": "plus", "＋": "plus", "↑": "arrow-up", "↓": "arrow-down", "▤": "folder",
+               "⧉": "clipboard", "⚙": "settings", "⋯": "more", "✕": "x", "▾": "chevron-down",
+               "▶": "play"}
+_ICON_CACHE: dict[tuple[Any, ...], tk.PhotoImage] = {}
+
+
+def icon_image(master: tk.Misc, name: str, size: int, color: str, bg: str,
+               weight: float = 1.7) -> tk.PhotoImage:
+    """The icon ``name`` as a ``size``-pixel image in ``color`` on ``bg``, with smooth
+    edges. ``weight`` is the stroke on the 24-unit grid. Cached per look."""
+    import math
+
+    key = (master.tk, name, size, color, bg, weight)
+    image = _ICON_CACHE.get(key)
+    if image is not None:
+        return image
+    if len(_ICON_CACHE) > 600:
+        _ICON_CACHE.clear()
+    k = size / 24.0
+    half = max(1.15, weight * k) / 2
+    ink = [v / 257 for v in master.winfo_rgb(color)]
+    paper = [v / 257 for v in master.winfo_rgb(bg)]
+
+    def segment(x: float, y: float, x1: float, y1: float, x2: float, y2: float) -> float:
+        dx, dy = x2 - x1, y2 - y1
+        length = dx * dx + dy * dy
+        t = 0.0 if not length else max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / length))
+        return math.hypot(x - x1 - t * dx, y - y1 - t * dy)
+
+    def cover(shape: tuple[Any, ...], x: float, y: float) -> float:
+        kind = shape[0]
+        v = [n * k for n in shape[1:]] if kind != "a" else [n * k for n in shape[1:4]]
+        if kind == "l":
+            d = min(segment(x, y, v[i], v[i + 1], v[i + 2], v[i + 3])
+                    for i in range(0, len(v) - 2, 2))
+        elif kind in "cde":
+            d = math.hypot(x - v[0], y - v[1]) - v[2]
+            if kind != "c":
+                return max(0.0, min(1.0, 0.5 - d))
+            d = abs(d)
+        elif kind == "a":
+            start, end = shape[4], shape[5]
+            angle = math.degrees(math.atan2(y - v[1], x - v[0])) % 360
+            if (angle - start) % 360 <= end - start:
+                d = abs(math.hypot(x - v[0], y - v[1]) - v[2])
+            else:
+                d = min(math.hypot(x - v[0] - v[2] * math.cos(math.radians(a)),
+                                   y - v[1] - v[2] * math.sin(math.radians(a)))
+                        for a in (start, end))
+        else:  # "r": the outline of a rounded box
+            radius = v[4]
+            qx = abs(x - (v[0] + v[2]) / 2) - ((v[2] - v[0]) / 2 - radius)
+            qy = abs(y - (v[1] + v[3]) / 2) - ((v[3] - v[1]) / 2 - radius)
+            d = abs(math.hypot(max(qx, 0.0), max(qy, 0.0)) + min(max(qx, qy), 0.0) - radius)
+        return max(0.0, min(1.0, half + 0.5 - d))
+
+    rows = []
+    for py in range(size):
+        row = []
+        for px in range(size):
+            pixel = paper
+            for shape in ICONS[name]:
+                amount = cover(shape, px + 0.5, py + 0.5)
+                if amount > 0:
+                    target = paper if shape[0] == "e" else ink
+                    pixel = [a + (b - a) * amount for a, b in zip(pixel, target, strict=True)]
+            row.append("#" + "".join(_HEX[max(0, min(255, int(c)))] for c in pixel))
+        rows.append("{" + " ".join(row) + "}")
+    image = tk.PhotoImage(master=master, width=size, height=size)
+    image.put(" ".join(rows))
+    _ICON_CACHE[key] = image
     return image
 
 
@@ -314,18 +494,22 @@ def set_dark_titlebar(window: tk.Misc, dark: bool) -> None:
 
 
 class Button(tk.Canvas):
-    """Launcher-style button drawn on a canvas: hover, press, and keyboard focus.
+    """The app's button, drawn on a canvas: a softly rounded rectangle with a hover, a
+    pressed and a keyboard-focus state.
 
-    Tab reaches every button; Enter or Space presses the focused one, which shows a
-    focus ring. ``size="xl"`` is the big blue "Play"-style button on the Send hero.
+    Tab reaches every button; Enter or Space presses the focused one, which shows a cyan
+    focus ring. A known symbol as ``icon`` (＋ ↑ ⚙ …) is drawn from the app's own icon
+    family, and a label ending in ``▾`` gets a drawn chevron. Colours glide between the
+    states in a few frames (unless the theme asks for no motion).
     """
 
     SIZES = {  # font size, horizontal padding, height
         "sm": (9, 10, 28),
-        "md": (10, 14, 34),
-        "lg": (11, 20, 42),
-        "xl": (13, 30, 50),
+        "md": (10, 13, 32),
+        "lg": (10, 16, 38),
+        "xl": (11, 22, 44),
     }
+    FADE_MS = 24  # per frame; four frames = about 100 ms
 
     def __init__(
         self,
@@ -350,13 +534,18 @@ class Button(tk.Canvas):
         self._focused = False
         self._text = text
         self._icon = icon
+        self._size = size
         font_size, pad, height = self.SIZES[size]
         bold = kind in {"primary", "danger"} or size == "xl"
         self._font = theme.font(font_size, "bold" if bold else "normal")
         self._pad = theme.px(pad)
         self._fixed = theme.px(width) if width else None
         self._height = theme.px(height)
-        self._label = f"{icon}  {text}" if icon and text else (icon or text)
+        self._radius = theme.px(RADIUS["sm"] if size == "sm" else RADIUS["md"])
+        self._glyph = theme.px(14 if size == "sm" else 16)  # drawn icon size
+        self._shown: tuple[str, str, str] | None = None  # colours on screen right now
+        self._fade_after: str | None = None
+        self._parse()
         self._width = self._fixed or self._natural()
         background = bg if bg is not None else parent.cget("bg")
         super().__init__(
@@ -376,65 +565,144 @@ class Button(tk.Canvas):
         self.bind("<Configure>", lambda _e: self._draw())
         self.bind("<FocusIn>", lambda _e: self._set_focus(True))
         self.bind("<FocusOut>", lambda _e: self._set_focus(False))
+        self.bind("<Destroy>", lambda _e: self._stop_fade(), add="+")
         for key in ("<Return>", "<KP_Enter>", "<space>"):
             self.bind(key, self._key_pressed)
         self._draw()
 
+    def _parse(self) -> None:
+        """Split the label into a drawn leading icon, the words and a drawn chevron."""
+        text, icon = self._text, self._icon
+        self._lead = GLYPH_ICONS.get(icon, "")
+        self._chevron = False
+        if not self._lead and text in GLYPH_ICONS:  # a button that is only a symbol
+            self._lead, text = GLYPH_ICONS[text], ""
+        elif text.endswith(" ▾"):
+            self._chevron, text = True, text[:-2].rstrip()
+        glyph = "" if self._lead else icon
+        self._words = f"{glyph}  {text}" if glyph and text else (glyph or text)
+        self._label = f"{icon}  {self._text}" if icon and self._text else (icon or self._text)
+
     def _natural(self) -> int:
-        # The pill's round ends need room: never less padding than about half its height.
-        return self._font.measure(self._label) + 2 * max(self._pad, int(self._height * 0.42))
+        gap = self.theme.px(7)
+        inner = self._font.measure(self._words) if self._words else 0
+        if self._lead:
+            inner += self._glyph + (gap if self._words else 0)
+        if self._chevron:
+            inner += self.theme.px(12) + self.theme.px(4)
+        return inner + 2 * self._pad
 
     def _colors(self) -> tuple[str, str, str]:
         c = self.theme.c
         if not self.enabled:
-            return c["neutral_soft"], c["neutral_soft"], c["faint"]
+            return c["neutral_soft"], c["border"], c["faint"]
         if self.kind == "primary":
             fill = (
                 c["accent_press"] if self._pressed
                 else c["button_hover"] if self._hover
                 else c["button"]
             )
-            return fill, fill, c["accent_text"]
+            # A hairline lighter than the fill: the button's edge catches a little light.
+            return fill, mix_color("#FFFFFF", fill, 0.84), c["accent_text"]
         if self.kind == "danger":
             fill = c["danger"] if self._hover or self._pressed else c["danger_soft"]
             text = c["accent_text"] if self._hover or self._pressed else c["danger"]
-            return fill, c["danger"], text
+            if not self.theme.dark and (self._hover or self._pressed):
+                text = "#FFFFFF"
+            return fill, mix_color(c["danger"], fill, 0.5), text
         if self.kind == "ghost":
             fill = (
-                c["accent_soft"] if self._pressed
+                c["border"] if self._pressed
                 else c["nav_active"] if self._hover
                 else self.cget("bg")
             )
             return fill, fill, c["text"]
         if self.kind == "soft":
-            fill = c["nav_active"] if self._pressed else c["accent_soft"]
-            return fill, fill, c["accent_hover"] if self._hover else c["accent"]
+            fill = mix_color(c["accent_soft"], c["accent"], 0.14) if (
+                self._hover or self._pressed) else c["accent_soft"]
+            return fill, mix_color(c["accent"], fill, 0.70), c["accent"]
         fill = (
             c["border"] if self._pressed
             else c["card_hover"] if self._hover
             else c["neutral_soft"]
         )
-        border = c["border_strong"] if self._hover else c["border"]
+        border = c["border_strong"] if self._hover else mix_color(
+            c["border_strong"], c["border"], 0.5)
         return fill, border, c["text"]
 
     def _draw(self) -> None:
+        """Move to the colours of the current state: at once, or gliding there in a few
+        frames when the pointer moved on or off the button."""
+        target = self._colors()
+        glide = (self.theme.motion and self._shown is not None and self._shown != target
+                 and not self._pressed and self.enabled and self.winfo_ismapped())
+        self._stop_fade()
+        if glide:
+            self._fade(self._shown, target, 1)
+        else:
+            self._paint(target)
+
+    def _stop_fade(self) -> None:
+        if self._fade_after is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._fade_after)
+            self._fade_after = None
+
+    def _fade(self, start: tuple[str, str, str], target: tuple[str, str, str], step: int) -> None:
+        self._fade_after = None
+        steps = 4
+        try:
+            if step >= steps:
+                self._paint(target)
+                return
+            k = step / steps
+            self._paint(tuple(mix_color(a, b, k) for a, b in zip(start, target, strict=True)))
+            self._fade_after = self.after(self.FADE_MS,
+                                          lambda: self._fade(start, target, step + 1))
+        except tk.TclError:
+            return
+        except ValueError:  # a named system colour cannot be blended: jump to the end
+            with contextlib.suppress(tk.TclError):
+                self._paint(target)
+
+    def _paint(self, colors: tuple[str, ...]) -> None:
         self.delete("all")
         width = max(self.winfo_width(), self._width) if self.winfo_ismapped() else self._width
-        fill, outline, foreground = self._colors()
+        fill, outline, foreground = colors
+        self._shown = (fill, outline, foreground)
         bg: str | tuple[str, str, str, str] = self.backdrop or self.cget("bg")
         ring: str | None = outline if outline != fill else None
         if self._focused:
-            ring = self.theme.c["accent2"] if self.kind == "primary" else self.theme.c["accent"]
-        # A soft pill with smooth edges; glassy unless it is a flat ghost on its background.
+            ring = self.theme.c["accent2"]
         self._image = glass_image(
-            self, width, self._height, self._height / 2, fill, bg, ring,
-            2.0 if self._focused else 1.0, shine=fill != self.cget("bg") and not self._pressed)
+            self, width, self._height, self._radius, fill, bg, ring,
+            2.0 if self._focused else 1.0)
         self.create_image(0, 0, image=self._image, anchor="nw")
-        nudge = 1 if self._pressed else 0  # pressed text sinks a pixel
-        self.create_text(
-            width / 2, self._height / 2 + nudge, text=self._label, fill=foreground,
-            font=self._font,
-        )
+        nudge = 1 if self._pressed else 0  # pressed content sinks a pixel
+        gap = self.theme.px(7)
+        words = self._font.measure(self._words) if self._words else 0
+        chevron = self.theme.px(12)
+        inner = words + (self._glyph + (gap if self._words else 0) if self._lead else 0) + (
+            chevron + self.theme.px(4) if self._chevron else 0)
+        x = (width - inner) / 2
+        mid = self._height / 2 + nudge
+        self._glyphs = []
+        if self._lead:
+            image = icon_image(self, self._lead, self._glyph, foreground, fill,
+                               2.0 if self._size == "xl" else 1.8)
+            self._glyphs.append(image)
+            self.create_image(round(x), round(mid - self._glyph / 2), image=image, anchor="nw")
+            x += self._glyph + (gap if self._words else 0)
+        if self._words:
+            self.create_text(x, mid, text=self._words, fill=foreground, font=self._font,
+                             anchor="w")
+            x += words
+        if self._chevron:
+            image = icon_image(self, "chevron-down", chevron,
+                               mix_color(foreground, fill, 0.25), fill, 2.0)
+            self._glyphs.append(image)
+            self.create_image(round(x + self.theme.px(4)), round(mid - chevron / 2 + 1),
+                              image=image, anchor="nw")
 
     def _set_hover(self, value: bool) -> None:
         self._hover = value and self.enabled
@@ -448,6 +716,7 @@ class Button(tk.Canvas):
 
     def _set_focus(self, value: bool) -> None:
         self._focused = value
+        self._shown = None  # the ring appears at once
         self._draw()
 
     def _key_pressed(self, _event: tk.Event) -> str:
@@ -466,38 +735,41 @@ class Button(tk.Canvas):
     def set_enabled(self, enabled: bool) -> None:
         self.enabled = enabled
         self.configure(cursor="hand2" if enabled else "arrow", takefocus=1 if enabled else 0)
+        self._shown = None
         self._draw()
 
     def set_text(self, text: str) -> None:
         self._text = text
-        self._label = f"{self._icon}  {text}" if self._icon and text else (self._icon or text)
+        self._parse()
         # Measured afresh each time, so a label that gets shorter gives its width back.
         self._width = self._fixed or self._natural()
         self.configure(width=self._width)
+        self._shown = None
         self._draw()
 
 
 def chip(parent: tk.Misc, theme: Theme, text: str, color: str) -> tk.Canvas:
-    """A small soft status pill: a dot and a word or two, tinted with ``color``."""
+    """A small status chip: a dot in ``color`` and a word or two in plain text colour, on a
+    hairline-bordered surface. The dot carries the colour; the words stay easy to read."""
+    c = theme.c
     bg = parent.cget("bg")
-    font = theme.font(8, "bold")
-    height = theme.px(24)
+    font = theme.font(9)
+    height = theme.px(26)
     dot = theme.px(6)
-    width = font.measure(text) + dot + theme.px(30)
+    width = font.measure(text) + dot + theme.px(28)
     canvas = tk.Canvas(parent, width=width, height=height, bg=bg, highlightthickness=0, bd=0)
-    tint = mix_color(color, bg, 0.86)
     canvas.image = glass_image(  # type: ignore[attr-defined]
-        canvas, width, height, height / 2, tint, bg, mix_color(color, bg, 0.55), light=0.10)
+        canvas, width, height, theme.px(RADIUS["sm"]), c["card"], bg, c["border"])
     canvas.create_image(0, 0, image=canvas.image, anchor="nw")
-    x = theme.px(12)
+    x = theme.px(10)
     canvas.create_oval(x, (height - dot) / 2, x + dot, (height + dot) / 2, fill=color, outline="")
-    canvas.create_text(x + dot + theme.px(7), height / 2, text=text, fill=color, font=font,
+    canvas.create_text(x + dot + theme.px(8), height / 2, text=text, fill=c["muted"], font=font,
                        anchor="w")
     return canvas
 
 
 class Toggle(tk.Canvas):
-    """iOS/Android style switch."""
+    """A switch. Click it, or Tab to it and press Space or Enter; the knob slides across."""
 
     def __init__(
         self,
@@ -509,34 +781,79 @@ class Toggle(tk.Canvas):
         self.theme = theme
         self.value = value
         self.command = command
-        self._tw = theme.px(40)
+        self._tw = theme.px(38)
         self._th = theme.px(22)
+        self._ring = theme.px(3)  # room around the track for the focus ring
+        self._pos = 1.0 if value else 0.0  # where the knob is, 0 (off) to 1 (on)
+        self._focused = False
+        self._hover = False
+        self._slide_after: str | None = None
         super().__init__(
             parent,
-            width=self._tw,
-            height=self._th,
+            width=self._tw + 2 * self._ring,
+            height=self._th + 2 * self._ring,
             bg=parent.cget("bg"),
             highlightthickness=0,
             bd=0,
             cursor="hand2",
+            takefocus=1,
         )
         self.bind("<ButtonRelease-1>", lambda _e: self.toggle())
+        for key in ("<space>", "<Return>", "<KP_Enter>"):
+            self.bind(key, lambda _e: (self.toggle(), "break")[1])
+        self.bind("<FocusIn>", lambda _e: self._state(focused=True))
+        self.bind("<FocusOut>", lambda _e: self._state(focused=False))
+        self.bind("<Enter>", lambda _e: self._state(hover=True))
+        self.bind("<Leave>", lambda _e: self._state(hover=False))
+        self.bind("<Destroy>", lambda _e: self._stop(), add="+")
+        self._draw()
+
+    def _state(self, focused: bool | None = None, hover: bool | None = None) -> None:
+        if focused is not None:
+            self._focused = focused
+        if hover is not None:
+            self._hover = hover
         self._draw()
 
     def _draw(self) -> None:
         self.delete("all")
         c = self.theme.c
-        track = c["accent"] if self.value else c["track"]
+        off = c["border_strong"] if self._hover else c["track"]
+        on = c["accent_hover"] if self._hover and self.theme.dark else c["button"]
+        track = mix_color(off, on, self._pos)
         margin = self.theme.px(3)
         diameter = self._th - 2 * margin
-        x = self._tw - margin - diameter if self.value else margin
-        # Smooth edges like the buttons: a glassy track and a soft white knob.
-        self._images = (
-            glass_image(self, self._tw, self._th, self._th / 2, track, self.cget("bg")),
-            glass_image(self, diameter, diameter, diameter / 2, "#FFFFFF", track, shine=False),
-        )
-        self.create_image(0, 0, image=self._images[0], anchor="nw")
-        self.create_image(x, margin, image=self._images[1], anchor="nw")
+        x = self._ring + margin + (self._tw - 2 * margin - diameter) * self._pos
+        bg = self.cget("bg")
+        self._images = [
+            glass_image(self, self._tw, self._th, self._th / 2, track, bg),
+            glass_image(self, diameter, diameter, diameter / 2, "#FFFFFF", track),
+        ]
+        if self._focused:
+            outer = (self._tw + 2 * self._ring, self._th + 2 * self._ring)
+            self._images.append(glass_image(self, outer[0], outer[1], outer[1] / 2, bg, bg,
+                                            c["accent2"], 2.0))
+            self.create_image(0, 0, image=self._images[-1], anchor="nw")
+        self.create_image(self._ring, self._ring, image=self._images[0], anchor="nw")
+        self.create_image(round(x), self._ring + margin, image=self._images[1], anchor="nw")
+
+    def _stop(self) -> None:
+        if self._slide_after is not None:
+            with contextlib.suppress(tk.TclError):
+                self.after_cancel(self._slide_after)
+            self._slide_after = None
+
+    def _slide(self) -> None:
+        self._slide_after = None
+        try:
+            goal = 1.0 if self.value else 0.0
+            step = 0.26 if goal > self._pos else -0.26
+            self._pos = goal if abs(goal - self._pos) <= abs(step) else self._pos + step
+            self._draw()
+            if self._pos != goal:
+                self._slide_after = self.after(18, self._slide)
+        except tk.TclError:
+            return
 
     def toggle(self) -> None:
         self.set(not self.value)
@@ -545,7 +862,12 @@ class Toggle(tk.Canvas):
 
     def set(self, value: bool) -> None:
         self.value = bool(value)
-        self._draw()
+        self._stop()
+        if self.theme.motion and self.winfo_ismapped():
+            self._slide()
+        else:
+            self._pos = 1.0 if self.value else 0.0
+            self._draw()
 
 
 class ProgressBar(tk.Canvas):
@@ -588,7 +910,7 @@ class ProgressBar(tk.Canvas):
         try:
             if not self.live or not self.winfo_exists():
                 return
-            if self.winfo_ismapped():
+            if self.winfo_ismapped() and self.theme.motion:
                 self._sheen = (self._sheen + 0.025) % 1.4
                 self._draw()
             self._after = self.after(self.FRAME_MS, self._frame)
@@ -610,7 +932,7 @@ class ProgressBar(tk.Canvas):
                 x = -band + (filled + band) * min(1.0, self._sheen)
                 left, right = max(0.0, x), min(filled, x + band)
                 if right - left > 1:
-                    light = mix_color("#FFFFFF", self.color, 0.62)
+                    light = mix_color(self.theme.c["accent2"], self.color, 0.45)
                     self.create_rectangle(left, 1, right, self._h - 1, fill=light, outline="")
         elif filled > 0:
             self.create_oval(0, 0, self._h, self._h, fill=self.color, outline=self.color)
@@ -708,37 +1030,41 @@ class Pill(tk.Canvas):
             "danger": (c["danger_soft"], c["danger"]),
             "accent": (c["accent_soft"], c["accent"]),
         }.get(tone, (c["neutral_soft"], c["muted"]))
-        width = self._font.measure(text) + self.theme.px(18)
+        width = self._font.measure(text) + self.theme.px(16)
         height = self.theme.px(20)
         self.configure(width=width)
         self.delete("all")
-        round_rect(self, 0, 0, width, height, height / 2, fill=fill, outline=fill)
+        self._image = glass_image(self, width, height, self.theme.px(RADIUS["sm"]), fill,
+                                  self.cget("bg"), mix_color(fg, fill, 0.72))
+        self.create_image(0, 0, image=self._image, anchor="nw")
         self.create_text(width / 2, height / 2, text=text, fill=fg, font=self._font)
 
 
 class Avatar(tk.Canvas):
-    """Coloured circle with a platform letter."""
+    """A device's badge: a softly tinted rounded square with the platform's icon."""
 
     def __init__(self, parent: tk.Misc, theme: Theme, platform_name: str, size: int = 40) -> None:
         self.theme = theme
-        diameter = theme.px(size)
-        super().__init__(
-            parent,
-            width=diameter,
-            height=diameter,
-            bg=parent.cget("bg"),
-            highlightthickness=0,
-            bd=0,
-        )
-        color, letter = PLATFORM_STYLE.get(platform_name.lower(), (theme.c["faint"], "?"))
-        self.create_oval(1, 1, diameter - 1, diameter - 1, fill=color, outline=color)
-        self.create_text(
-            diameter / 2,
-            diameter / 2,
-            text=letter,
-            fill=AVATAR_LETTER,
-            font=theme.font(max(9, size // 3), "bold"),
-        )
+        side = theme.px(size)
+        bg = parent.cget("bg")
+        super().__init__(parent, width=side, height=side, bg=bg, highlightthickness=0, bd=0)
+        key = platform_name.lower()
+        color, letter = PLATFORM_STYLE.get(key, (theme.c["faint"], "?"))
+        if not theme.dark:
+            color = mix_color(color, "#000000", 0.38)
+        tint = mix_color(color, theme.c["card"], 0.86)
+        self._images = [glass_image(self, side, side, side * 0.28, tint, bg,
+                                    mix_color(color, tint, 0.70))]
+        self.create_image(0, 0, image=self._images[0], anchor="nw")
+        name = PLATFORM_ICON.get(key)
+        if name:
+            glyph = max(12, int(side * 0.52))
+            self._images.append(icon_image(self, name, glyph, color, tint))
+            self.create_image((side - glyph) // 2, (side - glyph) // 2, image=self._images[1],
+                              anchor="nw")
+        else:
+            self.create_text(side / 2, side / 2, text=letter, fill=color,
+                             font=theme.font(max(9, size // 3), "bold"))
 
 
 class SignalBars(tk.Canvas):
@@ -785,7 +1111,7 @@ class Card(tk.Canvas):
         padding: int = 18,
         fill: str | None = None,
         outline: str | None = None,
-        radius: int = 14,
+        radius: int = RADIUS["lg"],
     ) -> None:
         self.theme = theme
         self._image: tk.PhotoImage | None = None
@@ -927,6 +1253,7 @@ class QrCanvas(tk.Canvas):
 
     def show(self, matrix: list[list[bool]]) -> None:
         self.delete("all")
+        self.configure(bg="#FFFFFF")
         modules = len(matrix) + 8
         cell = self._size / modules
         offset = 4 * cell
@@ -965,20 +1292,21 @@ class Toast:
             "danger": c["danger"],
             "warning": c["warning"],
         }.get(tone, c["accent"])
-        frame = tk.Frame(self.root, bg=c["card"], highlightthickness=1,
+        frame = tk.Frame(self.root, bg=c["card_hover"], highlightthickness=1,
                          highlightbackground=c["border_strong"])
-        tk.Frame(frame, bg=accent, width=px(4)).pack(side="left", fill="y")
-        inner = tk.Frame(frame, bg=c["card"], padx=px(14), pady=px(11))
+        tk.Frame(frame, bg=accent, width=px(3)).pack(side="left", fill="y")
+        inner = tk.Frame(frame, bg=c["card_hover"], padx=px(12), pady=px(10))
         inner.pack(side="left", fill="both")
         tk.Label(
-            inner, text=self.ICONS.get(tone, "●"), fg=accent, bg=c["card"],
-            font=self.theme.font(11, "bold"), width=2,
-        ).pack(side="left", padx=(0, px(6)))
+            inner, text=self.ICONS.get(tone, "●"), fg=accent,
+            bg=mix_color(accent, c["card_hover"], 0.84),
+            font=self.theme.font(9, "bold"), width=2, pady=px(2),
+        ).pack(side="left", padx=(0, px(10)))
         tk.Label(
             inner,
             text=text,
             fg=c["text"],
-            bg=c["card"],
+            bg=c["card_hover"],
             font=self.theme.font(10),
             wraplength=px(380),
             justify="left",
@@ -993,8 +1321,10 @@ class Toast:
         if frame is not self._frame:
             return
         with contextlib.suppress(tk.TclError):
-            frame.place(relx=1.0, rely=1.0, anchor="se", y=-self.theme.px(24),
-                        x=-self.theme.px(24) + self.theme.px(self.SLIDE[step]))
+            if not self.theme.motion:
+                step = len(self.SLIDE) - 1
+            frame.place(relx=1.0, rely=1.0, anchor="se", y=-self.theme.px(44),
+                        x=-self.theme.px(20) + self.theme.px(self.SLIDE[step]))
             if step + 1 < len(self.SLIDE):
                 self._slide_after = self.root.after(16, lambda: self._slide(frame, step + 1))
 
@@ -1019,7 +1349,9 @@ class Modal(tk.Toplevel):
         self.theme = theme
         self.withdraw()
         self.title(title)
-        self.configure(bg=theme.c["bg"])
+        self.configure(bg=theme.c["bg"], highlightthickness=1,
+                       highlightbackground=theme.c["border_strong"],
+                       highlightcolor=theme.c["border_strong"])
         self.resizable(False, False)
         self.transient(parent.winfo_toplevel())
         self.body = tk.Frame(self, bg=theme.c["bg"], padx=theme.px(28), pady=theme.px(24))
@@ -1087,15 +1419,21 @@ class Modal(tk.Toplevel):
 
 def entry(parent: tk.Misc, theme: Theme, variable: tk.Variable, **kwargs: Any) -> tk.Entry:
     c = theme.c
+    # The flat border is drawn in the field's own colour, so it works as inner padding.
     return tk.Entry(
         parent,
         textvariable=variable,
         bg=c["entry"],
         fg=c["text"],
-        insertbackground=c["text"],
+        insertbackground=c["accent"],
+        selectbackground=c["button"],
+        selectforeground=c["accent_text"],
+        disabledbackground=c["neutral_soft"],
+        disabledforeground=c["faint"],
         relief="flat",
+        bd=theme.px(6),
         highlightthickness=1,
-        highlightbackground=c["border"],
+        highlightbackground=c["border_strong"],
         highlightcolor=c["accent"],
         font=theme.font(10),
         **kwargs,
@@ -1495,9 +1833,9 @@ class MonkeyActor:
 
 
 class HeroBanner(tk.Canvas):
-    """The Send page's key art, Battle.net style: deep-blue light, drifting embers and
-    the monkey as the character. The words are drawn straight onto the art (set_words);
-    the owner packs its buttons into ``buttons``, which sits under the words.
+    """The Send page's header: who you are sending to, in large type, with the main
+    actions right under it and the monkey in a small card on the right. The words are
+    drawn on the canvas (set_words); the owner packs its buttons into ``buttons``.
 
     The monkey strolls about; click it and it grins, says "Lad være!" or turns a
     somersault. Animation pauses while the banner is not on screen.
@@ -1557,13 +1895,16 @@ class HeroBanner(tk.Canvas):
         self.delete("backdrop")
         self.create_image(0, 0, image=self._image, anchor="nw", tags=("backdrop",))
         self.tag_lower("backdrop")
-        # IDE look: no key art. A small flat mascot card on the right holds the monkey.
-        card = min(height - px(20), px(156))
-        cx2 = width - px(28)
-        cx1, cy1, cy2 = cx2 - card, (height - card) / 2, (height + card) / 2
-        round_rect(self, cx1, cy1, cx2, cy2, px(14), fill=c["card"], outline=c["border"],
-                   width=1, tags=("backdrop",))
-        self.actor.place((cx1 + cx2) / 2, cy2 - px(18), card * 0.60, roam=card * 0.10)
+        # A small mascot card on the right holds the monkey, level with the words.
+        card = int(min(height - px(36), px(136)))
+        self._card = card
+        cx2 = width
+        cx1, cy1 = cx2 - card, px(18)
+        cy2 = cy1 + card
+        self._card_image = glass_image(self, card, card, px(RADIUS["lg"]), c["card"], c["bg"],
+                                       c["border"])
+        self.create_image(cx1, cy1, image=self._card_image, anchor="nw", tags=("backdrop",))
+        self.actor.place((cx1 + cx2) / 2, cy2 - px(16), card * 0.60, roam=card * 0.10)
         self._layout_words()
 
     def set_words(
@@ -1583,18 +1924,19 @@ class HeroBanner(tk.Canvas):
             return
         self.delete("words")
         eyebrow, title, status, dot, hint = self._words
-        x = px(40)
-        title_size = 26 if len(title) <= 16 else 22 if len(title) <= 24 else 18
+        x = px(1)
+        room = max(px(240), width - getattr(self, "_card", px(136)) - px(32))
+        title_size = 24 if len(title) <= 18 else 20 if len(title) <= 26 else 17
         fonts = (self.theme.font(8, "bold", self.theme.mono),
                  self.theme.title_font(title_size), self.theme.font(10))
-        y = height * 0.16
+        y = px(20)
         self.create_text(x, y, text=eyebrow.upper(), fill=c["accent"], font=fonts[0], anchor="nw",
                          tags=("words",))
-        y += fonts[0].metrics("linespace") + px(4)
+        y += fonts[0].metrics("linespace") + px(6)
         self.create_text(x, y, text=title, fill=c["text"], font=fonts[1], anchor="nw",
-                         width=int(width * 0.56), tags=("words",))
-        y += fonts[1].metrics("linespace") * (1 if fonts[1].measure(title) < width * 0.56
-                                               else 2) + px(2)
+                         width=room, tags=("words",))
+        y += fonts[1].metrics("linespace") * (1 if fonts[1].measure(title) < room
+                                               else 2) + px(4)
         if status:
             r = px(4)
             mid = y + fonts[2].metrics("linespace") / 2
@@ -1604,12 +1946,12 @@ class HeroBanner(tk.Canvas):
                              anchor="nw", tags=("words",))
             y += fonts[2].metrics("linespace")
         y += px(16)
-        self.coords(self._buttons_item, x, y)
+        self.coords(self._buttons_item, 0, y)
         self.refresh_buttons()
         if hint:
-            y += max(self.buttons.winfo_reqheight(), px(50)) + px(12)
+            y += max(self.buttons.winfo_reqheight(), px(44)) + px(12)
             self.create_text(x, y, text=hint, fill=c["faint"], font=self.theme.font(9),
-                             anchor="nw", width=int(width * 0.55), tags=("words",))
+                             anchor="nw", width=room, tags=("words",))
 
     def refresh_buttons(self) -> None:
         """The buttons take the art's colour behind each of them (Tk widgets are opaque, and
@@ -1734,11 +2076,12 @@ class HeroBanner(tk.Canvas):
 
 
 class DeviceTiles(tk.Frame):
-    """Devices as launcher game icons: square tiles with the platform, name and status.
+    """Your devices as a row of compact cards: the platform's icon, the name and a short
+    status line. The cards wrap onto more rows when the window is narrow.
 
-    The selected tile glows blue; a pointer over a tile lifts it a little. ``nodes`` are
-    dicts with id, name, platform, online, selected and sub (a short status line);
-    ``on_add`` adds a dashed "+" tile at the end.
+    The selected card is tinted blue; a pointer over a card lifts its surface. ``nodes``
+    are dicts with id, name, platform, online, selected and sub (a short status line);
+    ``on_add`` adds a dashed "Forbind ny" card at the end.
     """
 
     def __init__(
@@ -1754,9 +2097,13 @@ class DeviceTiles(tk.Frame):
         self.on_add = on_add
         self.nodes: list[dict[str, Any]] = []
         self.tiles: dict[str, tk.Canvas] = {}
-        self._tw, self._th = theme.px(118), theme.px(150)
+        self._order: list[tk.Canvas] = []
+        self._tw, self._th = theme.px(190), theme.px(60)
+        self._gap = theme.px(10)
+        self._cols = 0
         self._phase = 0.0
         self._pulse_after: str | None = None
+        self.bind("<Configure>", lambda e: self._reflow(e.width), add="+")
         self.set_nodes([])
 
     def set_nodes(self, nodes: list[dict[str, Any]]) -> None:
@@ -1766,15 +2113,30 @@ class DeviceTiles(tk.Frame):
         for tile in self.winfo_children():
             tile.destroy()
         self.tiles = {}
+        self._order = []
         for node in self.nodes:
             self.tiles[node["id"]] = self._tile(node)
         if self.on_add is not None:
             self._tile({"id": "+", "name": "Forbind ny", "sub": "QR · IP · Bluetooth"})
+        self._cols = 0
+        self._reflow(self.winfo_width())
         if self._pulse_after is None and any(node.get("sending") for node in self.nodes):
             self._pulse_after = self.after(60, self._pulse)
 
+    def _reflow(self, width: int) -> None:
+        """As many cards per row as fit; the rest wrap."""
+        if width <= 1:  # not on screen yet: a sensible first guess
+            width = 4 * (self._tw + self._gap)
+        cols = max(1, (width + self._gap) // (self._tw + self._gap))
+        if cols == self._cols:
+            return
+        self._cols = cols
+        for index, tile in enumerate(self._order):
+            tile.grid(row=index // cols, column=index % cols, sticky="w",
+                      padx=(0, self._gap), pady=(0, self._gap))
+
     def _pulse(self) -> None:
-        """The tile being sent to breathes blue until the send is over."""
+        """The card being sent to breathes cyan until the send is over."""
         self._pulse_after = None
         try:
             if not self.winfo_exists() or not any(n.get("sending") for n in self.nodes):
@@ -1788,10 +2150,9 @@ class DeviceTiles(tk.Frame):
             return
 
     def _tile(self, node: dict[str, Any]) -> tk.Canvas:
-        px = self.theme.px
         tile = tk.Canvas(self, width=self._tw, height=self._th, bg=self.theme.c["bg"],
                          highlightthickness=0, bd=0, cursor="hand2", takefocus=1)
-        tile.pack(side="left", padx=(0, px(12)))
+        self._order.append(tile)
         tile.node = node  # type: ignore[attr-defined]
         tile.hover = False  # type: ignore[attr-defined]
         tile.focused = False  # type: ignore[attr-defined]
@@ -1816,66 +2177,627 @@ class DeviceTiles(tk.Frame):
         tile.focused = value  # type: ignore[attr-defined]
         self._paint(tile)
 
+    def _fit(self, text: str, font: tkfont.Font, room: int) -> str:
+        if font.measure(text) <= room:
+            return text
+        while len(text) > 1 and font.measure(text + "…") > room:
+            text = text[:-1]
+        return text.rstrip() + "…"
+
     def _paint(self, tile: tk.Canvas) -> None:
         c, px = self.theme.c, self.theme.px
         node = tile.node  # type: ignore[attr-defined]
         hover = tile.hover  # type: ignore[attr-defined]
         w, h = self._tw, self._th
         tile.delete("all")
-        lift = px(3) if hover else 0
-        box = (px(4), px(4) - lift, w - px(4), w - px(16) - lift)
-        selected = node.get("selected")
-        if node["id"] == "+":
-            round_rect(tile, *box, px(16), fill=c["bg"], outline=c["border_strong"], dash=(4, 4))
-            tile.create_text((box[0] + box[2]) / 2, (box[1] + box[3]) / 2, text="+",
-                             fill=c["accent"] if hover else c["muted"],
-                             font=self.theme.font(26))
-        else:
-            radius = px(16)
-            bw, bh = int(box[2] - box[0]), int(box[3] - box[1])
-            images = []
-            if selected:  # a soft blue glow around the selected tile
-                grow = px(4)
-                images.append((box[0] - grow, box[1] - grow, glass_image(
-                    tile, bw + 2 * grow, bh + 2 * grow, radius + grow,
-                    mix_color(c["accent"], c["bg"], 0.72), c["bg"], shine=False)))
-            fill = c["card_hover"] if hover else c["card"]
-            outline = c["accent"] if selected else c["border_strong"] if hover else c["border"]
-            if node.get("sending"):
-                import math
+        selected = bool(node.get("selected"))
+        adding = node["id"] == "+"
+        online = bool(node.get("online")) or adding
+        fill = (mix_color(c["accent_soft"], c["accent"], 0.10 if hover else 0.0) if selected
+                else c["card_hover"] if hover else c["bg"] if adding else c["card"])
+        outline = c["accent"] if selected else c["border_strong"] if hover else c["border"]
+        if node.get("sending"):
+            import math
 
-                # In six steps, so the breathing edge reuses its few cached images.
-                level = round((0.5 - 0.5 * math.sin(self._phase)) * 6) / 6
-                outline = mix_color(c["accent2"], c["border"], level)
-            width = 2 if selected or node.get("sending") else 1
-            under = mix_color(c["accent"], c["bg"], 0.72) if selected else c["bg"]
-            images.append((box[0], box[1], glass_image(
-                tile, bw, bh, radius, fill, under, outline, width, light=0.08)))
-            tile.images = [image for _x, _y, image in images]  # type: ignore[attr-defined]
-            for x, y, image in images:
-                tile.create_image(x, y, image=image, anchor="nw")
-            color, letter = PLATFORM_STYLE.get(str(node.get("platform", "")).lower(),
-                                               (c["faint"], "?"))
-            if not node.get("online"):
-                color = mix_color(color, c["card"], 0.55)
-            cx, cy, r = (box[0] + box[2]) / 2, (box[1] + box[3]) / 2, px(22)
-            tile.create_oval(cx - r, cy - r, cx + r, cy + r, fill=color, outline="")
-            tile.create_text(cx, cy, text=letter, fill=AVATAR_LETTER,
-                             font=self.theme.font(15, "bold"))
-            dot = c["success"] if node.get("online") else c["faint"]
-            tile.create_oval(box[2] - px(20), box[1] + px(10), box[2] - px(12), box[1] + px(18),
-                             fill=dot, outline=fill, width=2)
-        name = node["name"] if len(node["name"]) <= 14 else node["name"][:13] + "…"
-        tile.create_text(w / 2, w - px(4), text=name, anchor="n",
-                         fill=c["text"] if node.get("online") or node["id"] == "+" else c["muted"],
-                         font=self.theme.font(9, "bold"))
-        tile.create_text(w / 2, w + px(13), text=node.get("sub", ""), anchor="n",
-                         fill=c["accent"] if selected else c["faint"], font=self.theme.font(8))
+            # In six steps, so the breathing edge reuses its few cached images.
+            level = round((0.5 - 0.5 * math.sin(self._phase)) * 6) / 6
+            outline = mix_color(c["accent2"], c["border"], level)
         if tile.focused:  # type: ignore[attr-defined]
-            round_rect(tile, 1, 1, w - 1, h - 1, px(16), fill="", outline=c["accent2"], width=2)
+            outline = c["accent2"]
+        heavy = selected or node.get("sending") or tile.focused  # type: ignore[attr-defined]
+        radius = px(10)
+        images = [glass_image(tile, w, h, radius, fill, c["bg"],
+                              None if adding and not hover and not tile.focused  # type: ignore[attr-defined]
+                              else outline, 1.5 if heavy else 1.0)]
+        tile.create_image(0, 0, image=images[0], anchor="nw")
+        if adding and not hover and not tile.focused:  # type: ignore[attr-defined]
+            round_rect(tile, 1, 1, w - 2, h - 2, radius, fill="", outline=c["border_strong"],
+                       dash=(3, 4))
+        side = px(34)
+        ax, ay = px(12), (h - side) // 2
+        if adding:
+            color = c["accent"] if hover else c["muted"]
+            tint = c["neutral_soft"] if hover else c["card"]
+            icon = "plus"
+        else:
+            color, _letter = PLATFORM_STYLE.get(str(node.get("platform", "")).lower(),
+                                                (c["faint"], "?"))
+            if not self.theme.dark:
+                color = mix_color(color, "#000000", 0.38)
+            if not online:
+                color = mix_color(color, fill, 0.5)
+            tint = mix_color(color, fill, 0.86)
+            icon = PLATFORM_ICON.get(str(node.get("platform", "")).lower(), "monitor")
+        images.append(glass_image(tile, side, side, px(9), tint, fill,
+                                  mix_color(color, tint, 0.72)))
+        tile.create_image(ax, ay, image=images[-1], anchor="nw")
+        glyph = px(18)
+        images.append(icon_image(tile, icon, glyph, color, tint))
+        tile.create_image(ax + (side - glyph) // 2, ay + (side - glyph) // 2, image=images[-1],
+                          anchor="nw")
+        if not adding:
+            r = px(4)
+            dx, dy = ax + side - px(2), ay + side - px(2)
+            tile.create_oval(dx - r, dy - r, dx + r, dy + r,
+                             fill=c["success"] if online else c["faint"], outline=fill, width=2)
+        tile.images = images  # type: ignore[attr-defined]
+        tx = ax + side + px(11)
+        room = w - tx - px(10)
+        name_font, sub_font = self.theme.font(10, "bold"), self.theme.font(9)
+        tile.create_text(tx, h / 2 - px(9), text=self._fit(node["name"], name_font, room),
+                         anchor="w", fill=c["text"] if online else c["muted"], font=name_font)
+        tile.create_text(tx, h / 2 + px(10), text=self._fit(node.get("sub", ""), sub_font, room),
+                         anchor="w", fill=c["accent"] if selected else c["faint"], font=sub_font)
 
 
-def tooltip(widget: tk.Misc, theme: Theme, text: str, title: str = "") -> None:
+class NavRow(tk.Canvas):
+    """One entry of the side menu: a drawn icon, the page's name and a small counter.
+
+    The open page gets a raised surface and a blue marker on its edge; a pointer over a row
+    lifts it slightly. Tab reaches the rows and Enter or Space opens the focused one.
+    ``set_compact(True)`` shows the icon alone (the narrow menu of a small window).
+    """
+
+    def __init__(self, parent: tk.Misc, theme: Theme, icon: str, label: str,
+                 command: Callable[[], Any]) -> None:
+        self.theme = theme
+        self.icon = icon
+        self.label = label
+        self.command = command
+        self.badge = ""
+        self.active = False
+        self.compact = False
+        self._hover = False
+        self._focused = False
+        self._height = theme.px(32)
+        super().__init__(parent, height=self._height, width=theme.px(40), bg=parent.cget("bg"),
+                         highlightthickness=0, bd=0, cursor="hand2", takefocus=1)
+        self.bind("<Configure>", lambda _e: self._draw())
+        self.bind("<Enter>", lambda _e: self._set(hover=True))
+        self.bind("<Leave>", lambda _e: self._set(hover=False))
+        self.bind("<FocusIn>", lambda _e: self._set(focused=True))
+        self.bind("<FocusOut>", lambda _e: self._set(focused=False))
+        self.bind("<Button-1>", lambda _e: self.command())
+        for key in ("<Return>", "<KP_Enter>", "<space>"):
+            self.bind(key, lambda _e: (self.command(), "break")[1])
+
+    def _set(self, hover: bool | None = None, focused: bool | None = None) -> None:
+        if hover is not None:
+            self._hover = hover
+        if focused is not None:
+            self._focused = focused
+        self._draw()
+
+    def set_active(self, active: bool) -> None:
+        if active != self.active:
+            self.active = active
+            self._draw()
+
+    def set_badge(self, text: str) -> None:
+        if text != self.badge:
+            self.badge = text
+            self._draw()
+
+    def set_compact(self, compact: bool) -> None:
+        if compact != self.compact:
+            self.compact = compact
+            self._draw()
+
+    def _draw(self) -> None:
+        c, px = self.theme.c, self.theme.px
+        self.delete("all")
+        width, height = max(self.winfo_width(), px(40)), self._height
+        bg = self.cget("bg")
+        fill = c["nav_active"] if self.active else c["nav_hover"] if self._hover else bg
+        ring = c["accent2"] if self._focused else (c["border"] if self.active else None)
+        self._images = [glass_image(self, width, height, px(7), fill, bg, ring,
+                                    2.0 if self._focused else 1.0)]
+        self.create_image(0, 0, image=self._images[0], anchor="nw")
+        lit = self.active or self._hover
+        glyph = px(16)
+        color = c["accent"] if self.active else c["text"] if self._hover else c["muted"]
+        self._images.append(icon_image(self, self.icon, glyph, color, fill))
+        x = (width - glyph) // 2 if self.compact else px(11)
+        self.create_image(x, (height - glyph) // 2, image=self._images[1], anchor="nw")
+        if self.active:
+            self.create_line(px(1), height * 0.28, px(1), height * 0.72, fill=c["accent"],
+                             width=px(3), capstyle="round")
+        if self.compact:
+            if self.badge:  # a dot in the corner says "something new here"
+                r = px(3)
+                self.create_oval(width - px(12) - r, px(8) - r, width - px(12) + r, px(8) + r,
+                                 fill=c["accent"], outline=fill)
+            return
+        self.create_text(px(37), height / 2, text=self.label, anchor="w",
+                         fill=c["text"] if lit else c["muted"],
+                         font=self.theme.font(10, "bold" if self.active else "normal"))
+        if self.badge:
+            font = self.theme.font(8, "bold")
+            bw, bh = max(px(20), font.measure(self.badge) + px(12)), px(18)
+            self._images.append(glass_image(self, bw, bh, bh / 2, c["accent_soft"], fill,
+                                            mix_color(c["accent"], c["accent_soft"], 0.6)))
+            bx = width - bw - px(8)
+            self.create_image(bx, (height - bh) // 2, image=self._images[-1], anchor="nw")
+            self.create_text(bx + bw / 2, height / 2, text=self.badge, fill=c["accent"],
+                             font=font)
+
+
+class NavBadge:
+    """The counter on a menu row, with the ``configure(text=…)`` / ``cget("text")`` of the
+    label it used to be, so the pages that set it need not know how it is drawn."""
+
+    def __init__(self, row: NavRow) -> None:
+        self._row = row
+
+    def configure(self, **options: Any) -> None:
+        if "text" in options:
+            self._row.set_badge(str(options["text"]))
+
+    config = configure
+
+    def cget(self, key: str) -> str:
+        return self._row.badge if key == "text" else ""
+
+
+def key_cap(parent: tk.Misc, theme: Theme, text: str) -> tk.Label:
+    """A small keyboard key ("Ctrl", "K") for showing a shortcut."""
+    c = theme.c
+    return tk.Label(parent, text=text, bg=c["neutral_soft"], fg=c["muted"],
+                    font=theme.font(8, family=theme.mono), padx=theme.px(5), pady=theme.px(1),
+                    highlightthickness=1, highlightbackground=c["border_strong"])
+
+
+class CommandPalette:
+    """Ctrl+K: a search box over the window. Type a few letters of a page or an action,
+    choose with the arrow keys and press Enter. Escape, or a click elsewhere, closes it.
+
+    ``items`` are (title, group, shortcut, action) tuples.
+    """
+
+    ROWS = 8
+
+    def __init__(self, root: tk.Misc, theme: Theme) -> None:
+        self.root = root
+        self.theme = theme
+        self.frame: tk.Frame | None = None
+        self.entry: tk.Entry | None = None
+        self.query = tk.StringVar(master=root)
+        self.items: list[tuple[str, str, str, Callable[[], Any]]] = []
+        self.matches: list[tuple[str, str, str, Callable[[], Any]]] = []
+        self.index = 0
+        self._list: tk.Frame | None = None
+        self._images: list[tk.PhotoImage] = []
+        # The click that opens the palette (on the search box) also reaches the window-wide
+        # watcher below, after the box's own handler. So the watcher only starts to count
+        # clicks a moment after opening: that first click is not "a click elsewhere".
+        self._armed = False
+        self.query.trace_add("write", lambda *_a: self._filter())
+        root.bind_all("<Button-1>", self._clicked_elsewhere, add="+")
+
+    @property
+    def is_open(self) -> bool:
+        return self.frame is not None
+
+    def toggle(self, items: list[tuple[str, str, str, Callable[[], Any]]]) -> None:
+        if self.is_open:
+            self.close()
+        else:
+            self.open(items)
+
+    def open(self, items: list[tuple[str, str, str, Callable[[], Any]]]) -> None:
+        self.close()
+        c, px = self.theme.c, self.theme.px
+        self.items = list(items)
+        surface = c["card"]
+        frame = tk.Frame(self.root, bg=surface, highlightthickness=1,
+                         highlightbackground=c["border_strong"])
+        self.frame = frame
+        top = tk.Frame(frame, bg=surface)
+        top.pack(fill="x", padx=px(14), pady=(px(12), px(10)))
+        self._images = [icon_image(frame, "search", px(18), c["faint"], surface)]
+        tk.Label(top, image=self._images[0], bg=surface).pack(side="left", padx=(0, px(10)))
+        self.query.set("")
+        self.entry = tk.Entry(top, textvariable=self.query, bg=surface, fg=c["text"],
+                              insertbackground=c["accent"], relief="flat", bd=0,
+                              highlightthickness=0, font=self.theme.font(12))
+        self.entry.pack(side="left", fill="x", expand=True)
+        key_cap(top, self.theme, "Esc").pack(side="right")
+        tk.Frame(frame, bg=c["border"], height=1).pack(fill="x")
+        self._list = tk.Frame(frame, bg=surface)
+        self._list.pack(fill="x", padx=px(6), pady=px(6))
+        tk.Frame(frame, bg=c["border"], height=1).pack(fill="x")
+        foot = tk.Frame(frame, bg=surface)
+        foot.pack(fill="x", padx=px(14), pady=px(7))
+        for keys, words in ((("↑", "↓"), "vælg"), (("Enter",), "kør"), (("Esc",), "luk")):
+            for key in keys:
+                key_cap(foot, self.theme, key).pack(side="left", padx=(0, px(4)))
+            tk.Label(foot, text=words, bg=surface, fg=c["faint"],
+                     font=self.theme.font(8)).pack(side="left", padx=(px(2), px(14)))
+        self.entry.bind("<Escape>", lambda _e: (self.close(), "break")[1])
+        self.entry.bind("<Return>", lambda _e: (self.run(), "break")[1])
+        self.entry.bind("<KP_Enter>", lambda _e: (self.run(), "break")[1])
+        self.entry.bind("<Down>", lambda _e: (self.move(1), "break")[1])
+        self.entry.bind("<Up>", lambda _e: (self.move(-1), "break")[1])
+        self.entry.bind("<Next>", lambda _e: (self.move(self.ROWS), "break")[1])
+        self.entry.bind("<Prior>", lambda _e: (self.move(-self.ROWS), "break")[1])
+        width = min(px(580), max(px(320), self.root.winfo_width() - px(48)))
+        frame.place(relx=0.5, y=px(64), anchor="n", width=width)
+        frame.lift()
+        self._filter()
+        self.entry.focus_set()
+        self._armed = False
+        frame.after(1, lambda: self._arm(frame))
+
+    def _arm(self, frame: tk.Frame) -> None:
+        if self.frame is frame:
+            self._armed = True
+
+    def close(self) -> None:
+        self._armed = False
+        frame, self.frame, self.entry, self._list = self.frame, None, None, None
+        if frame is not None:
+            with contextlib.suppress(tk.TclError):
+                frame.destroy()
+
+    def _clicked_elsewhere(self, event: tk.Event) -> None:
+        if self.frame is None or not self._armed:
+            return
+        widget = event.widget
+        while widget is not None and not isinstance(widget, str):
+            if widget is self.frame:
+                return
+            widget = getattr(widget, "master", None)
+        self.close()
+
+    def _filter(self) -> None:
+        if self.frame is None:
+            return
+        words = self.query.get().lower().split()
+        self.matches = [item for item in self.items
+                        if all(word in f"{item[0]} {item[1]}".lower() for word in words)]
+        # Best first: a title that starts with what was typed, then a word that does.
+        if words:
+            def rank(item: tuple[str, str, str, Callable[[], Any]]) -> int:
+                title = item[0].lower()
+                if title.startswith(words[0]):
+                    return 0
+                return 1 if any(part.startswith(words[0]) for part in title.split()) else 2
+
+            self.matches.sort(key=rank)
+        self.index = 0
+        self._render()
+
+    def move(self, step: int) -> None:
+        if self.matches:
+            self.index = max(0, min(len(self.matches) - 1, self.index + step))
+            self._render()
+
+    def run(self, index: int | None = None) -> None:
+        if index is not None:
+            self.index = index
+        if not 0 <= self.index < len(self.matches):
+            return
+        action = self.matches[self.index][3]
+        self.close()
+        action()
+
+    def _render(self) -> None:
+        box = self._list
+        if box is None:
+            return
+        c, px = self.theme.c, self.theme.px
+        surface = c["card"]
+        for child in box.winfo_children():
+            child.destroy()
+        if not self.matches:
+            tk.Label(box, text=f"Intet fundet for “{self.query.get().strip()}”", bg=surface,
+                     fg=c["muted"], font=self.theme.font(10), pady=px(14)).pack(fill="x")
+            return
+        first = max(0, min(self.index - self.ROWS + 1, len(self.matches) - self.ROWS))
+        first = max(first, 0)
+        if self.index < first:
+            first = self.index
+        for position in range(first, min(len(self.matches), first + self.ROWS)):
+            title, group, shortcut, _action = self.matches[position]
+            chosen = position == self.index
+            bg = c["nav_active"] if chosen else surface
+            row = tk.Frame(box, bg=bg, cursor="hand2")
+            row.pack(fill="x")
+            tk.Frame(row, bg=c["accent"] if chosen else bg, width=px(3)).pack(
+                side="left", fill="y")
+            parts: list[tk.Misc] = [row]
+            parts.append(tk.Label(row, text=title, bg=bg, fg=c["text"], anchor="w",
+                                  font=self.theme.font(10, "bold" if chosen else "normal"),
+                                  padx=px(9), pady=px(7)))
+            parts[-1].pack(side="left")
+            for key in reversed(shortcut.split("+") if shortcut else []):
+                cap = key_cap(row, self.theme, key)
+                cap.pack(side="right", padx=(0, px(6)))
+                parts.append(cap)
+            parts.append(tk.Label(row, text=group, bg=bg, fg=c["faint"], anchor="e",
+                                  font=self.theme.font(9), padx=px(8)))
+            parts[-1].pack(side="right")
+            for part in parts:
+                part.bind("<Button-1>", lambda _e, i=position: self.run(i))
+
+
+class PopupMenu(tk.Menu):
+    """A drop-down or right-click menu drawn in the app's own look.
+
+    It is filled like a ``tk.Menu`` (``add_command`` with ``label``, ``command`` and, when
+    there is one, ``accelerator="Ctrl+O"``; ``add_separator``), but ``tk_popup`` shows a
+    themed panel inside the window instead of the system menu: a hover row, key caps for
+    shortcuts, a drawn tick for a label that starts with "✓", and the entry's own
+    ``foreground`` for a destructive action. Arrow keys move, Enter or Space runs,
+    Escape or a click elsewhere closes.
+    """
+
+    _open: PopupMenu | None = None  # only one menu is open at a time
+    # The button whose press just closed its own menu, and when: the release that follows
+    # must not open the menu again (a second click on "▾" closes it, like any menu button).
+    _dismissed: tuple[tk.Misc | None, float] = (None, 0.0)
+
+    def __init__(self, master: tk.Misc, theme: Theme) -> None:
+        super().__init__(master, tearoff=0)
+        self.theme = theme
+        self.panel: tk.Frame | None = None
+        self.active: int | None = None
+        self._rows: dict[int, list[tk.Misc]] = {}
+        self._images: list[tk.PhotoImage] = []
+        self._focus_before: tk.Misc | None = None
+        self._slide_after: str | None = None
+        self._anchor: tk.Misc | None = None
+        # False for the instant of the press that opened the menu (a right-click reaches
+        # the window-wide watcher right after it opened the menu): see _pressed_elsewhere.
+        self._armed = False
+
+    @property
+    def is_open(self) -> bool:
+        return self.panel is not None
+
+    def commands(self) -> list[int]:
+        """The indexes of the entries that can be chosen right now."""
+        last = self.index("end")
+        return [index for index in range(0 if last is None else last + 1)
+                if self.type(index) == "command"
+                and str(self.entrycget(index, "state")) != "disabled"]
+
+    def popup_below(self, widget: tk.Misc) -> None:
+        closed_by, when = PopupMenu._dismissed
+        PopupMenu._dismissed = (None, 0.0)
+        if closed_by is widget and time.monotonic() - when < 0.6:
+            return
+        self._anchor = widget
+        self.tk_popup(widget.winfo_rootx(), widget.winfo_rooty() + widget.winfo_height())
+
+    def tk_popup(self, x: int, y: int, entry: str | int = "") -> None:
+        if PopupMenu._open is not None:
+            PopupMenu._open.close()
+        last = self.index("end")
+        if last is None:
+            return
+        theme = self.theme
+        c, px = theme.c, theme.px
+        under = None
+        with contextlib.suppress(KeyError, tk.TclError):
+            under = self.winfo_containing(x, y)
+        top = (under or self.master).winfo_toplevel()
+        surface = c["card_hover"]
+        panel = tk.Frame(top, bg=surface, highlightthickness=1,
+                         highlightbackground=c["border_strong"], takefocus=1)
+        inner = tk.Frame(panel, bg=surface)
+        inner.pack(fill="both", expand=True, padx=px(4), pady=px(4))
+        labels = [str(self.entrycget(index, "label")) for index in range(last + 1)
+                  if self.type(index) == "command"]
+        ticks = any(label.startswith(("✓", "   ")) for label in labels)
+        self._rows, self._images = {}, []
+        tick_size = px(14)
+        for index in range(last + 1):
+            if self.type(index) == "separator":
+                tk.Frame(inner, bg=c["border_strong"], height=1).pack(
+                    fill="x", padx=px(6), pady=px(4))
+                continue
+            if self.type(index) != "command":
+                continue
+            label = str(self.entrycget(index, "label"))
+            ticked = label.startswith("✓")
+            text = label.lstrip("✓").strip()
+            disabled = str(self.entrycget(index, "state")) == "disabled"
+            own = str(self.entrycget(index, "foreground"))
+            ink = c["faint"] if disabled else (own if own.startswith("#") else c["text"])
+            row = tk.Frame(inner, bg=surface, cursor="arrow" if disabled else "hand2")
+            row.pack(fill="x")
+            parts: list[tk.Misc] = [row]
+            if ticks:
+                mark = tk.Label(row, bg=surface, width=tick_size, height=tick_size)
+                if ticked:
+                    self._images.append(
+                        icon_image(row, "check", tick_size, c["accent"], surface, 2.0))
+                    self._images.append(
+                        icon_image(row, "check", tick_size, c["accent"], c["nav_active"], 2.0))
+                    mark.configure(image=self._images[-2])
+                    mark.pair = (self._images[-2], self._images[-1])  # type: ignore[attr-defined]
+                else:
+                    blank = tk.PhotoImage(master=row, width=tick_size, height=tick_size)
+                    self._images.append(blank)
+                    mark.configure(image=blank)
+                mark.pack(side="left", padx=(px(8), 0))
+                parts.append(mark)
+            name = tk.Label(row, text=text, bg=surface, fg=ink, anchor="w",
+                            font=theme.font(10), padx=px(10), pady=px(6))
+            name.pack(side="left")
+            parts.append(name)
+            keys = str(self.entrycget(index, "accelerator"))
+            caps = tk.Frame(row, bg=surface)
+            caps.pack(side="right", padx=(px(24), px(8)))
+            parts.append(caps)
+            for key in keys.split("+") if keys else []:
+                cap = key_cap(caps, theme, key)
+                cap.pack(side="left", padx=(px(4), 0))
+                parts.append(cap)
+            self._rows[index] = parts
+            if disabled:
+                continue
+            for part in parts:
+                part.bind("<Enter>", lambda _e, i=index: self._set_active(i), add="+")
+                part.bind("<ButtonRelease-1>", lambda _e, i=index: self.choose(i))
+        self.panel = panel
+        self.active = None
+        PopupMenu._open = self
+        panel.bind("<Escape>", lambda _e: (self.close(), "break")[1])
+        panel.bind("<Down>", lambda _e: (self.move(1), "break")[1])
+        panel.bind("<Up>", lambda _e: (self.move(-1), "break")[1])
+        for key in ("<Return>", "<KP_Enter>", "<space>"):
+            panel.bind(key, lambda _e: (self.choose(self.active), "break")[1])
+        panel.bind("<Destroy>", lambda _e: self._forget(panel), add="+")
+        root = top._root()
+        if not getattr(root, "_popup_menu_watch", False):
+            root._popup_menu_watch = True  # type: ignore[attr-defined]
+            root.bind_all("<ButtonPress-1>", PopupMenu._pressed_elsewhere, add="+")
+            root.bind_all("<ButtonPress-3>", PopupMenu._pressed_elsewhere, add="+")
+        panel.update_idletasks()
+        width = max(panel.winfo_reqwidth(), px(200))
+        height = panel.winfo_reqheight()
+        room_x = max(top.winfo_width(), width + px(16))
+        room_y = max(top.winfo_height(), height + px(16))
+        left = max(px(8), min(x - top.winfo_rootx(), room_x - width - px(8)))
+        upper = max(px(8), min(y - top.winfo_rooty() + px(4), room_y - height - px(8)))
+        self._focus_before = top.focus_get()
+        start = upper - px(6) if theme.motion else upper
+        panel.place(x=left, y=start, width=width)
+        panel.lift()
+        panel.focus_set()
+        self._armed = False
+        panel.after(1, lambda: self._arm(panel))
+        if theme.motion:
+            self._slide(left, start, upper, 0)
+
+    def _arm(self, panel: tk.Frame) -> None:
+        if self.panel is panel:
+            self._armed = True
+
+    def _slide(self, left: int, start: int, end: int, step: int) -> None:
+        """Three short frames: the panel settles down into place."""
+        panel = self.panel
+        self._slide_after = None
+        if panel is None:
+            return
+        step += 1
+        with contextlib.suppress(tk.TclError):
+            panel.place_configure(x=left, y=start + (end - start) * step // 3)
+            if step < 3:
+                self._slide_after = panel.after(22, self._slide, left, start, end, step)
+
+    def _forget(self, panel: tk.Frame) -> None:
+        if self.panel is panel:
+            self.panel = None
+            if PopupMenu._open is self:
+                PopupMenu._open = None
+
+    @staticmethod
+    def _pressed_elsewhere(event: tk.Event) -> None:
+        menu = PopupMenu._open
+        if menu is None or menu.panel is None or not menu._armed:
+            return
+        widget = event.widget
+        while widget is not None and not isinstance(widget, str):
+            if widget is menu.panel:
+                return
+            widget = getattr(widget, "master", None)
+        if event.widget is menu._anchor:
+            PopupMenu._dismissed = (menu._anchor, time.monotonic())
+        menu.close()
+
+    def _set_active(self, index: int | None) -> None:
+        if index == self.active:
+            return
+        c = self.theme.c
+        for which, lit in ((self.active, False), (index, True)):
+            for part in self._rows.get(which, []) if which is not None else []:
+                with contextlib.suppress(tk.TclError):
+                    if isinstance(part, tk.Label) and str(part.cget("highlightthickness")) != "0":
+                        continue  # a key cap keeps its own surface
+                    part.configure(bg=c["nav_active"] if lit else c["card_hover"])
+                    pair = getattr(part, "pair", None)
+                    if pair is not None:
+                        part.configure(image=pair[1 if lit else 0])
+        self.active = index
+
+    def move(self, step: int) -> None:
+        choices = self.commands()
+        if not choices:
+            return
+        if self.active not in choices:
+            self._set_active(choices[0 if step > 0 else -1])
+        else:
+            self._set_active(choices[(choices.index(self.active) + step) % len(choices)])
+
+    def choose(self, index: int | None) -> None:
+        if index is None or index not in self.commands():
+            return
+        self.close()
+        self.invoke(index)
+
+    def close(self) -> None:
+        panel, self.panel = self.panel, None
+        if PopupMenu._open is self:
+            PopupMenu._open = None
+        if panel is None:
+            return
+        with contextlib.suppress(tk.TclError):
+            if self._slide_after is not None:
+                panel.after_cancel(self._slide_after)
+            self._slide_after = None
+            had_focus = panel.focus_get() is panel
+            panel.destroy()
+            if had_focus and self._focus_before is not None:
+                self._focus_before.focus_set()
+        self._rows, self._images, self._focus_before = {}, [], None
+
+
+def icon_badge(master: tk.Misc, theme: Theme, name: str, size: int = 36,
+               color: str | None = None, bg: str | None = None, gap: int = 0) -> tk.PhotoImage:
+    """An icon on a softly tinted rounded square, as one image: the mark of an empty state,
+    a list row or a kind of file. ``gap`` adds clear space on its right, for a label that
+    shows the badge next to its text. Keep a reference to the image where it is used."""
+    c = theme.c
+    side = theme.px(size)
+    color = color or c["accent"]
+    bg = bg or str(master.cget("bg"))
+    tint = mix_color(color, bg, 0.86)
+    base = glass_image(master, side, side, side * 0.28, tint, bg, mix_color(color, tint, 0.72))
+    glyph = int(side * 0.5)
+    icon = icon_image(master, name, glyph, color, tint)
+    image = tk.PhotoImage(master=master, width=side + theme.px(gap), height=side)
+    image.put(bg, to=(0, 0, side + theme.px(gap), side))
+    image.tk.call(image, "copy", base)
+    offset = (side - glyph) // 2
+    image.tk.call(image, "copy", icon, "-to", offset, offset)
+    return image
+
+
+def tooltip(widget: tk.Misc, theme: Theme, text: str, title: str = "",
+            when: Callable[[], bool] | None = None) -> None:
     """Hover (or keyboard focus) for half a second shows a small card below the widget.
     With ``title`` the card gets a bold heading over the (wrapped) body text — used by the
     ``?`` help markers for a fuller explanation."""
@@ -1883,23 +2805,31 @@ def tooltip(widget: tk.Misc, theme: Theme, text: str, title: str = "") -> None:
 
     def show() -> None:
         state["after"] = None
+        if when is not None and not when():
+            return
         with contextlib.suppress(tk.TclError):
             tip = tk.Toplevel(widget)
             tip.wm_overrideredirect(True)
             c = theme.c
-            box = tk.Frame(tip, bg=c["card"], padx=theme.px(10), pady=theme.px(7),
+            surface = c["card_hover"]
+            box = tk.Frame(tip, bg=surface, padx=theme.px(10), pady=theme.px(7),
                            highlightthickness=1, highlightbackground=c["border_strong"])
             box.pack()
             if title:
-                tk.Label(box, text=title, bg=c["card"], fg=c["text"], anchor="w", justify="left",
+                tk.Label(box, text=title, bg=surface, fg=c["text"], anchor="w", justify="left",
                          font=theme.font(9, "bold")).pack(fill="x")
-            tk.Label(box, text=text, bg=c["card"], fg=c["muted"] if title else c["text"],
+            tk.Label(box, text=text, bg=surface, fg=c["muted"] if title else c["text"],
                      font=theme.font(9), justify="left", anchor="w",
                      wraplength=theme.px(260) if title else theme.px(420),
                      pady=theme.px(2) if title else 0).pack(fill="x")
+            tip.update_idletasks()
             x = widget.winfo_rootx() + widget.winfo_width() // 2 - tip.winfo_reqwidth() // 2
             y = widget.winfo_rooty() + widget.winfo_height() + theme.px(6)
-            tip.wm_geometry(f"+{max(0, x)}+{y}")
+            # Never off the edge of the screen; above the widget when there is no room below.
+            x = max(4, min(x, tip.winfo_screenwidth() - tip.winfo_reqwidth() - 4))
+            if y + tip.winfo_reqheight() > tip.winfo_screenheight() - 4:
+                y = widget.winfo_rooty() - tip.winfo_reqheight() - theme.px(6)
+            tip.wm_geometry(f"+{x}+{max(0, y)}")
             state["tip"] = tip
 
     def schedule(_event: tk.Event | None = None) -> None:
@@ -1920,17 +2850,3 @@ def tooltip(widget: tk.Misc, theme: Theme, text: str, title: str = "") -> None:
         widget.bind(name, schedule, add="+")
     for name in ("<Leave>", "<FocusOut>", "<ButtonPress>", "<Destroy>"):
         widget.bind(name, hide, add="+")
-
-
-def help_dot(parent: tk.Misc, theme: Theme, body: str, title: str = "Hjælp") -> tk.Canvas:
-    """A small circular ``?`` marker. Hover or keyboard focus shows a title+body tooltip
-    explaining what the button next to it does. Pack it right after that button."""
-    c = theme.c
-    d = theme.px(16)
-    dot = tk.Canvas(parent, width=d, height=d, bg=parent.cget("bg"), highlightthickness=0,
-                    bd=0, cursor="question_arrow", takefocus=1)
-    dot.create_oval(1, 1, d - 1, d - 1, fill=c["neutral_soft"], outline=c["border_strong"])
-    dot.create_text(d / 2, d / 2 - theme.px(0.5), text="?", fill=c["muted"],
-                    font=theme.font(8, "bold"))
-    tooltip(dot, theme, body, title)
-    return dot

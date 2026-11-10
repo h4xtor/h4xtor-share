@@ -26,7 +26,7 @@ Never use the deleted repo `h4xtor/H4xtorShare` or old folders such as `C:\AI\Fr
 | Path | What it is |
 |------|------------|
 | `src/h4xtor_share/` | Desktop app (Python 3.11+, Tk, aiohttp). Entry: `app.py` (`H4xtorShareApp`) |
-| `src/h4xtor_share/ui_kit.py` | Battle.net-style widgets: Theme, Button, Card, ScrollFrame, `HeroBanner` (Send page key art), `DeviceTiles`, `MonkeyActor` (hop/grin/point/nod), `render_backdrop` … |
+| `src/h4xtor_share/ui_kit.py` | The "Graphite" design system: semantic colour tokens (`DARK`/`LIGHT`), `SPACE`/`RADIUS` scales, drawn `ICONS`, and the widgets: Theme, Button, Card, Toggle, ScrollFrame, `NavRow`, `DeviceTiles`, `CommandPalette` (Ctrl+K), `PopupMenu` (every drop-down and right-click menu: never `tk.Menu` directly), `Toast`, `Modal`, `tooltip`, `MonkeyActor` … |
 | `src/h4xtor_share/server.py` / `client.py` | Protocol v1 (HTTPS on port 47474, pinned TLS fingerprints) |
 | `src/h4xtor_share/local_api.py` | Loopback API on 127.0.0.1:47476, used by the Chrome extension |
 | `src/h4xtor_share/web_share.py` + `web_page.py` | iPhone/browser sharing: plain HTTP on the LAN, port 47478, guarded by a random key in the QR link. Off until switched on (page "iPhone") |
@@ -80,7 +80,7 @@ phone: the "Telefon på PC'en" card), a test, and the glass look (PC: `glass_ima
 5. Scan papir til PDF: PC asks, the phone's camera shoots, a straight PDF lands on the PC
 6. Tænd/lås PC'en fra telefonen: Wake-on-LAN, lock, sleep, shut down
 7. Del Wi-Fi med gæster: QR code with the Wi-Fi password on PC and phone
-8. Telefonens skærm på PC'en: live mirror with mouse control — **v1.7.0**; the "Styr telefon" page (`MirrorView` in `mirror_window.py`, first under TELEFON) and AI control over MCP (`mcp_phone.py`, `h4xtor-share --mcp` → local API `/v1/phone/*`, flag `ai_control`) — **v1.9.0** (v1.8.0 was the flat IDE redesign). Next: iPhone view via AirPlay
+8. Telefonens skærm på PC'en: live mirror with mouse control — **v1.7.0**; the "Styr telefon" page (`MirrorView` in `mirror_window.py`, first under TELEFON) and AI control over MCP (`mcp_phone.py`, `h4xtor-share --mcp` → local API `/v1/phone/*`, flag `ai_control`) — **v1.9.0** (v1.8.0 was the flat IDE redesign; v1.10.0 the "Graphite" redesign with Ctrl+K). Next: iPhone view via AirPlay
 9. Svævende abe på skrivebordet: always-on-top drop target (drag a file → phone; click → clipboard)
 10. Hvem ringer? på PC'en: caller name pops up, reject or quick SMS reply
 
