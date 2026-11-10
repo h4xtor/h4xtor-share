@@ -19,7 +19,16 @@ from typing import Any
 
 from h4xtor_share.gdrive import SETUP_HELP, GoogleDrive, GoogleDriveError
 from h4xtor_share.models import NotificationReceived, NotificationRemoved, Peer, SmsReceived
-from h4xtor_share.ui_kit import Button, Card, Modal, ScrollFrame, Slider, entry
+from h4xtor_share.ui_kit import (
+    PAGE_INSET,
+    Button,
+    Card,
+    Modal,
+    ScrollFrame,
+    Slider,
+    entry,
+    icon_badge,
+)
 
 MAX_NOTIFICATIONS = 200
 SCREENSHOT_WAIT_SECONDS = 180
@@ -163,9 +172,12 @@ class PhonePagesMixin:
         ]
         return (online or capable or [None])[0]
 
-    def _notice(self, parent: tk.Misc, text: str, tone: str = "muted") -> tk.Label:
+    def _notice(self, parent: tk.Misc, text: str, tone: str = "muted",
+                icon: str = "") -> tk.Label:
+        """A quiet line of explanation. With ``icon`` it is an empty state: the drawn icon
+        on a soft square sits to the left of the words."""
         c = self.theme.c
-        return tk.Label(
+        label = tk.Label(
             parent,
             text=text,
             bg=c["bg"],
@@ -175,6 +187,11 @@ class PhonePagesMixin:
             justify="left",
             wraplength=self.theme.px(560),
         )
+        if icon:
+            label.badge = icon_badge(  # type: ignore[attr-defined]
+                label, self.theme, icon, 36, c["faint"], gap=12)
+            label.configure(image=label.badge, compound="left")  # type: ignore[attr-defined]
+        return label
 
     def _autowrap(self, label: tk.Label, container: tk.Misc, margin: int = 0) -> None:
         container.bind(
@@ -222,12 +239,13 @@ class PhonePagesMixin:
             side="left"
         )
         self.notif_scroll = ScrollFrame(page, self.theme)
-        self.notif_scroll.pack(fill="both", expand=True, padx=(px(36), px(24)), pady=(0, px(16)))
+        self.notif_scroll.pack(fill="both", expand=True, padx=px(PAGE_INSET), pady=(0, px(16)))
         self.notif_empty = self._notice(
             self.notif_scroll.inner,
             "Ingen notifikationer endnu.\n"
             "Slå det til på telefonen: Indstillinger → Telefon på PC'en. "
             "Så dukker telefonens beskeder op her, og du kan svare på dem.",
+            icon="bell",
         )
         self.notif_empty.pack(fill="x", pady=px(8))
 
@@ -486,10 +504,10 @@ class PhonePagesMixin:
         Button(actions, self.theme, "Opdatér", self._sms_refresh, kind="ghost").pack(side="left")
         Button(actions, self.theme, "Ny besked", self._sms_new).pack(side="left", padx=(px(8), 0))
         self.sms_picker = tk.Frame(page, bg=c["bg"])
-        self.sms_picker.pack(fill="x", padx=px(36), pady=(0, px(10)))
+        self.sms_picker.pack(fill="x", padx=px(PAGE_INSET), pady=(0, px(10)))
         self.sms_notice = self._notice(page, "")
         columns = tk.Frame(page, bg=c["bg"])
-        columns.pack(fill="both", expand=True, padx=(px(36), px(24)), pady=(0, px(16)))
+        columns.pack(fill="both", expand=True, padx=px(PAGE_INSET), pady=(0, px(16)))
         self.sms_columns = columns
         left = tk.Frame(columns, bg=c["bg"], width=px(290))
         left.pack(side="left", fill="y")
@@ -532,7 +550,8 @@ class PhonePagesMixin:
         self.sms_msg_scroll = ScrollFrame(right, self.theme)
         self.sms_msg_scroll.pack(fill="both", expand=True)
         self.sms_placeholder = self._notice(
-            self.sms_msg_scroll.inner, "Vælg en samtale til venstre – eller tryk Ny besked."
+            self.sms_msg_scroll.inner, "Vælg en samtale til venstre – eller tryk Ny besked.",
+            icon="message",
         )
         self.sms_placeholder.pack(fill="x", pady=px(8))
         self.sms_compose.pack_forget()
@@ -544,7 +563,7 @@ class PhonePagesMixin:
             )
             self.sms_notice.pack(
                 fill="x",
-                padx=self.theme.px(36),
+                padx=self.theme.px(PAGE_INSET),
                 pady=(0, self.theme.px(8)),
                 before=self.sms_columns,
             )
@@ -699,7 +718,8 @@ class PhonePagesMixin:
             for child in self.sms_msg_scroll.inner.winfo_children():
                 child.destroy()
             self.sms_placeholder = self._notice(
-                self.sms_msg_scroll.inner, "Vælg en samtale til venstre – eller tryk Ny besked."
+                self.sms_msg_scroll.inner,
+                "Vælg en samtale til venstre – eller tryk Ny besked.", icon="message",
             )
             self.sms_placeholder.pack(fill="x", pady=self.theme.px(8))
             return
@@ -890,9 +910,9 @@ class PhonePagesMixin:
             "remote", "Fjernbetjening", "Find telefonen, tag skærmbillede og styr lyden."
         )
         self.remote_picker = tk.Frame(page, bg=c["bg"])
-        self.remote_picker.pack(fill="x", padx=px(36), pady=(0, px(10)))
+        self.remote_picker.pack(fill="x", padx=px(PAGE_INSET), pady=(0, px(10)))
         self.remote_scroll = ScrollFrame(page, self.theme)
-        self.remote_scroll.pack(fill="both", expand=True, padx=(px(36), px(24)), pady=(0, px(16)))
+        self.remote_scroll.pack(fill="both", expand=True, padx=px(PAGE_INSET), pady=(0, px(16)))
         self.remote_speak_var = tk.StringVar()
 
     def open_remote(self, peer: Peer) -> None:

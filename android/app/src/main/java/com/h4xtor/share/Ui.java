@@ -23,14 +23,14 @@ import android.widget.TextView;
 
 import java.util.Locale;
 
-/** Tiny design system, clean IDE style: a near-black developer-tool palette, flat panels
- *  with hairline borders and one blue accent for the actions that matter (green is kept for
- *  online status only). The sibling of the PC app's ui_kit. */
+/** Tiny design system, "Graphite": near-black graphite surfaces separated by hairlines, one
+ *  electric blue for the actions that matter and a restrained cyan for highlights (green is
+ *  kept for online status only). The same tokens as the PC app's ui_kit (DARK palette). */
 public final class Ui {
-    /** The launcher blue (text, icons, indicators): 5.6:1 on the background. */
-    public static final int ACCENT_LIGHT = Color.parseColor("#148EFF");
-    /** Filled buttons use a deeper blue so white text on them reads at 4.6:1. */
-    public static final int BUTTON_BLUE = Color.parseColor("#0B74DC");
+    /** The accent blue (text, icons, indicators): 6:1 on the background. */
+    public static final int ACCENT_LIGHT = Color.parseColor("#4C8DFF");
+    /** Filled buttons use a deeper blue so white text on them reads at 5:1. */
+    public static final int BUTTON_BLUE = Color.parseColor("#2563EB");
 
     public final Context context;
     public final boolean dark;
@@ -58,33 +58,33 @@ public final class Ui {
 
     public Ui(Context context) {
         this.context = context;
-        // Battle.net: always the dark launcher look; every text colour keeps 4.5:1 on panels.
+        // Always the dark look; every text colour keeps at least 4.5:1 on the panels.
         dark = true;
         density = context.getResources().getDisplayMetrics().density;
-        bg = Color.parseColor("#111318");
-        chrome = Color.parseColor("#0B0D11");
-        surface = Color.parseColor("#1A1D24");
-        surfaceAlt = Color.parseColor("#22262F");
-        border = Color.parseColor("#272B34");
-        text = Color.parseColor("#F3F5F9");
-        muted = Color.parseColor("#AAB1BE");
-        faint = Color.parseColor("#8A92A0");
+        bg = Color.parseColor("#0B0C0E");
+        chrome = Color.parseColor("#08090A");
+        surface = Color.parseColor("#121317");
+        surfaceAlt = Color.parseColor("#181A1F");
+        border = Color.parseColor("#262A32");
+        text = Color.parseColor("#EDEEF1");
+        muted = Color.parseColor("#A0A6B2");
+        faint = Color.parseColor("#7D8492");
         accent = ACCENT_LIGHT;
-        accentPressed = Color.parseColor("#3BA2FF");
-        accentSoft = Color.parseColor("#0D2340");
-        success = Color.parseColor("#3CCB7F");
-        successSoft = Color.parseColor("#12301F");
-        warning = Color.parseColor("#F2B33D");
-        warningSoft = Color.parseColor("#352A12");
-        danger = Color.parseColor("#FF6B6B");
-        dangerSoft = Color.parseColor("#3A1C1F");
-        neutralSoft = Color.parseColor("#22262F");
-        track = Color.parseColor("#272B34");
+        accentPressed = Color.parseColor("#6FA5FF");
+        accentSoft = Color.parseColor("#111D36");
+        success = Color.parseColor("#34D399");
+        successSoft = Color.parseColor("#0E2A20");
+        warning = Color.parseColor("#FBBF24");
+        warningSoft = Color.parseColor("#2E2410");
+        danger = Color.parseColor("#F87171");
+        dangerSoft = Color.parseColor("#33191B");
+        neutralSoft = Color.parseColor("#181A1F");
+        track = Color.parseColor("#23262D");
         onAccent = Color.WHITE;
     }
 
-    /** Light launcher blue: highlights, the eyebrow over hero titles. */
-    public static final int SKY = Color.parseColor("#45B6FF");
+    /** Restrained cyan: highlights and live activity. */
+    public static final int SKY = Color.parseColor("#22D3EE");
     /** Warm orange: Bluetooth and the monkey. */
     public static final int ORANGE = Color.parseColor("#FF9F1A");
 
@@ -240,7 +240,7 @@ public final class Ui {
                 color = text;
         }
         view.setTextColor(color);
-        view.setBackground(ripple(glass(fill, stroke, 24), 24));  // a soft glass pill
+        view.setBackground(ripple(glass(fill, stroke, 12), 12));  // a softly rounded rectangle
         pressable(view);
         return view;
     }
@@ -263,7 +263,7 @@ public final class Ui {
         LinearLayout layout = new LinearLayout(context);
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(dp(18), dp(16), dp(18), dp(16));
-        layout.setBackground(rounded(surface, border, 8));
+        layout.setBackground(rounded(surface, border, 12));
         return layout;
     }
 
@@ -302,15 +302,15 @@ public final class Ui {
         int color;
         String letter;
         switch (key) {
-            case "android": color = Color.parseColor("#3CCB7F"); letter = "A"; break;
-            case "windows": color = Color.parseColor("#3BA2FF"); letter = "W"; break;
-            case "linux": color = Color.parseColor("#F2B33D"); letter = "L"; break;
+            case "android": color = Color.parseColor("#34D399"); letter = "A"; break;
+            case "windows": color = Color.parseColor("#5B9BFF"); letter = "W"; break;
+            case "linux": color = Color.parseColor("#FBBF24"); letter = "L"; break;
             case "darwin":
-            case "macos": color = Color.parseColor("#AAB1BE"); letter = "M"; break;
+            case "macos": color = Color.parseColor("#A0A6B2"); letter = "M"; break;
             case "all": color = SKY; letter = "★"; break;
             default: color = faint; letter = "?";
         }
-        TextView view = text(letter, sizeDp * 0.38f, Color.parseColor("#0B0D11"), true);
+        TextView view = text(letter, sizeDp * 0.38f, Color.parseColor("#08090A"), true);
         view.setGravity(Gravity.CENTER);
         GradientDrawable circle = new GradientDrawable();
         circle.setShape(GradientDrawable.OVAL);

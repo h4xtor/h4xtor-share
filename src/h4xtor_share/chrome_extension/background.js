@@ -90,7 +90,7 @@ async function deliver(deviceId, deviceName, kind, value) {
     return;
   }
   try {
-    await chrome.action.setBadgeBackgroundColor({ color: "#C6613F" });
+    await chrome.action.setBadgeBackgroundColor({ color: "#2563EB" });
     await chrome.action.setBadgeText({ text: "…" });
     if (deviceId === ALL.id) {
       let list = [];

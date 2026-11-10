@@ -1556,7 +1556,7 @@ def test_every_button_and_menu_entry_runs(tmp_path, monkeypatch) -> None:
 
     from h4xtor_share import app as app_module
     from h4xtor_share.models import TransferProgress
-    from h4xtor_share.ui_kit import Button
+    from h4xtor_share.ui_kit import Button, PopupMenu
 
     for name in ("askopenfilenames", "askopenfilename", "asksaveasfilename"):
         monkeypatch.setattr(filedialog, name, lambda **_k: "")
@@ -1605,7 +1605,7 @@ def test_every_button_and_menu_entry_runs(tmp_path, monkeypatch) -> None:
 
     menu_entries: list[str] = []
 
-    def run_menu(menu: tk.Menu, _x: int, _y: int, _entry: str = "") -> None:
+    def run_menu(menu: PopupMenu, _x: int, _y: int, _entry: str = "") -> None:
         last = menu.index("end")
         for index in range(0 if last is None else last + 1):
             if menu.type(index) != "command":
@@ -1620,7 +1620,7 @@ def test_every_button_and_menu_entry_runs(tmp_path, monkeypatch) -> None:
             for dialog in dialogs():
                 dialog.destroy()
 
-    monkeypatch.setattr(tk.Menu, "tk_popup", run_menu)
+    monkeypatch.setattr(PopupMenu, "tk_popup", run_menu)
     pressed = 0
     try:
         settle(0.3)
@@ -1651,3 +1651,257 @@ def test_every_button_and_menu_entry_runs(tmp_path, monkeypatch) -> None:
         app.close()
     assert not problems, "\n".join(problems)
     assert pressed > 40 and len(menu_entries) > 10, (pressed, menu_entries)
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_every_page_and_button_symbol_has_a_drawn_icon() -> None:
+    from h4xtor_share import ui_kit
+
+    app = _new_app()
+    try:
+        for key, _glyph, _label in app.NAV_ITEMS:
+            assert app.NAV_ICONS[key] in ui_kit.ICONS, key
+            assert app.nav_rows[key].icon == app.NAV_ICONS[key]
+        assert set(ui_kit.GLYPH_ICONS.values()) <= set(ui_kit.ICONS)
+        assert set(ui_kit.PLATFORM_ICON.values()) <= set(ui_kit.ICONS)
+        for name in ui_kit.ICONS:
+            image = ui_kit.icon_image(app, name, 18, "#FFFFFF", "#000000")
+            assert (image.width(), image.height()) == (18, 18)
+            pixels = {image.get(x, y) for x in range(18) for y in range(18)}
+            assert (0, 0, 0) in pixels and len(pixels) > 2, name  # paper, ink and smoothing
+        again = ui_kit.icon_image(app, "send", 18, "#FFFFFF", "#000000")
+        assert again is ui_kit.icon_image(app, "send", 18, "#FFFFFF", "#000000")  # cached
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_rounded_surface_draws_only_edges_but_looks_whole() -> None:
+    """A window-sized card: fill inside, ring on every straight edge, background outside
+    the round corners — the fast path must paint the same picture as pixel by pixel."""
+    from h4xtor_share.ui_kit import glass_image
+
+    app = _new_app()
+    try:
+        image = glass_image(app, 900, 620, 12, "#102030", "#000000", "#FFFFFF", 1.0)
+        assert image.get(450, 310) == (16, 32, 48)  # the fill
+        assert image.get(0, 0) == (0, 0, 0) and image.get(899, 619) == (0, 0, 0)  # corners
+        for x, y in ((450, 0), (450, 619), (0, 310), (899, 310)):  # the ring, all four sides
+            assert image.get(x, y) == (255, 255, 255), (x, y)
+        for x, y in ((450, 3), (450, 616), (3, 310), (896, 310)):  # and fill just inside it
+            assert image.get(x, y) == (16, 32, 48), (x, y)
+        small = glass_image(app, 20, 20, 10, "#102030", "#000000")  # a dot: every pixel worked
+        assert small.get(10, 10) == (16, 32, 48) and small.get(0, 0) == (0, 0, 0)
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_popup_menu_is_drawn_in_the_window_and_works_from_mouse_and_keyboard(
+        tmp_path, monkeypatch) -> None:
+    import tkinter as tk
+
+    from h4xtor_share.ui_kit import PopupMenu
+
+    app, _peers = _paired_app(2, tmp_path, monkeypatch)
+    try:
+        app.geometry("1100x720")
+        app.update()
+        ran: list[str] = []
+        menu = PopupMenu(app, app.theme)
+        menu.add_command(label="✓ Første", command=lambda: ran.append("a"))
+        menu.add_command(label="Anden", accelerator="Ctrl+O", command=lambda: ran.append("b"))
+        menu.add_separator()
+        menu.add_command(label="Slået fra", state="disabled", command=lambda: ran.append("x"))
+        menu.add_command(label="Slet…", foreground=app.theme.c["danger"],
+                         command=lambda: ran.append("c"))
+        assert menu.commands() == [0, 1, 4]  # the separator and the disabled entry are skipped
+        menu.tk_popup(app.winfo_rootx() + 5000, app.winfo_rooty() + 5000)  # far off the edge
+        app.update()
+        panel = menu.panel
+        assert menu.is_open and panel is not None and panel.winfo_toplevel() is app
+        for _ in range(8):  # let the short slide finish
+            app.update()
+            app.after(30)
+        app.update()
+        # ... and it is kept wholly inside the window.
+        assert panel.winfo_x() >= 0 and panel.winfo_y() >= 0
+        assert panel.winfo_x() + panel.winfo_width() <= app.winfo_width()
+        assert panel.winfo_y() + panel.winfo_height() <= app.winfo_height()
+        menu.move(1)
+        assert menu.active == 0
+        menu.move(1)
+        menu.move(1)
+        assert menu.active == 4  # over the separator and the disabled entry
+        menu.move(1)
+        assert menu.active == 0  # ... and round again
+        menu.move(-1)
+        assert menu.active == 4
+        menu.choose(3)  # a disabled entry does nothing and leaves the menu open
+        assert ran == [] and menu.is_open
+        menu.choose(menu.active)
+        assert ran == ["c"] and not menu.is_open
+
+        menu.tk_popup(app.winfo_rootx() + 300, app.winfo_rooty() + 200)
+        app.update()
+        other = PopupMenu(app, app.theme)
+        other.add_command(label="Kun én ad gangen", command=lambda: ran.append("d"))
+        other.popup_below(app.hero_more)
+        app.update()
+        assert other.is_open and not menu.is_open
+        other.panel.focus_force()
+        app.update()
+        other.panel.event_generate("<Escape>")
+        app.update()
+        assert not other.is_open and ran == ["c"]
+
+        # The app's own menus use it: the ▾ next to SEND FILER shows shortcuts as key caps.
+        app._hero_menu()
+        app.update()
+        shown = PopupMenu._open
+        assert shown is not None and shown.is_open
+        labels = [shown.entrycget(i, "label") for i in shown.commands()]
+        assert "Send filer…" in labels and "Send til alle enheder" in labels
+        assert shown.entrycget(0, "accelerator") == "Ctrl+O"
+        # A second click on the same button closes its menu instead of opening it again.
+        press = tk.Event()
+        press.widget = app.hero_more
+        PopupMenu._pressed_elsewhere(press)
+        assert PopupMenu._open is None
+        app._hero_menu()  # ... the release of that same click
+        assert PopupMenu._open is None
+        app._hero_menu()  # the next click opens it as usual
+        assert PopupMenu._open is not None
+        PopupMenu._open.close()
+        assert PopupMenu._open is None
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_command_palette_finds_pages_and_runs_actions(tmp_path, monkeypatch) -> None:
+    app, _peers = _paired_app(1, tmp_path, monkeypatch)
+    try:
+        app.update()
+        titles = [title for title, _group, _keys, _action in app.palette_items()]
+        for _key, _glyph, label in app.NAV_ITEMS:
+            assert label in titles  # every page can be reached from the keyboard
+        assert "Send filer…" in titles and "Forbind ny enhed (QR-kode)" in titles
+
+        app.open_palette()
+        app.update()
+        assert app.palette.is_open and len(app.palette.matches) == len(titles)
+        app.palette.query.set("indst")
+        assert app.palette.matches[0][0] == "Indstillinger"
+        app.palette.run()
+        assert app.active_page == "settings" and not app.palette.is_open
+
+        app.open_palette()
+        app.palette.query.set("zzz findes ikke")
+        assert app.palette.matches == []
+        app.palette.run()  # nothing chosen: nothing happens, and it stays open
+        assert app.palette.is_open
+        app.palette.query.set("s")
+        assert app.palette.matches[0][0].lower().startswith("s")  # best match first
+        app.palette.move(1)
+        app.palette.move(-5)
+        assert app.palette.index == 0
+        app.palette.entry.focus_force()  # key events only reach the widget with the focus
+        app.update()
+        app.palette.entry.event_generate("<Escape>")
+        assert not app.palette.is_open
+        app.open_palette()
+        app.open_palette()  # Ctrl+K again closes it
+        assert not app.palette.is_open
+
+        ran = []
+        app.palette.open([("Prøve", "Test", "Ctrl+P", lambda: ran.append(True))])
+        app.update()
+        app.palette.run(0)
+        assert ran == [True]
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_menu_goes_slim_in_a_narrow_window_and_keeps_working(tmp_path, monkeypatch) -> None:
+    app, _peers = _paired_app(1, tmp_path, monkeypatch)
+    try:
+        app.update()
+        px = app.theme.px
+        assert not app._sidebar_compact
+        assert int(app.sidebar.cget("width")) == px(app.SIDEBAR_WIDE)
+        app._set_sidebar_compact(True)
+        app.update()
+        assert int(app.sidebar.cget("width")) == px(app.SIDEBAR_SLIM)
+        assert all(row.compact for row in app.nav_rows.values())
+        assert app.connect_compact.winfo_manager() and not app.connect_button.winfo_manager()
+        app.nav_rows["history"].command()  # the icons still open their pages
+        assert app.active_page == "history" and app.nav_rows["history"].active
+        app._set_nav_badge("notifications", 3)
+        assert app.nav_badges["notifications"].cget("text") == "3"
+        app._set_sidebar_compact(False)
+        app.update()
+        assert int(app.sidebar.cget("width")) == px(app.SIDEBAR_WIDE)
+        assert app.connect_button.winfo_manager() and not app.connect_compact.winfo_manager()
+        assert not any(row.compact for row in app.nav_rows.values())
+        row = app.nav_rows["transfers"]
+        row.focus_force()  # Tab + Enter opens a page, like a click
+        app.update()
+        row.event_generate("<Return>")
+        assert app.active_page == "transfers"
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_switches_work_from_the_keyboard_and_motion_can_be_turned_off() -> None:
+    from h4xtor_share.ui_kit import Button, Toggle
+
+    app = _new_app()
+    try:
+        app.update()
+        app.show_page("settings")
+        app.update()
+        toggle = app.motion_toggle  # "Færre animationer"
+        assert int(toggle.cget("takefocus")) == 1 and toggle.value == (not app.theme.motion)
+        toggle.focus_force()
+        app.update()
+        toggle.event_generate("<space>")
+        assert toggle.value is True and app.theme.motion is False
+        toggle.event_generate("<Return>")
+        assert toggle.value is False and app.theme.motion is True
+
+        toggle = Toggle(app.pages["settings"], app.theme, False)
+        app._set_reduce_motion(True)
+        assert app.theme.motion is False and app.config_store.get_flag("reduce_motion", False)
+        toggle.set(True)
+        assert toggle._pos == 1.0 and toggle._slide_after is None  # jumps, no slide
+        button = Button(app.pages["settings"], app.theme, "Prøve")
+        button._set_hover(True)
+        assert button._fade_after is None  # and buttons change colour at once
+        app._set_reduce_motion(False)
+        assert app.theme.motion is True
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_buttons_draw_known_symbols_as_icons_and_keep_their_text() -> None:
+    from h4xtor_share.ui_kit import Button
+
+    app = _new_app()
+    try:
+        plus = Button(app, app.theme, "Filer", icon="＋")
+        assert (plus._lead, plus._words, plus._text, plus._icon) == ("plus", "Filer", "Filer", "＋")
+        menu = Button(app, app.theme, "Til: Mobil ▾")
+        assert menu._chevron and menu._words == "Til: Mobil" and menu._text == "Til: Mobil ▾"
+        gear = Button(app, app.theme, "⚙")
+        assert gear._lead == "settings" and gear._words == "" and gear._text == "⚙"
+        plain = Button(app, app.theme, "◀  Tilbage")  # an unknown symbol stays text
+        assert plain._lead == "" and plain._words == "◀  Tilbage"
+        wide = menu._width
+        menu.set_text("Vælg modtager ▾")
+        assert menu._width != wide and menu._chevron
+    finally:
+        app.close()

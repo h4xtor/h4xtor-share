@@ -131,9 +131,11 @@ class MirrorView(tk.Frame):
                             "Tryk først i et tekstfelt på telefonen, og skriv så her.")
         row = tk.Frame(typing.body, bg=c["card"])
         row.pack(fill="x")
-        self.text = tk.Entry(row, bg=c["entry"], fg=c["text"], insertbackground=c["text"],
-                             relief="flat", font=self.theme.font(10))
-        self.text.pack(side="left", fill="x", expand=True, ipady=px(7))
+        self.text = tk.Entry(row, bg=c["entry"], fg=c["text"], insertbackground=c["accent"],
+                             relief="flat", bd=px(6), highlightthickness=1,
+                             highlightbackground=c["border_strong"], highlightcolor=c["accent"],
+                             font=self.theme.font(10))
+        self.text.pack(side="left", fill="x", expand=True, ipady=px(1))
         self.text.bind("<Return>", lambda _e: self.type_text())
         self.type_button = Button(row, self.theme, "Skriv", self.type_text, kind="primary")
         self.type_button.pack(side="left", padx=(px(8), 0))
