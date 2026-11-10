@@ -1198,6 +1198,9 @@ def test_bluetooth_finds_and_pairs_a_phone_never_seen_on_wifi(tmp_path, monkeypa
         _pump(app, lambda: phone_id not in app._bt_bridges)
         kept = app.peers[phone_id]
         assert (kept.address, kept.transport) == ("", "bluetooth")
+        # "Offline" follows through the event queue, and a ping answered just before the
+        # link dropped may still land first: wait for it rather than expect it at once.
+        _pump(app, lambda: not app.peer_status[phone_id].online, 15)
         assert not app.peer_status[phone_id].online
         # …and comes back on Bluetooth by itself (the remembered MAC first).
         _pump(app, lambda: phone_id not in app._bt_trying)  # an out-of-range retry is over
