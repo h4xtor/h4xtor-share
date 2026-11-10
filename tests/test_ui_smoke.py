@@ -1359,8 +1359,13 @@ def test_pc_wifi_direct_can_be_retried_after_a_failed_start(tmp_path, monkeypatc
         app.direct_name_var.set("DIRECT-h4-Test")
         app.direct_pass_var.set("hemmelig")
         app.start_direct_host()
-        _pump(app, lambda: bool(errors) and app.direct_host is None)
-        assert "NetworkManager" in errors[0]
+        # Another start-up error may come first on a slow runner (the port of the app in
+        # the test before is not free yet): wait for, and look for, the Wi-Fi Direct one.
+        def failed() -> bool:
+            return any("NetworkManager" in error for error in errors)
+
+        _pump(app, lambda: failed() and app.direct_host is None)
+        assert failed()
         assert "Slukket" in app.direct_status.cget("text")
         assert str(app.direct_name_entry.cget("state")) == "normal"
         assert app.direct_toggle.enabled
