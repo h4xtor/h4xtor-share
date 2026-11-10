@@ -1825,12 +1825,31 @@ def test_command_palette_finds_pages_and_runs_actions(tmp_path, monkeypatch) -> 
 
 @pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
 def test_menu_goes_slim_in_a_narrow_window_and_keeps_working(tmp_path, monkeypatch) -> None:
+    import tkinter as tk
+
     app, _peers = _paired_app(1, tmp_path, monkeypatch)
     try:
         app.update()
         px = app.theme.px
+
+        # The window's width decides (a small screen may already have made it narrow, so
+        # the test drives the rule itself rather than trusting the size it opened in).
+        def resized_to(width: int) -> None:
+            event = tk.Event()
+            event.widget, event.width = app, width
+            app._window_resized(event)
+            app.update()
+
+        resized_to(px(app.COMPACT_BELOW))
         assert not app._sidebar_compact
         assert int(app.sidebar.cget("width")) == px(app.SIDEBAR_WIDE)
+        resized_to(px(app.COMPACT_BELOW) - 1)
+        assert app._sidebar_compact
+        inner = tk.Event()  # a child's <Configure> bubbles up too: it must not count
+        inner.widget, inner.width = app.sidebar, px(app.SIDEBAR_SLIM)
+        app._window_resized(inner)
+        resized_to(px(app.COMPACT_BELOW) + 200)
+        assert not app._sidebar_compact
         app._set_sidebar_compact(True)
         app.update()
         assert int(app.sidebar.cget("width")) == px(app.SIDEBAR_SLIM)
