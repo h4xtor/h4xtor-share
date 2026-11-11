@@ -80,44 +80,77 @@ def quick_shot(name: str) -> None:
 def mascot_checks() -> None:
     """The Del page's hero with the whole monkey; a tap opens its menu.
 
-    The rest of the run keeps Android's animations off for stable taps, so they are switched
-    on just for this. The menu offers its tricks (each caught by quick screenshots while it
-    plays) and its two habits, which carry a tick and are remembered.
+    First with Android's animations off, as in the rest of the run: then the screen can be
+    read reliably (with them on, the hero never stands still and a UI dump may see nothing,
+    or the previous screen). The menu's entries, the ticks on the two habits and switching
+    one off and on again are checked there, and the places of the monkey and of two tricks
+    are noted. Then, with animations on, each trick is chosen by those places and caught
+    by quick screenshots while it plays.
     """
+    def center(pattern: str) -> tuple[int, int]:
+        regex = re.compile(pattern)
+        deadline = time.time() + 15
+        while time.time() < deadline:
+            for node in reversed(ui_nodes()):
+                if (regex.search(node.get("text") or "")
+                        or regex.search(node.get("content-desc") or "")):
+                    x1, y1, x2, y2 = map(int, re.findall(r"\d+", node.get("bounds", "")))
+                    return (x1 + x2) // 2, (y1 + y2) // 2
+            time.sleep(1)
+        raise AssertionError(f"no element matching {pattern!r} on screen")
+
+    def tap_at(place: tuple[int, int]) -> None:
+        shell(f"input tap {place[0]} {place[1]}")
+
+    def open_menu() -> None:
+        tap_at(monkey)
+        if not screen_has("^Slå en salto$", 10):
+            tap_at(monkey)  # a slow emulator can drop a tap; once more
+            assert screen_has("^Slå en salto$", 10), "the monkey's menu did not open"
+
+    tap_text("^Del$")
+    time.sleep(2)
+    assert screen_has("^SEND FILER$", 10), "the hero's big send button is missing"
+    # 10 s, not 2: a UI dump taken while the live status rebuilds the page sees nothing.
+    assert screen_has("^SEND TIL$", 10), "the hero does not say who it sends to"
+    monkey = center("tryk for at vælge")  # the monkey's description
+
+    open_menu()
+    assert screen_has("^✓ Dans, når filer flytter sig$", 5), "habit not ticked"
+    assert screen_has("^✓ Gå rundt$", 5), "habit not ticked"
+    tricks = {name: center(f"^{name}$") for name in ("Dans", "Overrask mig")}
+    quick_shot("41-monkey-menu")
+    # A habit switched off loses its tick and is remembered; then on again.
+    tap_text("^✓ Gå rundt$")
+    time.sleep(1)
+    open_menu()
+    assert screen_has("^Gå rundt$", 10), "the habit kept its tick after being switched off"
+    tap_text("^Gå rundt$")
+    time.sleep(1)
+    open_menu()
+    assert screen_has("^✓ Gå rundt$", 10), "the habit did not come back on"
+    shell("input keyevent BACK", check=False)
+    time.sleep(1)
+    assert screen_has("^SEND FILER$", 10), "the monkey's menu did not close"
+
     shell("settings put global animator_duration_scale 1", check=False)
     try:
-        tap_text("^Del$")
         time.sleep(2)
-        assert screen_has("^SEND FILER$", 10), "the hero's big send button is missing"
-        # 10 s, not 2: a UI dump taken while the live status rebuilds the page sees nothing.
-        assert screen_has("^SEND TIL$", 10), "the hero does not say who it sends to"
         quick_shot("40-hero")
-        for tap, trick in enumerate(("^Dans$", "^Overrask mig$")):
-            tap_text("tryk for at vælge")  # the monkey's description
-            assert screen_has("^Slå en salto$", 10), "the monkey's menu did not open"
-            if tap == 0:
-                assert screen_has("^✓ Dans, når filer flytter sig$", 5), "habit not ticked"
-                assert screen_has("^✓ Gå rundt$", 5), "habit not ticked"
-                quick_shot("41-monkey-menu")
-            tap_text(trick)
-            for index in range(3):
-                quick_shot(f"41-monkey-tap{tap}-{index}")
+        for index, place in enumerate(tricks.values()):
+            tap_at(monkey)
+            time.sleep(1.5)
+            tap_at(place)
+            for frame in range(3):
+                quick_shot(f"41-monkey-tap{index}-{frame}")
             time.sleep(3.4)  # the dance is three seconds
-        # A habit switched off loses its tick and is remembered; then on again.
-        tap_text("tryk for at vælge")
-        tap_text("^✓ Gå rundt$")
-        time.sleep(1)
-        tap_text("tryk for at vælge")
-        assert screen_has("^Gå rundt$", 10), "the habit kept its tick after being switched off"
-        tap_text("^Gå rundt$")
-        time.sleep(1)
-        tap_text("tryk for at vælge")
-        assert screen_has("^✓ Gå rundt$", 10), "the habit did not come back on"
-        shell("input keyevent BACK", check=False)
-        time.sleep(1)
         quick_shot("42-monkey-after")
     finally:
         shell("settings put global animator_duration_scale 0", check=False)
+    time.sleep(1)
+    # Each trick was chosen: its tap closed the menu, so the page is in front again.
+    assert screen_has("^SEND FILER$", 10), "the hero is not in front after the tricks"
+    assert not screen_has("^Slå en salto$", 2), "a trick was not chosen: the menu is still open"
     ok("Del page: hero with SEND FILER; a tap on the monkey opens its menu of tricks and habits")
 
 
