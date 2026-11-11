@@ -1410,7 +1410,7 @@ def test_send_page_hero_and_tiles_follow_the_selection(tmp_path, monkeypatch) ->
 
         app.transfers["t"] = TransferState("t", "ferie.mp4", "send", "Bærbar", total=10, sent=4)
         app._update_transfer_badge()
-        assert app.hero.actor.busy  # the monkey hops while files move
+        assert app.hero.actor.busy  # the monkey dances while files move
         sub = {n["id"]: n["sub"] for n in app.device_tiles.nodes}
         assert sub[peers[1].device_id] == "Sender …"
         assert app.device_tiles._pulse_after is not None  # its tile breathes blue
@@ -1530,12 +1530,12 @@ def test_monkey_actor_strolls_points_reacts_and_hops() -> None:
         assert actor.hit(x, y) and not actor.hit(5, 5)
 
         actor._gesture = None
-        actor.set_busy(True)
+        actor.set_busy(True)  # busy: it moves the whole time (the dance has its own test)
         tops = []
         for _ in range(14):
             actor.tick()
             tops.append(canvas.bbox("m")[1])
-        assert max(tops) - min(tops) > 8  # hopping while files move
+        assert max(tops) - min(tops) > 4 and actor.pose.dance == 1.0
     finally:
         root.destroy()
 
@@ -1859,6 +1859,160 @@ def test_the_click_that_opens_a_menu_or_the_palette_does_not_close_it_again(
         assert PopupMenu._open is not None
         click(app.hero_more)
         assert PopupMenu._open is None
+    finally:
+        app.close()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_monkey_dances_while_files_move_and_can_be_told_not_to() -> None:
+    import tkinter as tk
+
+    from h4xtor_share.ui_kit import MonkeyActor
+
+    root = tk.Tk()
+    try:
+        canvas = tk.Canvas(root, width=400, height=320)
+        canvas.pack()
+        actor = MonkeyActor(canvas, "m", seed=3)
+        actor.place(200, 280, 100, roam=60)
+        root.update()
+
+        def hands() -> tuple[float, float]:
+            """How high the two hands are (smaller is higher)."""
+            tops = sorted(canvas.bbox(item)[1] for item in canvas.find_withtag("m-hand"))
+            return tops[0], tops[-1]
+
+        actor._rest = 10_000  # standing still
+        actor.tick()
+        at_rest = hands()[0]
+        centre = actor.center
+
+        actor.set_busy(True)
+        seen = []
+        for _ in range(actor.BEAT * 4):
+            actor.tick()
+            seen.append((actor.pose.dance, actor.pose.rot, actor.pose.facing, *hands()))
+        assert all(frame[0] == 1.0 for frame in seen)
+        assert max(f[1] for f in seen) > 5 and min(f[1] for f in seen) < -5  # rocks both ways
+        assert {f[2] for f in seen} == {1, -1}  # looks left and right
+        assert min(f[3] for f in seen) < at_rest - 30  # an arm high in the air ...
+        assert max(f[4] - f[3] for f in seen) > 12  # ... the two swinging in turn
+        assert actor.center == centre  # on the spot: it does not wander off while dancing
+
+        actor.dance_on_busy = False  # switched off: the old hops, arms down
+        seen = []
+        for _ in range(26):
+            actor.tick()
+            seen.append((actor.pose.dance, canvas.bbox("m")[1]))
+        assert all(frame[0] == 0 for frame in seen)
+        assert max(f[1] for f in seen) - min(f[1] for f in seen) > 8  # it still hops
+
+        actor.set_busy(False)
+        actor.dance()  # a dance on request: swells in, ends at rest
+        assert actor.gesture == "dance"
+        amounts = []
+        while actor.gesture == "dance":
+            actor.tick()
+            amounts.append(actor.pose.dance)
+        assert len(amounts) == actor.LENGTHS["dance"] and max(amounts) == 1.0
+        assert amounts[0] == 0 and amounts[-1] == 0
+        actor.tick()
+        assert actor.pose.dance == 0 and actor.pose.rot == 0
+
+        actor.stroll_enabled = False  # told to stay: it never leaves its spot
+        actor._rest, actor._x, actor._target = 0, 0.0, 1.0
+        for _ in range(200):
+            actor.tick()
+        assert actor._x == 0.0
+        actor.stroll_enabled = True
+        for _ in range(40):
+            actor.tick()
+        assert actor._x > 0.2
+    finally:
+        root.destroy()
+
+
+@pytest.mark.skipif(not _can_build_ui(), reason="Tk/tkdnd display server unavailable")
+def test_click_on_the_monkey_opens_its_menu_with_tricks_and_habits(
+        tmp_path, monkeypatch) -> None:
+    from h4xtor_share.app import TransferState
+    from h4xtor_share.ui_kit import PopupMenu
+
+    app, _peers = _paired_app(1, tmp_path, monkeypatch)
+    try:
+        app.geometry("1100x720")
+        app.update()
+        actor = app.hero.actor
+        assert actor.dance_on_busy and actor.stroll_enabled  # both habits on from the start
+
+        def settle() -> None:
+            for _ in range(6):
+                app.update()
+                app.after(25)
+            app.update()
+
+        def click_monkey() -> PopupMenu:
+            x, y = actor.center
+            app.hero.event_generate("<Button-1>", x=int(x), y=int(y))  # a real click
+            settle()
+            menu = PopupMenu._open
+            assert menu is not None and menu.is_open
+            return menu
+
+        def choose(menu: PopupMenu, label: str) -> None:
+            labels = {menu.entrycget(i, "label").lstrip("✓ "): i for i in menu.commands()}
+            menu.choose(labels[label])
+
+        menu = click_monkey()
+        assert [menu.entrycget(i, "label").lstrip("✓ ") for i in menu.commands()] == [
+            "Send filer…", "Send udklipsholder", "Dans", "Slå en salto", "Stort smil",
+            "Peg på enhederne", "Overrask mig", "Dans, når filer flytter sig", "Gå rundt"]
+        assert menu.entrycget(menu.commands()[-1], "label").startswith("✓")
+        # The menu is inside the window, next to the monkey.
+        assert menu.panel.winfo_x() + menu.panel.winfo_width() <= app.winfo_width()
+        choose(menu, "Dans")
+        assert not menu.is_open and actor.gesture == "dance"
+        for label, gesture in (("Slå en salto", "flip"), ("Stort smil", "grin"),
+                               ("Peg på enhederne", "point")):
+            choose(click_monkey(), label)
+            assert actor.gesture == gesture
+        choose(click_monkey(), "Overrask mig")
+        assert actor.gesture in actor.REACTIONS
+
+        # A click beside the monkey is not a click on it.
+        app.hero.event_generate("<Button-1>", x=4, y=4)
+        settle()
+        assert PopupMenu._open is None
+
+        # The habits: a tick each, remembered, and they change what the monkey does.
+        choose(click_monkey(), "Dans, når filer flytter sig")
+        assert not actor.dance_on_busy and not app.config_store.get_flag("monkey_dance", True)
+        menu = click_monkey()
+        dance_habit = next(i for i in menu.commands()
+                           if "Dans, når" in menu.entrycget(i, "label"))
+        assert not menu.entrycget(dance_habit, "label").startswith("✓")
+        choose(menu, "Gå rundt")
+        assert not actor.stroll_enabled and not app.config_store.get_flag("monkey_stroll", True)
+
+        app.transfers["t"] = TransferState("t", "ferie.mp4", "send", "Mobil", total=10, sent=4)
+        app._update_transfer_badge()
+        actor._gesture = None
+        app.hero._animate()
+        assert actor.busy and actor.pose.dance == 0  # told not to dance: it only hops
+        choose(click_monkey(), "Dans, når filer flytter sig")
+        actor._gesture = None
+        app.hero._animate()
+        assert actor.dance_on_busy and actor.pose.dance == 1.0  # ... and dances again
+
+        # Ctrl+K knows the monkey too.
+        titles = {item[0]: item[3] for item in app.palette_items()}
+        actor._gesture = None
+        titles["Få aben til at danse"]()
+        assert actor.gesture == "dance"
+        titles["Abens menu"]()
+        settle()
+        assert PopupMenu._open is not None
+        PopupMenu._open.close()
     finally:
         app.close()
 

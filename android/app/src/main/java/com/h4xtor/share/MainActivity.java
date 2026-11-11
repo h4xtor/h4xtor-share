@@ -1034,15 +1034,56 @@ public final class MainActivity extends Activity implements ShareService.UiListe
         }
     }
 
-    /** The mascot, reused across renders (it keeps strolling), hopping while files move. */
+    /** The mascot, reused across renders (it keeps strolling), dancing while files move. */
     private MonkeyView monkey() {
         if (monkeyView == null) {
             monkeyView = new MonkeyView(this);
+            monkeyView.setOnTap(this::monkeyMenu);
         } else if (monkeyView.getParent() instanceof ViewGroup) {
             ((ViewGroup) monkeyView.getParent()).removeView(monkeyView);
         }
         monkeyView.setBusy(service != null && service.activeTransfers() > 0);
+        if (service != null) {
+            monkeyView.setDanceOnBusy(service.identity().flag("monkey_dance", true));
+            monkeyView.setStrollEnabled(service.identity().flag("monkey_stroll", true));
+        }
         return monkeyView;
+    }
+
+    /** A tap on the monkey: its tricks on request, and its two habits to switch on and off. */
+    private void monkeyMenu() {
+        if (monkeyView == null) {
+            return;
+        }
+        List<String> labels = new ArrayList<>();
+        List<Runnable> actions = new ArrayList<>();
+        labels.add("Dans");
+        actions.add(monkeyView::dance);
+        labels.add("Slå en salto");
+        actions.add(monkeyView::flip);
+        labels.add("Stort smil");
+        actions.add(monkeyView::grin);
+        labels.add("Overrask mig");
+        actions.add(monkeyView::tap);
+        if (service != null) {
+            AppIdentity identity = service.identity();
+            boolean dances = identity.flag("monkey_dance", true);
+            labels.add((dances ? "✓ " : "") + "Dans, når filer flytter sig");
+            actions.add(() -> {
+                identity.setFlag("monkey_dance", !dances);
+                monkeyView.setDanceOnBusy(!dances);
+            });
+            boolean strolls = identity.flag("monkey_stroll", true);
+            labels.add((strolls ? "✓ " : "") + "Gå rundt");
+            actions.add(() -> {
+                identity.setFlag("monkey_stroll", !strolls);
+                monkeyView.setStrollEnabled(!strolls);
+            });
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Aben")
+                .setItems(labels.toArray(new String[0]), (dialog, which) -> actions.get(which).run())
+                .show();
     }
 
     /** The phone is set to show no animations: decoration stays still. */

@@ -1100,8 +1100,19 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
              "Udseende", "", lambda: self._set_theme(other)),
             ("Søg efter opdatering", "h4xtor share", "", self.check_for_updates_now),
             ("Se hvad der er nyt", "h4xtor share", "", self.show_changelog),
+            ("Få aben til at danse", "Aben", "", self._monkey_dance),
+            ("Abens menu", "Aben", "", self._monkey_menu_from_palette),
         ]
         return items
+
+    def _monkey_dance(self) -> None:
+        self.show_page("share")
+        self.hero.actor.dance()
+
+    def _monkey_menu_from_palette(self) -> None:
+        self.show_page("share")
+        self.update_idletasks()
+        self._monkey_menu()
 
     def open_palette(self) -> None:
         self.palette.toggle(self.palette_items())
@@ -1444,6 +1455,8 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
         # and the monkey in a small card. The words and buttons follow the selection.
         self.hero = HeroBanner(center, self.theme, height=206)
         self.hero.pack(fill="x")
+        self.hero.on_actor_click = self._monkey_menu
+        self._apply_monkey_habits()
         self.hero_send = Button(self.hero.buttons, self.theme, "SEND FILER",
                                 lambda: self.send_files(), kind="primary", size="xl", width=196)
         self.hero_send.pack(side="left")
@@ -1803,6 +1816,44 @@ class H4xtorShareApp(PhonePagesMixin, NetMergePageMixin, UpdateMixin, TkinterDnD
                              command=lambda: self.scan_bluetooth(manual=True))
         menu.add_command(label="Tilføj via IP-adresse…", command=self.add_manual_peer)
         menu.popup_below(anchor)
+
+    # The monkey's two habits, each with a tick in its menu (a click on the monkey).
+    MONKEY_HABITS = (("monkey_dance", "Dans, når filer flytter sig"),
+                     ("monkey_stroll", "Gå rundt"))
+
+    def _apply_monkey_habits(self) -> None:
+        actor = self.hero.actor
+        actor.dance_on_busy = self.config_store.get_flag("monkey_dance", True)
+        actor.stroll_enabled = self.config_store.get_flag("monkey_stroll", True)
+
+    def _toggle_monkey_habit(self, key: str) -> None:
+        self.config_store.set_flag(key, not self.config_store.get_flag(key, True))
+        self._apply_monkey_habits()
+
+    def _monkey_menu(self, event: tk.Event | None = None) -> None:
+        """A click on the monkey: the two things people send most, its tricks on request,
+        and its habits to switch on and off."""
+        actor = self.hero.actor
+        everyone = self._all_selected()
+        target = self._drop_target_peer()
+        menu = PopupMenu(self, self.theme)
+        menu.add_command(label="   Send filer…", accelerator="Ctrl+O",
+                         command=lambda: self.send_files(target, to_all=everyone))
+        menu.add_command(label="   Send udklipsholder", accelerator="Ctrl+V",
+                         command=lambda: self.send_clipboard(target, to_all=everyone))
+        menu.add_separator()
+        for label, trick in (("Dans", actor.dance), ("Slå en salto", actor.flip),
+                             ("Stort smil", actor.grin), ("Peg på enhederne", actor.point),
+                             ("Overrask mig", actor.tap)):
+            menu.add_command(label="   " + label, command=trick)
+        menu.add_separator()
+        for key, label in self.MONKEY_HABITS:
+            on = self.config_store.get_flag(key, True)
+            menu.add_command(label=("✓ " if on else "   ") + label,
+                             command=lambda name=key: self._toggle_monkey_habit(name))
+        # Under the monkey's feet, so it stays in view while you choose.
+        box = self.hero.bbox(actor.tag) or (0, 0, 0, 0)
+        menu.tk_popup(self.hero.winfo_rootx() + box[0], self.hero.winfo_rooty() + box[3])
 
     def _hero_device_menu(self) -> None:
         target = self._drop_target_peer()
