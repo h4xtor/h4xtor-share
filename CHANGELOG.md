@@ -4,6 +4,12 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
+## 1.11.1 – 2026-11-11
+### Rettet
+- Opdateringer: appen sikrer nu, at den gamle udgave er helt lukket, inden den nye lægger sig i stedet – ikke kun at vinduet er væk. Hænger den gamle app fast (f.eks. i en netværks- eller Bluetooth-opkobling), tvinges den til at lukke, før opdateringen går videre. Kan den slet ikke lukkes, rører opdateringen ingenting og beder dig lukke appen helt via ikonet ved uret og prøve igen.
+- Alt om et opdateringsforløb skrives nu til en log, så en fejl kan spores bagefter.
+- Også ved almindelig lukning af appen: en fastlåst baggrundsopgave kan ikke længere holde appen (og dens forbindelser) i live efter vinduet er lukket.
+
 ## 1.11.0 – 2026-11-11
 ### Nyt
 - Aben danser, mens filer flytter sig: armene i vejret, fra fod til fod og med blikket fra side til side – både på PC'en og på telefonen. Når filen er landet, hopper den af glæde som før.

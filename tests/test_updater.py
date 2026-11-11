@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import hashlib
+import os
 import socket
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 import pytest
@@ -226,3 +229,167 @@ def test_pc_update_rolls_back_when_new_version_hangs(tmp_path: Path) -> None:
     assert started[0].poll() is not None  # the hung new version was stopped
     assert target.read_text(encoding="utf-8") == "import sys\n"  # old version restored
     assert "sat tilbage" in (updater.mark_started(folder) or "")
+
+
+def _old_app(tmp_path: Path, seconds: float) -> subprocess.Popen:
+    """A stand-in for the old app's process: it lives ``seconds`` unless it is ended."""
+    script = _script(tmp_path, "old_app.py", f"import time\ntime.sleep({seconds})\n")
+    process = subprocess.Popen([sys.executable, str(script)])
+    threading.Thread(target=process.wait, daemon=True).start()  # so it is gone once it ends
+    return process
+
+
+def _confirming(tmp_path: Path, folder: Path) -> Path:
+    return _script(
+        tmp_path,
+        "new.py",
+        f"from pathlib import Path\nPath({str(folder)!r}, 'update-ok').write_text('x')\n",
+    )
+
+
+def test_pc_update_ends_an_old_app_that_hangs_before_starting_the_new_one(
+    tmp_path: Path,
+) -> None:
+    """The old app has closed its window but its process hangs (a stuck background call):
+    it must be gone before the new version starts, or the new one finds the ports taken."""
+    folder = tmp_path / "config"
+    folder.mkdir()
+    target = _script(tmp_path, "app.py", "old")
+    new = _confirming(tmp_path, folder)
+    old = _old_app(tmp_path, 120)
+    seen: list[bool] = []
+
+    def launch(path: Path):
+        seen.append(updater._alive(old.pid))  # is the old app still there when we start?
+        return subprocess.Popen([sys.executable, str(path)])
+
+    try:
+        started = time.monotonic()
+        assert updater.apply_update(new, target, old.pid, folder, launch=launch,
+                                    timeout=20, grace=1.0)
+        assert time.monotonic() - started < 15  # it did not sit out the old app's two minutes
+        assert seen == [False]  # the old app was gone before the new one was started
+        assert old.poll() is not None
+        assert "update-ok" in target.read_text(encoding="utf-8")
+        log = (folder / "update.log").read_text(encoding="utf-8")
+        assert "lukkede ikke selv" in log and "opdateringen er gennemført" in log
+        assert updater.mark_started(folder) is None  # no failure note
+    finally:
+        if old.poll() is None:
+            old.kill()
+
+
+def test_pc_update_leaves_an_old_app_alone_that_closes_in_time(tmp_path: Path) -> None:
+    folder = tmp_path / "config"
+    folder.mkdir()
+    target = _script(tmp_path, "app.py", "old")
+    new = _confirming(tmp_path, folder)
+    old = _old_app(tmp_path, 1.0)
+    ended: list[int] = []
+
+    def launch(path: Path):
+        return subprocess.Popen([sys.executable, str(path)])
+
+    assert updater.apply_update(new, target, old.pid, folder, launch=launch, timeout=20,
+                                grace=20.0, end=ended.append)
+    assert ended == []  # it left by itself: nothing was ended
+    log = (folder / "update.log").read_text(encoding="utf-8")
+    assert "den gamle app er lukket" in log and "lukkede ikke selv" not in log
+
+
+def test_pc_update_changes_nothing_when_the_old_app_cannot_be_ended(
+    tmp_path: Path, monkeypatch
+) -> None:
+    folder = tmp_path / "config"
+    folder.mkdir()
+    target = _script(tmp_path, "app.py", "old")
+    new = _confirming(tmp_path, folder)
+    old = _old_app(tmp_path, 120)
+    launched: list[Path] = []
+    monkeypatch.setattr(updater, "END_WAIT", 0.5)
+    try:
+        assert not updater.apply_update(new, target, old.pid, folder,
+                                        launch=launched.append, timeout=5, grace=0.5,
+                                        end=lambda _pid: None)  # ending it does not work
+        assert launched == []  # nothing is started on top of an app that is still running
+        assert target.read_text(encoding="utf-8") == "old"  # and nothing was swapped
+        assert not target.with_name("app.py.old").exists() and new.exists()
+        note = updater.mark_started(folder) or ""
+        assert "kunne ikke lukkes" in note and "Afslut" in note
+    finally:
+        old.kill()
+
+
+def _run(code: str, timeout: float = 30) -> tuple[int, float]:
+    started = time.monotonic()
+    done = subprocess.run([sys.executable, "-c", code], timeout=timeout, check=False)
+    return done.returncode, time.monotonic() - started
+
+
+def test_leaving_for_an_update_ends_the_process_whatever_still_runs() -> None:
+    worker = "import threading, time\nthreading.Thread(target=time.sleep, args=(60,)).start()\n"
+    leave = "from h4xtor_share.updater import exit_after, leave_process\n"
+    # Closed in order, but a worker thread is stuck: Python alone would wait a minute for it.
+    code, seconds = _run(worker + leave + "leave_process(lambda: None)\n")
+    assert code == 0 and seconds < 15
+    # The orderly close itself hangs: gone after the grace period.
+    code, seconds = _run(leave + "import time\nleave_process(lambda: time.sleep(60), grace=1.0)\n")
+    assert code == 0 and seconds < 15
+    # An ordinary quit: the program ends, a stuck worker gets three seconds at most.
+    code, seconds = _run(worker + leave + "exit_after(1.0)\n")
+    assert code == 0 and seconds < 15
+
+
+def test_helper_is_a_fresh_copy_started_as_a_new_instance(tmp_path: Path, monkeypatch) -> None:
+    folder = tmp_path / "config"
+    folder.mkdir()
+    downloads = tmp_path / "downloads"
+    downloads.mkdir()
+    exe = tmp_path / "h4xtor-share.exe"
+    exe.write_bytes(b"the running app")
+    new_exe = downloads / "h4xtor-share-windows.exe"
+    new_exe.write_bytes(b"the new app")
+    stale = downloads / "h4xtor-share-updater.exe"  # left by an earlier update
+    stale.write_bytes(b"old helper")
+    calls: list[tuple[list[str], dict]] = []
+    monkeypatch.setattr(sys, "executable", str(exe))
+    monkeypatch.setattr(subprocess, "Popen", lambda args, **kw: calls.append((args, kw)))
+
+    updater.start_helper(new_exe, folder)
+    (args, options), = calls
+    helper = Path(args[0])
+    assert helper.parent == downloads and helper.read_bytes() == b"the running app"
+    assert helper.name == f"h4xtor-share-updater-{os.getpid()}.exe"  # its own name per try
+    assert not stale.exists()
+    assert args[1:] == ["--apply-update", str(new_exe), str(exe), str(os.getpid()), str(folder)]
+    # PyInstaller must unpack the copy as a new start of the app, not as a child of this one.
+    assert options["env"]["PYINSTALLER_RESET_ENVIRONMENT"] == "1"
+    assert "hjælper startet" in (folder / "update.log").read_text(encoding="utf-8")
+
+    # It cannot be started (here: the download folder is gone): a clear message, in Danish.
+    missing = tmp_path / "gone" / "h4xtor-share-windows.exe"
+    with pytest.raises(updater.UpdateError, match="kunne ikke startes"):
+        updater.start_helper(missing, folder)
+    assert len(calls) == 1
+
+
+def test_leftovers_of_an_update_are_tidied_and_the_log_stays_small(tmp_path: Path) -> None:
+    downloads = tmp_path / "downloads"
+    downloads.mkdir()
+    exe = tmp_path / "h4xtor-share.exe"
+    exe.write_bytes(b"app")
+    previous = tmp_path / "h4xtor-share.exe.old"
+    previous.write_bytes(b"previous version")
+    helper = downloads / "h4xtor-share-updater-4711.exe"
+    helper.write_bytes(b"helper")
+    keep = downloads / "h4xtor-share-windows.exe"
+    keep.write_bytes(b"download")
+    updater.tidy_after_update(exe, downloads)
+    assert not previous.exists() and not helper.exists()
+    assert exe.exists() and keep.exists()
+    updater.tidy_after_update(exe, tmp_path / "missing")  # nothing there: no error
+
+    for number in range(3000):
+        updater._log(tmp_path, f"linje {number} " + "x" * 40)
+    log = (tmp_path / "update.log").read_text(encoding="utf-8")
+    assert len(log) < 80 * 1024 and "linje 2999" in log and "linje 0 " not in log

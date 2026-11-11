@@ -6,6 +6,7 @@ back on the Tk thread as an ``update_result`` / ``update_progress`` event.
 
 from __future__ import annotations
 
+import sys
 import tempfile
 import tkinter as tk
 import webbrowser
@@ -23,8 +24,10 @@ from h4xtor_share.updater import (
     can_self_install,
     entries_between,
     is_newer,
+    leave_process,
     mark_started,
     start_helper,
+    tidy_after_update,
 )
 
 AUTO_TICK_MS = 3600 * 1000  # re-evaluate hourly; the updater itself allows one check a day
@@ -56,6 +59,13 @@ class UpdateMixin:
         elif last and is_newer(__version__, last):
             self.after(1200, lambda: self._show_welcome(last))
         self.after(5000, self._auto_update_tick)
+        if can_self_install():  # once the helper of an update just made has finished
+            self.after(30000, lambda: tidy_after_update(Path(sys.executable),
+                                                        self._update_downloads()))
+
+    @staticmethod
+    def _update_downloads() -> Path:
+        return Path(tempfile.gettempdir()) / "h4xtor-update"
 
     # -- checking ------------------------------------------------------------------
     def _auto_update_tick(self) -> None:
@@ -244,7 +254,7 @@ class UpdateMixin:
         modal.present()
 
     def _download_update(self, release: Release) -> None:
-        folder = Path(tempfile.gettempdir()) / "h4xtor-update"
+        folder = self._update_downloads()
 
         def progress(done: int, total: int) -> None:
             self.event_queue.put(("update_progress", (done, total)))
@@ -266,7 +276,9 @@ class UpdateMixin:
         except Exception as error:  # noqa: BLE001
             self._update_failed(error)
             return
-        self.after(300, self.close)
+        # The helper waits for this process to end. Closing the window is not enough: a
+        # background call that hangs would keep the process, and the app's ports, alive.
+        self.after(300, lambda: leave_process(self.close))
 
     def _update_failed(self, error: Exception) -> None:
         message = (
