@@ -23,7 +23,7 @@ jobs:
           cache: pip
       - name: Install Linux GUI dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install --yes python3-tk xvfb
+        run: bash .github/scripts/apt-install.sh python3-tk xvfb
       - name: Install
         run: python -m pip install -e ".[dev]"
       - name: Lint
@@ -62,7 +62,7 @@ jobs:
           cache: pip
       - name: Install
         run: |
-          sudo apt-get update && sudo apt-get install --yes python3-tk xvfb
+          bash .github/scripts/apt-install.sh python3-tk xvfb
           python -m pip install -e ".[dev]" playwright
           python -m playwright install --with-deps chromium
       - name: Desktop app + Chrome extension end-to-end
@@ -124,7 +124,7 @@ jobs:
           cache: pip
       - name: Install Linux GUI dependencies
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install --yes python3-tk
+        run: bash .github/scripts/apt-install.sh python3-tk
       - name: Install
         run: python -m pip install -e ".[dev]"
       - name: Package executable
