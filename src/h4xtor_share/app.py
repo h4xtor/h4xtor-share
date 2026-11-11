@@ -94,7 +94,7 @@ from h4xtor_share.ui_kit import (
     chip as status_chip,
 )
 from h4xtor_share.update_pages import UpdateMixin
-from h4xtor_share.updater import Updater, is_newer
+from h4xtor_share.updater import Updater, exit_after, is_newer
 from h4xtor_share.updater import run_helper as run_update_helper
 from h4xtor_share.web_share import WEB_PORT_OFFSET, WebShare
 
@@ -5925,6 +5925,9 @@ def main(argv: list[str] | None = None) -> None:
     _enable_high_dpi()
     app = H4xtorShareApp(start_minimized=minimized, initial_send=send_paths, instance=instance)
     app.mainloop()
+    # The window is closed and the services are stopped. A worker thread stuck in a network
+    # or Bluetooth call must not keep the process (and the app's ports) alive after that.
+    exit_after(3.0)
 
 
 if __name__ == "__main__":

@@ -915,6 +915,9 @@ def test_update_dialog_flow(tmp_path, monkeypatch) -> None:
         started: list = []
         monkeypatch.setattr(update_pages, "can_self_install", lambda: True)
         monkeypatch.setattr(update_pages, "start_helper", lambda path, folder: started.append(path))
+        # The real one ends this process for good (it must: the helper waits for that).
+        monkeypatch.setattr(update_pages, "leave_process",
+                            lambda close: (close(), started.append("left")))
         monkeypatch.setattr(app, "close", lambda: started.append("closed"))
 
         async def download(_release, _folder, progress):
@@ -926,10 +929,11 @@ def test_update_dialog_flow(tmp_path, monkeypatch) -> None:
         app.update()
         {b._text: b for b in app._update_buttons.winfo_children()}["Opdatér nu"].command()
         deadline = time.time() + 10
-        while "closed" not in started and time.time() < deadline:
+        while "left" not in started and time.time() < deadline:
             app.update()
             time.sleep(0.05)
-        assert started == [new_exe, "closed"]
+        # Handed to the helper, closed in order, and then the process leaves for good.
+        assert started == [new_exe, "closed", "left"]
 
         app.show_changelog()  # the offline log opens from the shipped/cached changelog
         app.update()

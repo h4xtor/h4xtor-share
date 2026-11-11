@@ -7,6 +7,12 @@ Flow: check (at most once a day, silent when offline) → ask with the changelog
 download to a temp folder → verify the release's SHA-256 file → on the Windows
 .exe a helper copy of this exe swaps the file, starts the new version, and puts
 the old one back if the new one does not come up.
+
+The old app must be really gone before the new one starts: as long as its process
+lives it keeps the app's ports, and the new version would give up at once. So the
+app leaves for good after handing over (``leave_process``), and the helper ends an
+old process that still hangs around (``apply_update``). Each step is written to
+``update.log`` in the settings folder.
 """
 
 from __future__ import annotations
@@ -18,6 +24,7 @@ import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -39,6 +46,9 @@ LATER_DELAY = 24 * 3600
 SECTIONS = ("Nyt", "Forbedret", "Rettet")
 OK_MARKER = "update-ok"
 FAILED_NOTE = "update-failed"
+UPDATE_LOG = "update.log"
+HELPER_PREFIX = "h4xtor-share-updater"
+END_WAIT = 15.0  # seconds an old app gets to disappear after it has been ended
 NO_CHANGELOG = "Ingen nyhedsliste tilgængelig."
 
 _HEADING = re.compile(r"^##\s+v?(\d+(?:\.\d+)+)\s*[–—-]\s*(\d{4}-\d{2}-\d{2})\s*$")
@@ -321,24 +331,90 @@ def can_self_install() -> bool:
     return os.name == "nt" and bool(getattr(sys, "frozen", False))
 
 
+def _fresh_environment() -> dict[str, str]:
+    """The environment for a copy of this exe that must outlive this process: PyInstaller
+    is told to treat it as a new start of the app, with its own unpacked files."""
+    return {**os.environ, "PYINSTALLER_RESET_ENVIRONMENT": "1"}
+
+
 def start_helper(new_exe: Path, folder: Path) -> None:
     """Run a copy of this exe that swaps in ``new_exe`` once this process has exited."""
     current = Path(sys.executable)
-    helper = new_exe.with_name("h4xtor-share-updater.exe")
-    shutil.copy2(current, helper)
+    for stale in new_exe.parent.glob(f"{HELPER_PREFIX}*.exe"):  # from earlier updates
+        with contextlib.suppress(OSError):
+            stale.unlink()
+    # Its own name per attempt: a helper from a failed attempt may still be running, and
+    # a running exe cannot be overwritten.
+    helper = new_exe.with_name(f"{HELPER_PREFIX}-{os.getpid()}.exe")
     flags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(
         subprocess, "CREATE_NEW_PROCESS_GROUP", 0
     )
-    subprocess.Popen(  # noqa: S603 - our own exe with our own arguments
-        [str(helper), "--apply-update", str(new_exe), str(current), str(os.getpid()), str(folder)],
-        creationflags=flags,
-        close_fds=True,
-    )
+    try:
+        shutil.copy2(current, helper)
+        subprocess.Popen(  # noqa: S603 - our own exe with our own arguments
+            [str(helper), "--apply-update", str(new_exe), str(current), str(os.getpid()),
+             str(folder)],
+            creationflags=flags,
+            close_fds=True,
+            env=_fresh_environment(),
+        )
+    except OSError as error:
+        raise UpdateError(
+            f"Opdateringen kunne ikke startes ({error}). Intet er ændret – prøv igen."
+        ) from error
+    _log(folder, f"hjælper startet: {helper.name} (denne app er pid {os.getpid()})")
 
 
-def _wait_for_exit(pid: int, timeout: float) -> None:
+def exit_after(seconds: float, code: int = 0) -> threading.Timer:
+    """Make sure this process is gone ``seconds`` from now, whatever still runs in it.
+
+    Python waits at exit for every worker thread to finish, and one stuck in a network or
+    Bluetooth call can hold the closed app alive (invisible, ports still taken) for minutes.
+    """
+    timer = threading.Timer(seconds, os._exit, args=(code,))
+    timer.daemon = True
+    timer.start()
+    return timer
+
+
+def leave_process(close: Callable[[], Any], grace: float = 8.0) -> None:
+    """End this process for good, for the update helper that waits for it: ``close`` tidies
+    up, and the process is gone right after it returns, or after ``grace`` seconds if it
+    hangs."""
+    exit_after(grace)
+    try:
+        close()
+    finally:
+        os._exit(0)
+
+
+def _alive(pid: int) -> bool:
     if pid <= 0:
-        return
+        return False
+    if os.name == "nt":
+        import ctypes
+
+        kernel = ctypes.windll.kernel32  # type: ignore[attr-defined]
+        handle = kernel.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE
+        if not handle:
+            return False  # gone
+        try:
+            return kernel.WaitForSingleObject(handle, 0) == 0x102  # WAIT_TIMEOUT: still running
+        finally:
+            kernel.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except OSError:
+        return True  # it exists, it is just not ours to signal
+    return True
+
+
+def _wait_for_exit(pid: int, timeout: float) -> bool:
+    """Wait up to ``timeout`` seconds for process ``pid`` to end. True when it is gone."""
+    if pid <= 0:
+        return True
     if os.name == "nt":
         import ctypes
 
@@ -347,18 +423,32 @@ def _wait_for_exit(pid: int, timeout: float) -> None:
         if handle:
             kernel.WaitForSingleObject(handle, int(timeout * 1000))
             kernel.CloseHandle(handle)
-        return
+        return not _alive(pid)
     deadline = time.monotonic() + timeout
-    while time.monotonic() < deadline:
-        try:
-            os.kill(pid, 0)
-        except OSError:
-            return
+    while _alive(pid):
+        if time.monotonic() > deadline:
+            return False
         time.sleep(0.2)
+    return True
+
+
+def _end_process(pid: int) -> None:
+    """End a process that will not leave by itself (and what it started)."""
+    if os.name == "nt":
+        subprocess.run(  # noqa: S603
+            ["taskkill", "/F", "/T", "/PID", str(pid)],  # noqa: S607
+            capture_output=True,
+            check=False,
+        )
+        return
+    import signal
+
+    with contextlib.suppress(OSError):
+        os.kill(pid, signal.SIGKILL)
 
 
 def _launch(path: Path) -> subprocess.Popen[bytes]:
-    return subprocess.Popen([str(path)], close_fds=True)  # noqa: S603
+    return subprocess.Popen([str(path)], close_fds=True, env=_fresh_environment())  # noqa: S603
 
 
 def apply_update(
@@ -368,33 +458,55 @@ def apply_update(
     folder: Path,
     launch: Callable[[Path], Any] = _launch,
     timeout: float = 120.0,
+    grace: float = 20.0,
+    end: Callable[[int], Any] = _end_process,
 ) -> bool:
     """Swap ``target`` for ``new``, start it, and roll back if it does not come up.
+
+    First the old app (process ``pid``) must be gone. It gets ``grace`` seconds to leave by
+    itself; if it still hangs around it is ended, because while it lives it holds the app's
+    ports and the new version would hand over to it, or give up, straight away.
 
     The new app proves it started by writing ``folder/update-ok``. Settings,
     pairings and certificates live in ``folder`` and are never touched.
     """
-    _wait_for_exit(pid, 30)
+    _log(folder, f"opdaterer {target.name}: venter på at den gamle app (pid {pid}) lukker")
+    if not _wait_for_exit(pid, grace):
+        _log(folder, f"den gamle app lukkede ikke selv inden for {grace:g} s – den afsluttes")
+        end(pid)
+        if not _wait_for_exit(pid, END_WAIT):
+            _log(folder, "den gamle app kunne ikke afsluttes – opdateringen er opgivet")
+            _note(
+                folder,
+                "Den gamle version kunne ikke lukkes – intet er ændret. Luk h4xtor share helt "
+                "(højreklik på ikonet ved uret → Afslut), og prøv så igen.",
+            )
+            return False
+    _log(folder, "den gamle app er lukket")
     backup = target.with_name(target.name + ".old")
     marker = folder / OK_MARKER
     with contextlib.suppress(OSError):
         marker.unlink(missing_ok=True)
     deadline = time.monotonic() + 30
-    while True:  # the exe stays locked until the old process is fully gone
+    while True:  # the file can stay locked for a moment (antivirus, the exe's own launcher)
         try:
             backup.unlink(missing_ok=True)
             target.replace(backup)
             break
-        except OSError:
+        except OSError as error:
             if time.monotonic() > deadline:
-                _note(folder, "Den gamle version kunne ikke lukkes – intet er ændret.")
+                _log(folder, f"programfilen kunne ikke flyttes ({error}) – intet er ændret")
+                _note(folder, "Programfilen var låst af et andet program – intet er ændret. "
+                              "Prøv at opdatere igen.")
                 launch(target)
                 return False
             time.sleep(0.5)
     try:
         shutil.copy2(new, target)
         process = launch(target)
-    except OSError:
+        _log(folder, "den nye version er lagt på plads og startet")
+    except OSError as error:
+        _log(folder, f"den nye version kunne ikke lægges på plads eller startes ({error})")
         process = None
     end = time.monotonic() + timeout
     while process is not None and time.monotonic() < end and not marker.exists():
@@ -405,9 +517,13 @@ def apply_update(
         for path in (new, backup):
             with contextlib.suppress(OSError):
                 path.unlink()
+        _log(folder, "den nye version kører – opdateringen er gennemført")
         return True
     if process is not None and process.poll() is None:  # hung while starting
+        _log(folder, f"den nye version meldte sig ikke inden for {timeout:g} s – den stoppes")
         _stop(process)
+    else:
+        _log(folder, "den nye version lukkede igen, før den var startet")
     deadline = time.monotonic() + 30
     while True:  # a just-stopped exe can stay locked for a moment
         try:
@@ -416,6 +532,7 @@ def apply_update(
             break
         except OSError:
             if time.monotonic() > deadline:
+                _log(folder, "den tidligere version kunne ikke sættes tilbage automatisk")
                 _note(
                     folder,
                     "Den nye version startede ikke. Den tidligere ligger som "
@@ -423,6 +540,7 @@ def apply_update(
                 )
                 return False
             time.sleep(0.5)
+    _log(folder, "den tidligere version er sat tilbage og startet")
     _note(folder, "Den nye version kunne ikke starte – din tidligere version er sat tilbage.")
     launch(target)
     return False
@@ -444,6 +562,26 @@ def _stop(process: Any) -> None:
 def _note(folder: Path, text: str) -> None:
     with contextlib.suppress(OSError):
         (folder / FAILED_NOTE).write_text(text, encoding="utf-8")
+
+
+def _log(folder: Path, text: str) -> None:
+    """One dated line in ``update.log``: what the update did, for when it goes wrong."""
+    with contextlib.suppress(OSError):
+        path = folder / UPDATE_LOG
+        if path.exists() and path.stat().st_size > 64 * 1024:  # keep the newest half
+            lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+            path.write_text("\n".join(lines[len(lines) // 2:]) + "\n", encoding="utf-8")
+        with path.open("a", encoding="utf-8") as output:
+            output.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')}  {text}\n")
+
+
+def tidy_after_update(exe: Path, downloads: Path) -> None:
+    """Remove what an update leaves behind once nothing uses it any more: the previous
+    version next to the exe, and helper copies in the download folder. Best effort."""
+    leftovers = [exe.with_name(exe.name + ".old"), *downloads.glob(f"{HELPER_PREFIX}*.exe")]
+    for path in leftovers:
+        with contextlib.suppress(OSError):
+            path.unlink()
 
 
 def run_helper(arguments: list[str]) -> bool:
