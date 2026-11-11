@@ -1,0 +1,68 @@
+--------- beginning of main
+11-11 19:08:25.976 13958 13958 I om.h4xtor.share: Late-enabling -Xcheck:jni
+11-11 19:08:26.016 13958 13958 I om.h4xtor.share: Using CollectorTypeCC GC.
+11-11 19:08:26.017 13958 13958 W om.h4xtor.share: Unexpected CPU variant for x86: x86_64.
+11-11 19:08:26.017 13958 13958 W om.h4xtor.share: Known variants: atom, sandybridge, silvermont, goldmont, goldmont-plus, tremont, kabylake, default
+11-11 19:08:26.111 13958 13958 D CompatibilityChangeReporter: Compat change id reported: 171979766; UID 10192; state: ENABLED
+11-11 19:08:26.114 13958 13958 D CompatibilityChangeReporter: Compat change id reported: 242716250; UID 10192; state: ENABLED
+11-11 19:08:26.134 13958 13958 W ziparchive: Unable to open '/data/app/~~s5_dhDYPDgi5YqLuK5zXLw==/com.h4xtor.share-_Hn21NDa7CXKODq4mjSmRQ==/base.dm': No such file or directory
+11-11 19:08:26.134 13958 13958 W ziparchive: Unable to open '/data/app/~~s5_dhDYPDgi5YqLuK5zXLw==/com.h4xtor.share-_Hn21NDa7CXKODq4mjSmRQ==/base.dm': No such file or directory
+11-11 19:08:26.150 13958 13958 D nativeloader: Configuring clns-6 for other apk /data/app/~~s5_dhDYPDgi5YqLuK5zXLw==/com.h4xtor.share-_Hn21NDa7CXKODq4mjSmRQ==/base.apk. target_sdk_version=36, uses_libraries=, library_path=/data/app/~~s5_dhDYPDgi5YqLuK5zXLw==/com.h4xtor.share-_Hn21NDa7CXKODq4mjSmRQ==/lib/x86_64, permitted_path=/data:/mnt/expand:/data/user/0/com.h4xtor.share
+11-11 19:08:26.155 13958 13958 V GraphicsEnvironment: Currently set values for:
+11-11 19:08:26.155 13958 13958 V GraphicsEnvironment:   angle_gl_driver_selection_pkgs=[]
+11-11 19:08:26.156 13958 13958 V GraphicsEnvironment:   angle_gl_driver_selection_values=[]
+11-11 19:08:26.156 13958 13958 V GraphicsEnvironment: ANGLE GameManagerService for com.h4xtor.share: false
+11-11 19:08:26.156 13958 13958 V GraphicsEnvironment: com.h4xtor.share is not listed in per-application setting
+11-11 19:08:26.156 13958 13958 V GraphicsEnvironment: Neither updatable production driver nor prerelease driver is supported.
+11-11 19:08:26.361 13958 13958 D CompatibilityChangeReporter: Compat change id reported: 160794467; UID 10192; state: ENABLED
+11-11 19:08:26.410 13958 13958 D CompatibilityChangeReporter: Compat change id reported: 270306772; UID 10192; state: ENABLED
+11-11 19:08:26.410 13958 13958 D CompatibilityChangeReporter: Compat change id reported: 235355681; UID 10192; state: ENABLED
+11-11 19:08:26.412 13958 13958 D CompatibilityChangeReporter: Compat change id reported: 263076149; UID 10192; state: ENABLED
+11-11 19:08:26.471 13958 13958 D TrafficStats: tagSocket(74) with statsTag=0xffffffff, statsUid=-1
+11-11 19:08:26.485 13958 14032 D TrafficStats: tagSocket(75) with statsTag=0xffffffff, statsUid=-1
+11-11 19:08:26.493 13958 14035 D BluetoothSocket: accept(), timeout (ms):-1
+11-11 19:08:26.512 13958 13958 W NsdServiceInfo: Key lengths > 9 are discouraged: fingerprint
+11-11 19:08:26.512 13958 13958 W NsdServiceInfo: Key lengths > 9 are discouraged: capabilities
+11-11 19:08:26.520 13958 13958 D TrafficStats: tagSocket(83) with statsTag=0xffffffff, statsUid=-1
+11-11 19:08:27.304 13958 14065 D TrafficStats: tagSocket(84) with statsTag=0xffffffff, statsUid=-1
+11-11 19:08:33.602 13958 14128 D libEGL  : loaded /vendor/lib64/egl/libEGL_emulation.so
+11-11 19:08:33.603 13958 14128 D libEGL  : loaded /vendor/lib64/egl/libGLESv1_CM_emulation.so
+11-11 19:08:33.605 13958 14128 D libEGL  : loaded /vendor/lib64/egl/libGLESv2_emulation.so
+11-11 19:08:33.703 13958 13958 D CompatibilityChangeReporter: Compat change id reported: 171228096; UID 10192; state: ENABLED
+11-11 19:08:33.707 13958 13958 D CompatibilityChangeReporter: Compat change id reported: 210923482; UID 10192; state: ENABLED
+11-11 19:08:34.068 13958 13958 D CompatibilityChangeReporter: Compat change id reported: 237531167; UID 10192; state: DISABLED
+11-11 19:08:34.077 13958 13958 W OpenGLRenderer: Unknown dataspace 0
+11-11 19:08:34.113 13958 14145 D TrafficStats: tagSocket(94) with statsTag=0xffffffff, statsUid=-1
+11-11 19:08:34.293 13958 14127 W OpenGLRenderer: Failed to initialize 101010-2 format, error = EGL_SUCCESS
+11-11 19:08:34.322 13958 14127 I Gralloc4: mapper 4.x is not supported
+11-11 19:08:34.740 13958 13958 D AutofillManager: view not autofillable - has multiline input type
+11-11 19:08:34.740 13958 13958 D AutofillManager: view not autofillable - has multiline input type
+11-11 19:08:35.853 13958 14146 E SurfaceSyncGroup: Failed to receive transaction ready in 1000ms. Marking SurfaceSyncGroup(wmsSync-VRI[MainActivity]#2) as ready
+11-11 19:08:35.856 13958 14146 E SurfaceSyncGroup: Failed to receive transaction ready in 1000ms. Marking SurfaceSyncGroup(VRI[MainActivity]#3) as ready
+11-11 19:08:36.159 13958 13958 I Choreographer: Skipped 114 frames!  The application may be doing too much work on its main thread.
+11-11 19:08:36.197 13958 14019 I OpenGLRenderer: Davey! duration=2083ms; Flags=1, FrameTimelineVsyncId=76887, IntendedVsync=1052687004416, Vsync=1052837004410, InputEventId=0, HandleInputStart=1052840097337, AnimationStart=1052840100413, PerformTraversalsStart=1052840235125, DrawStart=1053454194617, FrameDeadline=1052703671082, FrameInterval=1052839914727, FrameStartTime=16666666, SyncQueued=1053475518177, SyncStart=1053475741785, IssueDrawCommandsStart=1053475933904, SwapBuffers=1054544293155, FrameCompleted=1054770522469, DequeueBufferDuration=3848, QueueBufferDuration=562681, GpuCompleted=1054770522469, SwapBuffersCompleted=1054753744100, DisplayPresentTime=0, CommandSubmissionCompleted=1054544293155, 
+11-11 19:08:36.291 13958 13958 D AutofillManager: view not autofillable - has multiline input type
+11-11 19:08:36.294 13958 14019 I OpenGLRenderer: Davey! duration=1950ms; Flags=0, FrameTimelineVsyncId=76925, IntendedVsync=1052853671076, Vsync=1054753671000, InputEventId=0, HandleInputStart=1054761055876, AnimationStart=1054761059162, PerformTraversalsStart=1054763860534, DrawStart=1054765266801, FrameDeadline=1053353671056, FrameInterval=1054760734186, FrameStartTime=16666666, SyncQueued=1054767059660, SyncStart=1054767247922, IssueDrawCommandsStart=1054769326384, SwapBuffers=1054770085573, FrameCompleted=1054804175023, DequeueBufferDuration=3257, QueueBufferDuration=4439793, GpuCompleted=1054804175023, SwapBuffersCompleted=1054793864114, DisplayPresentTime=20401094660746, CommandSubmissionCompleted=1054770085573, 
+11-11 19:08:36.294 13958 13958 D AutofillManager: view not autofillable - has multiline input type
+11-11 19:08:36.307 13958 14019 I OpenGLRenderer: Davey! duration=2022ms; Flags=0, FrameTimelineVsyncId=76925, IntendedVsync=1052853671076, Vsync=1054753671000, InputEventId=0, HandleInputStart=1054761055876, AnimationStart=1054761059162, PerformTraversalsStart=1054763860534, DrawStart=1054767458685, FrameDeadline=1054803670998, FrameInterval=1054760734186, FrameStartTime=16666666, SyncQueued=1054772800322, SyncStart=1054794092611, IssueDrawCommandsStart=1054799345793, SwapBuffers=1054801670966, FrameCompleted=1054897602944, DequeueBufferDuration=2845, QueueBufferDuration=3844881, GpuCompleted=1054897553040, SwapBuffersCompleted=1054897602944, DisplayPresentTime=0, CommandSubmissionCompleted=1054801670966, 
+11-11 19:08:36.340 13958 13958 D AutofillManager: view not autofillable - has multiline input type
+11-11 19:08:36.340 13958 13958 D AutofillManager: view not autofillable - has multiline input type
+11-11 19:08:38.105 13958 14173 D TrafficStats: tagSocket(149) with statsTag=0xffffffff, statsUid=-1
+11-11 19:08:38.746 13958 13958 D AutofillManager: view not autofillable - has multiline input type
+11-11 19:08:38.746 13958 13958 D AutofillManager: view not autofillable - has multiline input type
+11-11 19:08:38.776 13958 13958 D AutofillManager: view not autofillable - has multiline input type
+11-11 19:08:38.776 13958 13958 D AutofillManager: view not autofillable - has multiline input type
+11-11 19:08:38.900 13958 14127 D EGL_emulation: app_time_stats: avg=687.20ms min=100.99ms max=2343.77ms count=4
+11-11 19:08:42.103 13958 14199 D TrafficStats: tagSocket(158) with statsTag=0xffffffff, statsUid=-1
+11-11 19:08:42.757 13958 13958 D AutofillManager: view not autofillable - has multiline input type
+11-11 19:08:42.757 13958 13958 D AutofillManager: view not autofillable - has multiline input type
+11-11 19:08:42.787 13958 13958 D AutofillManager: view not autofillable - has multiline input type
+11-11 19:08:42.787 13958 13958 D AutofillManager: view not autofillable - has multiline input type
+11-11 19:08:42.897 13958 14127 D EGL_emulation: app_time_stats: avg=1997.96ms min=74.15ms max=3921.77ms count=2
+11-11 19:08:43.655 13958 14127 D EGL_emulation: app_time_stats: avg=1118.19ms min=22.94ms max=6764.85ms count=8
+11-11 19:08:43.656 13958 13958 W WindowOnBackDispatcher: sendCancelIfRunning: isInProgress=falsecallback=android.view.ViewRootImpl$$ExternalSyntheticLambda17@3cfa96d
+11-11 19:08:43.741 13958 13958 D AutofillManager: view not autofillable - has multiline input type
+11-11 19:08:43.741 13958 13958 D AutofillManager: view not autofillable - has multiline input type
+11-11 19:08:43.786 13958 13958 D AutofillManager: view not autofillable - has multiline input type
+11-11 19:08:43.786 13958 13958 D AutofillManager: view not autofillable - has multiline input type
+11-11 19:08:43.972 13958 14127 D EGL_emulation: app_time_stats: avg=535.49ms min=62.88ms max=1008.10ms count=2
