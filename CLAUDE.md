@@ -26,7 +26,7 @@ Never use the deleted repo `h4xtor/H4xtorShare` or old folders such as `C:\AI\Fr
 | Path | What it is |
 |------|------------|
 | `src/h4xtor_share/` | Desktop app (Python 3.11+, Tk, aiohttp). Entry: `app.py` (`H4xtorShareApp`) |
-| `src/h4xtor_share/ui_kit.py` | The "Graphite" design system: semantic colour tokens (`DARK`/`LIGHT`), `SPACE`/`RADIUS` scales, drawn `ICONS`, and the widgets: Theme, Button, Card, Toggle, ScrollFrame, `NavRow`, `DeviceTiles`, `CommandPalette` (Ctrl+K), `PopupMenu` (every drop-down and right-click menu: never `tk.Menu` directly), `Toast`, `Modal`, `tooltip`, `MonkeyActor` … |
+| `src/h4xtor_share/ui_kit.py` | The "Graphite" design system: semantic colour tokens (`DARK`/`LIGHT`), `SPACE`/`RADIUS` scales, drawn `ICONS`, and the widgets: Theme, Button, Card, Toggle, ScrollFrame, `NavRow`, `DeviceTiles`, `CommandPalette` (Ctrl+K), `PopupMenu` (every drop-down and right-click menu: never `tk.Menu` directly), `Toast`, `Modal`, `tooltip`, `MonkeyActor` (strolls, dances while files move, tricks; a click opens the app's `_monkey_menu`; the phone's `MonkeyView` has the same moves) … |
 | `src/h4xtor_share/server.py` / `client.py` | Protocol v1 (HTTPS on port 47474, pinned TLS fingerprints) |
 | `src/h4xtor_share/local_api.py` | Loopback API on 127.0.0.1:47476, used by the Chrome extension |
 | `src/h4xtor_share/web_share.py` + `web_page.py` | iPhone/browser sharing: plain HTTP on the LAN, port 47478, guarded by a random key in the QR link. Off until switched on (page "iPhone") |

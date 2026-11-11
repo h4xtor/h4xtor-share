@@ -78,11 +78,11 @@ def quick_shot(name: str) -> None:
 
 
 def mascot_checks() -> None:
-    """The Del page's Battle.net hero with the whole monkey; taps make it react.
+    """The Del page's hero with the whole monkey; a tap opens its menu.
 
     The rest of the run keeps Android's animations off for stable taps, so they are switched
-    on just for this. Two taps give two different reactions (grin, "Lad være!" or a
-    somersault), caught by quick screenshots while they play.
+    on just for this. The menu offers its tricks (each caught by quick screenshots while it
+    plays) and its two habits, which carry a tick and are remembered.
     """
     shell("settings put global animator_duration_scale 1", check=False)
     try:
@@ -92,15 +92,33 @@ def mascot_checks() -> None:
         # 10 s, not 2: a UI dump taken while the live status rebuilds the page sees nothing.
         assert screen_has("^SEND TIL$", 10), "the hero does not say who it sends to"
         quick_shot("40-hero")
-        for tap in range(2):
-            tap_text("tryk for at hilse")  # the monkey's description
+        for tap, trick in enumerate(("^Dans$", "^Overrask mig$")):
+            tap_text("tryk for at vælge")  # the monkey's description
+            assert screen_has("^Slå en salto$", 10), "the monkey's menu did not open"
+            if tap == 0:
+                assert screen_has("^✓ Dans, når filer flytter sig$", 5), "habit not ticked"
+                assert screen_has("^✓ Gå rundt$", 5), "habit not ticked"
+                quick_shot("41-monkey-menu")
+            tap_text(trick)
             for index in range(3):
                 quick_shot(f"41-monkey-tap{tap}-{index}")
-            time.sleep(2.2)  # the longest reaction is two seconds
+            time.sleep(3.4)  # the dance is three seconds
+        # A habit switched off loses its tick and is remembered; then on again.
+        tap_text("tryk for at vælge")
+        tap_text("^✓ Gå rundt$")
+        time.sleep(1)
+        tap_text("tryk for at vælge")
+        assert screen_has("^Gå rundt$", 10), "the habit kept its tick after being switched off"
+        tap_text("^Gå rundt$")
+        time.sleep(1)
+        tap_text("tryk for at vælge")
+        assert screen_has("^✓ Gå rundt$", 10), "the habit did not come back on"
+        shell("input keyevent BACK", check=False)
+        time.sleep(1)
         quick_shot("42-monkey-after")
     finally:
         shell("settings put global animator_duration_scale 0", check=False)
-    ok("Del page: Battle.net hero with SEND FILER; taps on the monkey make it react")
+    ok("Del page: hero with SEND FILER; a tap on the monkey opens its menu of tricks and habits")
 
 
 def _dump() -> list[ET.Element]:

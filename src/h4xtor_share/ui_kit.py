@@ -1551,6 +1551,8 @@ class MonkeyPose:
         self.point = 0.0  # left arm out, down-left at the device tiles
         self.wag = 0.0  # right arm up, finger wagging: "lad være!"
         self.wag_phase = 0.0
+        self.dance = 0.0  # 0 … 1: arms in the air, swinging in turn to the beat
+        self.beat = 0.0  # the dance's phase (radians)
         self.blink = False
 
 
@@ -1600,8 +1602,11 @@ def monkey_parts(pose: MonkeyPose) -> list[tuple[str, list[float], str, float, s
     parts.append(("poly", oval(50, 97, 13, 17), face, 0, "belly"))
     cheer = pose.grin * 0.7
     left = lerp((27 - swing * 0.6, 104), (20, 62), cheer)
+    swing_up = math.sin(pose.beat) * 11
+    left = lerp(left, (15 - swing_up * 0.3, 60 + swing_up), pose.dance)
     left = lerp(left, (-8, 120), pose.point)
     right = lerp((73 + swing * 0.6, 104), (80, 62), cheer)
+    right = lerp(right, (85 - swing_up * 0.3, 60 - swing_up), pose.dance)
     right = lerp(right, (79, 48), pose.wag)
     for shoulder, hand, part in (((34, 80), left, "arm"), ((66, 80), right, "arm")):
         parts.append(("line", line(*shoulder, *hand), brown, 7, part))
@@ -1652,13 +1657,20 @@ class MonkeyActor:
     """The whole monkey, alive. Its owner calls tick() every frame (~25 fps).
 
     It strolls back and forth in its patch (``roam``), stops now and then and points at
-    the devices, breathes and blinks. Hops while files move (``set_busy``), happy hops when
-    a send lands (``celebrate``), points when a new device turns up (``point``), nods when
-    one is ready (``nod``). A click (``tap``) does one of three things, never the same
-    twice in a row: a big grin, a stern "Lad være!" with a wagging finger, or a somersault.
+    the devices, breathes and blinks. Dances while files move (``set_busy``): arms in the
+    air, rocking from foot to foot, looking left and right. Happy hops when a send lands
+    (``celebrate``), points when a new device turns up (``point``), nods when one is ready
+    (``nod``). ``tap`` does one of three things, never the same twice in a row: a big grin,
+    a stern "Lad være!" with a wagging finger, or a somersault; ``dance`` is a short dance
+    on request.
+
+    Two things can be switched off: ``dance_on_busy`` (then it only hops while files move,
+    as it used to) and ``stroll_enabled`` (then it stays where it stands).
     """
 
-    LENGTHS = {"point": 36, "nod": 14, "hops": 26, "grin": 24, "stop": 50, "flip": 30}
+    LENGTHS = {"point": 36, "nod": 14, "hops": 26, "grin": 24, "stop": 50, "flip": 30,
+               "dance": 76}
+    BEAT = 16  # frames per sway: about two thirds of a second
     REACTIONS = ("grin", "stop", "flip")
     BUBBLE = "Lad være!"
 
@@ -1670,6 +1682,8 @@ class MonkeyActor:
         self.tag = tag
         self.point_left = point_left
         self.busy = False
+        self.dance_on_busy = True
+        self.stroll_enabled = True
         self.frame = 0
         self.pose = MonkeyPose()
         self._rng = random.Random(seed)
@@ -1711,6 +1725,10 @@ class MonkeyActor:
     def celebrate(self) -> None:
         self._gesture = ("hops", 0)
 
+    def dance(self) -> None:
+        """A short dance, about three seconds."""
+        self._gesture = ("dance", 0)
+
     def grin(self) -> None:
         self._react("grin")
 
@@ -1743,15 +1761,19 @@ class MonkeyActor:
         self.frame += 1
         t, pose = self.frame, self.pose
         pose.bob = math.sin(t / 14) * 0.8  # breathing
-        pose.rot = pose.crouch = pose.grin = pose.point = pose.wag = 0.0
+        pose.rot = pose.crouch = pose.grin = pose.point = pose.wag = pose.dance = 0.0
         walking = False
         if self._gesture is not None:
             name, index = self._gesture
             self._play(name, index / (self.LENGTHS[name] - 1))  # ends at rest
             self._gesture = (name, index + 1) if index + 1 < self.LENGTHS[name] else None
+            walking = name == "dance"
+        elif self.busy and self.dance_on_busy:
+            self._dance(1.0)
+            walking = True  # the feet step on the spot
         elif self.busy:
             pose.bob -= abs(math.sin(t * math.pi / 13)) * 14
-        elif self._roam:
+        elif self._roam and self.stroll_enabled:
             walking = self._stroll()
         if walking:
             pose.step += 0.38
@@ -1761,6 +1783,19 @@ class MonkeyActor:
             if not pose.blink:
                 self._blink_at = t + 70 + (t * 37) % 80
         self._draw()
+
+    def _dance(self, amount: float) -> None:
+        """One frame of the dance, ``amount`` 0 … 1 of the way into it."""
+        import math
+
+        pose = self.pose
+        beat = self.frame * math.tau / self.BEAT
+        pose.dance, pose.beat = amount, beat
+        pose.rot = math.sin(beat) * 7 * amount  # rocks from foot to foot
+        pose.bob -= abs(math.sin(beat)) * 7 * amount
+        pose.grin = 0.45 * amount  # a happy open mouth
+        if amount > 0.5:
+            pose.facing = 1 if math.sin(beat / 2) >= 0 else -1  # looks left, then right
 
     def _stroll(self) -> bool:
         if self._rest > 0:
@@ -1796,6 +1831,8 @@ class MonkeyActor:
             pose.bob -= math.sin(p * math.pi) * 6
         elif name == "stop":
             pose.wag, pose.wag_phase = swell, p * 40
+        elif name == "dance":
+            self._dance(swell)
         elif name == "flip":
             if p < 0.2:
                 pose.crouch = p / 0.2
@@ -1837,8 +1874,10 @@ class HeroBanner(tk.Canvas):
     actions right under it and the monkey in a small card on the right. The words are
     drawn on the canvas (set_words); the owner packs its buttons into ``buttons``.
 
-    The monkey strolls about; click it and it grins, says "Lad være!" or turns a
-    somersault. Animation pauses while the banner is not on screen.
+    The monkey strolls about and dances while files move. A click on it calls
+    ``on_actor_click(event)`` when the owner has set one (the app opens the monkey's menu);
+    without one it grins, says "Lad være!" or turns a somersault. Animation pauses while
+    the banner is not on screen.
     """
 
     FRAME_MS = 40
@@ -1848,6 +1887,7 @@ class HeroBanner(tk.Canvas):
         self._h = theme.px(height)
         super().__init__(parent, height=self._h, bg=theme.c["bg"], highlightthickness=0, bd=0)
         self.actor = MonkeyActor(self, "hero-monkey", point_left=True)
+        self.on_actor_click: Callable[[tk.Event], Any] | None = None
         self._image: tk.PhotoImage | None = None
         self._size = (0, 0)
         self._resize_after: str | None = None
@@ -1860,9 +1900,17 @@ class HeroBanner(tk.Canvas):
         self.bind("<Map>", lambda _e: self._start(), add="+")
         self.bind("<Destroy>", lambda _e: self._stop(), add="+")
         # On the canvas, not the tag: the monkey is redrawn every frame.
-        self.bind("<Button-1>", lambda e: self.actor.hit(e.x, e.y) and self.actor.tap(), add="+")
+        self.bind("<Button-1>", self._clicked, add="+")
         self.bind("<Motion>", lambda e: self.configure(
             cursor="hand2" if self.actor.hit(e.x, e.y) else ""), add="+")
+
+    def _clicked(self, event: tk.Event) -> None:
+        if not self.actor.hit(event.x, event.y):
+            return
+        if self.on_actor_click is not None:
+            self.on_actor_click(event)
+        else:
+            self.actor.tap()
 
     def color_at(self, x: float, y: float) -> str:
         """The backdrop's colour under (x, y): widgets placed on the art match it."""

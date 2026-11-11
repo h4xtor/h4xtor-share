@@ -14,7 +14,8 @@ import java.util.Random;
 
 /**
  * The whole monkey on the Del page, alive (the same monkey and moves as the PC's
- * MonkeyActor in ui_kit.py). It strolls back and forth in its patch, stops now and then
+ * MonkeyActor in ui_kit.py). It dances while files move, and a tap opens its menu.
+ * It strolls back and forth in its patch, stops now and then
  * and points at the devices, breathes and blinks. Hops while files move ({@link #setBusy}),
  * happy hops when a send lands ({@link #celebrate}), points at a new device ({@link #point})
  * and nods when one is ready ({@link #nod}). A tap does one of three things, never the
@@ -40,6 +41,9 @@ public final class MonkeyView extends View {
     private final float density;
 
     private boolean busy;
+    private boolean danceOnBusy = true;
+    private boolean strollEnabled = true;
+    private Runnable onTap;
     private long last;
     private int frame;
     private float x;  // -1 … 1 across the patch
@@ -60,6 +64,8 @@ public final class MonkeyView extends View {
     private float point;
     private float wag;
     private float wagPhase;
+    private float dance;  // 0 … 1: arms in the air, swinging in turn to the beat
+    private float beat;
     private boolean blink;
 
     public MonkeyView(Context context) {
@@ -72,13 +78,56 @@ public final class MonkeyView extends View {
         text.setTextSize(12 * density);
         text.setTypeface(Typeface.DEFAULT_BOLD);
         text.setTextAlign(Paint.Align.CENTER);
-        setContentDescription("H4xtor Share-aben – tryk for at hilse");
+        setContentDescription("H4xtor Share-aben – tryk for at vælge");
         setClickable(true);
-        setOnClickListener(v -> tap());
+        setOnClickListener(v -> {
+            if (onTap != null) {
+                onTap.run();
+            } else {
+                tap();
+            }
+        });
+    }
+
+    /** What a tap does (the app opens the monkey's menu). Without one it reacts by itself. */
+    public void setOnTap(Runnable onTap) {
+        this.onTap = onTap;
     }
 
     public void setBusy(boolean busy) {
         this.busy = busy;
+    }
+
+    /** Off: it only hops while files move, as it used to. */
+    public void setDanceOnBusy(boolean on) {
+        danceOnBusy = on;
+    }
+
+    /** Off: it stays where it stands. */
+    public void setStrollEnabled(boolean on) {
+        strollEnabled = on;
+    }
+
+    /** Asked for from the menu: a short dance, about three seconds. */
+    public void dance() {
+        react("dance");
+    }
+
+    /** Asked for from the menu: a somersault. */
+    public void flip() {
+        react("flip");
+    }
+
+    /** Asked for from the menu: a big grin. */
+    public void grin() {
+        react("grin");
+    }
+
+    /** A trick the user chose plays even when the phone's animations are off. */
+    private void react(String name) {
+        gesture = name;
+        gestureFrame = 0;
+        invalidate();
     }
 
     /** A device the phone had not seen before showed up: point at the tiles. */
@@ -130,6 +179,7 @@ public final class MonkeyView extends View {
             case "hops": return 26;
             case "grin": return 24;
             case "stop": return 50;
+            case "dance": return 76;
             default: return 30;  // flip
         }
     }
@@ -139,17 +189,21 @@ public final class MonkeyView extends View {
         frame++;
         boolean calm = !moving();
         bob = calm ? 0 : (float) Math.sin(frame / 14.0) * 0.8f;  // breathing
-        rot = crouch = grin = point = wag = 0;
+        rot = crouch = grin = point = wag = dance = 0;
         boolean walking = false;
         if (!gesture.isEmpty()) {
             int length = length(gesture);
             act(gesture, gestureFrame / (float) (length - 1));  // ends at rest
+            walking = "dance".equals(gesture);  // the feet step on the spot
             if (++gestureFrame >= length) {
                 gesture = "";
             }
+        } else if (busy && !calm && danceOnBusy) {
+            sway(1f);
+            walking = true;
         } else if (busy && !calm) {
             bob -= Math.abs(Math.sin(frame * Math.PI / 13)) * 14;
-        } else if (!calm) {
+        } else if (!calm && strollEnabled) {
             walking = stroll();
         }
         if (walking) {
@@ -161,6 +215,18 @@ public final class MonkeyView extends View {
             if (!blink) {
                 blinkAt = frame + 70 + (frame * 37) % 80;
             }
+        }
+    }
+
+    /** One frame of the dance, {@code amount} 0 … 1 of the way into it. */
+    private void sway(float amount) {
+        beat = (float) (frame * 2 * Math.PI / 16);
+        dance = amount;
+        rot = (float) Math.sin(beat) * 7 * amount;  // rocks from foot to foot
+        bob -= Math.abs(Math.sin(beat)) * 7 * amount;
+        grin = 0.45f * amount;  // a happy open mouth
+        if (amount > 0.5f) {
+            facing = Math.sin(beat / 2) >= 0 ? 1 : -1;  // looks left, then right
         }
     }
 
@@ -203,6 +269,9 @@ public final class MonkeyView extends View {
             case "stop":
                 wag = swell;
                 wagPhase = p * 40;
+                break;
+            case "dance":
+                sway(swell);
                 break;
             default:  // flip
                 if (p < 0.2f) {
@@ -272,10 +341,11 @@ public final class MonkeyView extends View {
         oval(c, 50, 92, 21, 25, BROWN);
         oval(c, 50, 97, 13, 17, FACE);
         float cheer = grin * 0.7f;
-        float lx = mix(mix(27 - swing * 0.6f, 20, cheer), -8, point);
-        float ly = mix(mix(104, 62, cheer), 120, point);
-        float rx = mix(mix(73 + swing * 0.6f, 80, cheer), 79, wag);
-        float ry = mix(mix(104, 62, cheer), 48, wag);
+        float up = (float) Math.sin(beat) * 11;  // the dance: one arm up as the other dips
+        float lx = mix(mix(mix(27 - swing * 0.6f, 20, cheer), 15 - up * 0.3f, dance), -8, point);
+        float ly = mix(mix(mix(104, 62, cheer), 60 + up, dance), 120, point);
+        float rx = mix(mix(mix(73 + swing * 0.6f, 80, cheer), 85 - up * 0.3f, dance), 79, wag);
+        float ry = mix(mix(mix(104, 62, cheer), 60 - up, dance), 48, wag);
         arm(c, 34, 80, lx, ly);
         arm(c, 66, 80, rx, ry);
         if (wag > 0.2f) {  // the raised finger, wagging

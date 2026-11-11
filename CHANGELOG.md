@@ -4,6 +4,13 @@ Appen læser denne fil, så formatet er fast:
 `## <version> – <ÅÅÅÅ-MM-DD>`, derefter `### Nyt`, `### Forbedret` og `### Rettet` med punkter, der starter med `- `.
 Nyeste version øverst. Udgivelsen fejler, hvis versionen mangler her.
 
+## 1.11.0 – 2026-11-11
+### Nyt
+- Aben danser, mens filer flytter sig: armene i vejret, fra fod til fod og med blikket fra side til side – både på PC'en og på telefonen. Når filen er landet, hopper den af glæde som før.
+- Tryk på aben, og vælg selv: på PC'en åbner en menu med "Send filer…", "Send udklipsholder" og abens tricks – Dans, Slå en salto, Stort smil, Peg på enhederne og Overrask mig. På telefonen får du de samme tricks på en liste.
+- Abens vaner kan slås til og fra i samme menu, og den husker dem: "Dans, når filer flytter sig" og "Gå rundt".
+- Ctrl+K på PC'en kender også aben: "Få aben til at danse" og "Abens menu".
+
 ## 1.10.0 – 2026-11-10
 ### Nyt
 - Søg og kør med Ctrl+K: tryk Ctrl+K (eller klik i søgefeltet øverst), skriv et par bogstaver, og hop til en side eller start en handling – helt uden mus.
